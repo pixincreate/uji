@@ -16,6 +16,9 @@ pub enum StorageError {
     #[error("invalid uuid: {0}")]
     Uuid(#[from] uuid::Error),
 
+    #[error("migration: {0}")]
+    Migration(#[from] Box<dyn std::error::Error + Send + Sync>),
+
     #[error("not found: {0}")]
     NotFound(String),
 }

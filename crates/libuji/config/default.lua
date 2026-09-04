@@ -1,6 +1,3 @@
--- Default uji UI.
--- Message history fills the top (Pi-style blocks); input box at the bottom.
-
 uji.open_win("messages", {
   split = "top",
   size = "fill",
