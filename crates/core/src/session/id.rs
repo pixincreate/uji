@@ -1,27 +1,11 @@
 use std::fmt;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-/// Monotonic millisecond counter — mirrors opencode's `ascending()` id scheme:
-/// time-ordered, but never collides within the same millisecond.
-fn ascending() -> i64 {
-    static LAST: AtomicU64 = AtomicU64::new(0);
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0);
-    let mut prev = LAST.load(Ordering::Relaxed) as i64;
-    loop {
-        let next = now.max(prev + 1);
-        match LAST.compare_exchange_weak(prev as u64, next as u64, Ordering::Relaxed, Ordering::Relaxed) {
-            Ok(_) => return next,
-            Err(cur) => prev = cur as i64,
-        }
-    }
-}
-
+/// Current wall-clock time in epoch millis.
 pub fn now_millis() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -29,34 +13,64 @@ pub fn now_millis() -> i64 {
         .unwrap_or(0)
 }
 
-macro_rules! id_type {
-    ($name:ident, $prefix:literal) => {
-        #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-        pub struct $name(pub String);
+/// UUIDv7-based session id — time-ordered, index-friendly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SessionId(pub Uuid);
 
-        impl $name {
-            pub fn new() -> Self {
-                Self(format!(concat!($prefix, "{}"), ascending()))
-            }
-
-            pub fn as_str(&self) -> &str {
-                &self.0
-            }
-        }
-
-        impl fmt::Display for $name {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str(&self.0)
-            }
-        }
-
-        impl Default for $name {
-            fn default() -> Self {
-                Self::new()
-            }
-        }
-    };
+impl SessionId {
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
 }
 
-id_type!(SessionId, "ses_");
-id_type!(MessageId, "msg_");
+impl Default for SessionId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Display for SessionId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.hyphenated())
+    }
+}
+
+impl FromStr for SessionId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::parse_str(s).map(Self)
+    }
+}
+
+/// UUIDv7-based message id — time-ordered, index-friendly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct MessageId(pub Uuid);
+
+impl MessageId {
+    pub fn new() -> Self {
+        Self(Uuid::now_v7())
+    }
+}
+
+impl Default for MessageId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Display for MessageId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.hyphenated())
+    }
+}
+
+impl FromStr for MessageId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Uuid::parse_str(s).map(Self)
+    }
+}

@@ -10,6 +10,7 @@ use uji_core::action;
 use uji_core::session::model::{Message, Session, StoredMessage};
 use uji_core::session::store::SessionStorage;
 
+use crate::model::UiModel;
 use crate::ui;
 
 /// TUI application state.
@@ -19,11 +20,12 @@ pub struct App<'a, S: SessionStorage> {
     pub running: bool,
     pub session: Session,
     pub messages: Vec<StoredMessage>,
-    pub storage: &'a S,
+    pub storage: &'a mut S,
+    pub model: UiModel,
 }
 
 /// Enter raw mode, run the TUI, and restore the terminal on the way out.
-pub fn run<S: SessionStorage>(session: Session, storage: &S) -> io::Result<()> {
+pub fn run<S: SessionStorage>(session: Session, storage: &mut S, model: UiModel) -> io::Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
@@ -41,6 +43,7 @@ pub fn run<S: SessionStorage>(session: Session, storage: &S) -> io::Result<()> {
         session,
         messages,
         storage,
+        model,
     };
     let result = run_loop(&mut terminal, &mut app);
 

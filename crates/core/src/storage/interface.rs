@@ -8,16 +8,18 @@ use super::error::Result;
 /// Mirrors the split opencode uses: a connection source (their `Database`
 /// service) that domain stores (`SessionStorage`) are layered on top of.
 pub trait StorageInterface: Send {
-    /// Backend-native connection handle (`rusqlite::Connection` for sqlite).
+    /// Backend-native connection handle (`diesel::sqlite::SqliteConnection`
+    /// for sqlite).
     type Connection;
 
-    /// Open the backend at `path` (file path, URL, or `:memory:`).
+    /// Open the backend at `path` (file path or `:memory:`).
     fn open(path: impl AsRef<Path>) -> Result<Self>
     where
         Self: Sized;
 
-    /// Borrow the live connection used to run queries.
-    fn get_connection(&self) -> &Self::Connection;
+    /// Borrow the live connection used to run queries mutably — ORMs like
+    /// diesel take `&mut conn` for statement cache access.
+    fn get_connection(&mut self) -> &mut Self::Connection;
 
     /// Backend name, for status/debug output.
     fn backend(&self) -> &'static str {

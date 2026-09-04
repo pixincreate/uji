@@ -1,49 +1,109 @@
 use ratatui::prelude::*;
 use ratatui::style::Modifier;
+use ratatui::symbols;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use uji_core::session::model::{Message, StoredMessage};
 use uji_core::session::store::SessionStorage;
 
 use crate::app::App;
+use crate::model::{self, BufferKind, Border, WindowSpec};
 
-/// Render the TUI: message history on top, input box at the bottom.
+// Pi dark-theme message colors.
+const USER_BG: Color = Color::Rgb(0x34, 0x35, 0x41);
+const TEXT: Color = Color::Rgb(0xd4, 0xd4, 0xd4);
+const MUTED: Color = Color::Rgb(0x80, 0x80, 0x80);
+
+/// Render the TUI purely from the UI model: walk the declared windows and
+/// render whatever buffer each one views.
 pub fn render<S: SessionStorage>(frame: &mut Frame, app: &App<'_, S>) {
-    let area = frame.area();
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(1), Constraint::Length(3)])
-        .split(area);
-
-    // Top: message history.
-    let messages: Vec<_> = app
-        .messages
-        .iter()
-        .map(|stored| Line::from(render_message(stored)))
-        .collect();
-    frame.render_widget(Paragraph::new(messages), chunks[0]);
-
-    // Bottom: input box.
-    let block = Block::default().borders(Borders::ALL);
-    let paragraph = Paragraph::new(render_input(app)).block(block);
-    frame.render_widget(paragraph, chunks[1]);
-}
-
-fn render_message(stored: &StoredMessage) -> String {
-    match &stored.message {
-        Message::User { text } => format!("> {text}"),
-        Message::Assistant { text } => format!("  {text}"),
-        Message::System { text } => format!("[{text}]"),
+    let rects = model::layout(frame.area(), &app.model.windows);
+    for (win, area) in app.model.windows.iter().zip(rects) {
+        render_window(frame, app, win, area);
     }
 }
 
-/// Render the text buffer with a blinking cursor at the cursor position.
+fn render_window<S: SessionStorage>(frame: &mut Frame, app: &App<'_, S>, win: &WindowSpec, area: Rect) {
+    let block = block_for(win);
+    let inner = block.as_ref().map(|b| b.inner(area)).unwrap_or(area);
+    let kind = app.model.buffer_kind(&win.buffer).unwrap_or(BufferKind::Messages);
+
+    let paragraph = match kind {
+        BufferKind::Messages => Paragraph::new(render_messages(&app.messages, inner.width)),
+        BufferKind::Input => Paragraph::new(render_input(app)),
+    };
+    let paragraph = match block {
+        Some(block) => paragraph.block(block),
+        None => paragraph,
+    };
+    frame.render_widget(paragraph, area);
+}
+
+fn block_for(win: &WindowSpec) -> Option<Block<'static>> {
+    let mut block = match win.opts.border {
+        Border::None => return None,
+        Border::Plain => Block::default().borders(Borders::ALL),
+        Border::Rounded => Block::default()
+            .borders(Borders::ALL)
+            .border_set(symbols::border::ROUNDED),
+    };
+    if let Some(title) = &win.opts.title {
+        block = block.title(title.clone());
+    }
+    Some(block)
+}
+
+/// Render messages the way pi does:
+/// - user messages: full-width block on `userMessageBg`, text-colored,
+///   one padded line above/below and one column left/right
+/// - assistant messages: no background, one blank spacer line before,
+///   one column left pad
+/// - system messages: italic muted text, same spacing as assistant
+fn render_messages(messages: &[StoredMessage], width: u16) -> Vec<Line<'static>> {
+    // Full-width space fill; Paragraph clips lines at the area width, so
+    // padding with `fill` guarantees the bg spans the whole row.
+    let fill = " ".repeat(width as usize);
+    let mut lines = Vec::new();
+    for stored in messages {
+        match &stored.message {
+            Message::User { text } => {
+                let block_style = Style::default().bg(USER_BG).fg(TEXT);
+                lines.push(Line::from(fill.clone()).style(block_style));
+                for line in text.lines() {
+                    lines.push(Line::from(format!(" {line} {fill}")).style(block_style));
+                }
+                lines.push(Line::from(fill.clone()).style(block_style));
+            }
+            Message::Assistant { text } => {
+                lines.push(Line::from(""));
+                let text_style = Style::default().fg(TEXT);
+                for line in text.lines() {
+                    lines.push(Line::from(format!(" {line}")).style(text_style));
+                }
+            }
+            Message::System { text } => {
+                lines.push(Line::from(""));
+                let muted = Style::default().fg(MUTED).add_modifier(Modifier::ITALIC);
+                for line in text.lines() {
+                    lines.push(Line::from(format!(" {line}")).style(muted));
+                }
+            }
+        }
+    }
+    lines
+}
+
+/// Render the text buffer with a cursor (blinking per `uji.opt.cursor_blink`)
+/// at the cursor position.
 fn render_input<S: SessionStorage>(app: &App<'_, S>) -> Line<'static> {
     let before = &app.input[..app.cursor];
     let after = app.input[app.cursor..].to_owned();
 
-    let cursor = Span::styled("█", Style::default().add_modifier(Modifier::SLOW_BLINK));
+    let mut cursor_style = Style::default();
+    if app.model.opts.cursor_blink {
+        cursor_style = cursor_style.add_modifier(Modifier::SLOW_BLINK);
+    }
+    let cursor = Span::styled("█", cursor_style);
 
     Line::from(vec![Span::raw(before.to_owned()), cursor, Span::raw(after)])
 }

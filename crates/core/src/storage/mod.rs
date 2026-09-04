@@ -1,5 +1,6 @@
 pub mod error;
 pub mod interface;
+pub mod schema;
 pub mod sqlite;
 
 pub use error::{Result, StorageError};

@@ -38,7 +38,7 @@ fn main() {
     let cli = Cli::parse();
     let command = cli.command.unwrap_or(Command::New);
 
-    let storage = match default_db_path().and_then(SqliteStorage::open) {
+    let mut storage = match default_db_path().and_then(SqliteStorage::open) {
         Ok(storage) => storage,
         Err(err) => {
             eprintln!("uji: storage error: {err}");
@@ -47,10 +47,10 @@ fn main() {
     };
 
     let result = match command {
-        Command::New => handle_new(&storage),
-        Command::Resume { id } => handle_resume(&storage, id),
-        Command::List => handle_list(&storage),
-        Command::Delete { id } => handle_delete(&storage, &id),
+        Command::New => handle_new(&mut storage),
+        Command::Resume { id } => handle_resume(&mut storage, id),
+        Command::List => handle_list(&mut storage),
+        Command::Delete { id } => handle_delete(&mut storage, &id),
     };
 
     if let Err(err) = result {
@@ -59,16 +59,19 @@ fn main() {
     }
 }
 
-fn handle_new(storage: &SqliteStorage) -> Result<(), Box<dyn Error>> {
+fn handle_new(storage: &mut SqliteStorage) -> Result<(), Box<dyn Error>> {
     let session = storage.create_session("new")?;
-    app::run(session, storage)?;
+    let model = libuji::config::load();
+    app::run(session, storage, model)?;
     Ok(())
 }
 
-fn handle_resume(storage: &SqliteStorage, id: Option<String>) -> Result<(), Box<dyn Error>> {
+fn handle_resume(storage: &mut SqliteStorage, id: Option<String>) -> Result<(), Box<dyn Error>> {
     let session = match id {
         Some(id) => {
-            let session_id = SessionId(id.clone());
+            let session_id: SessionId = id
+                .parse()
+                .map_err(|_| format!("invalid session id: {id}"))?;
             storage
                 .get_session(&session_id)?
                 .ok_or_else(|| format!("no session with id: {id}"))?
@@ -78,11 +81,12 @@ fn handle_resume(storage: &SqliteStorage, id: Option<String>) -> Result<(), Box<
             None => storage.create_session("resumed")?,
         },
     };
-    app::run(session, storage)?;
+    let model = libuji::config::load();
+    app::run(session, storage, model)?;
     Ok(())
 }
 
-fn handle_list(storage: &SqliteStorage) -> Result<(), Box<dyn Error>> {
+fn handle_list(storage: &mut SqliteStorage) -> Result<(), Box<dyn Error>> {
     let sessions = storage.list_sessions()?;
     if sessions.is_empty() {
         println!("no sessions");
@@ -94,8 +98,11 @@ fn handle_list(storage: &SqliteStorage) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn handle_delete(storage: &SqliteStorage, id: &str) -> Result<(), Box<dyn Error>> {
-    if storage.delete_session(&SessionId(id.to_string()))? {
+fn handle_delete(storage: &mut SqliteStorage, id: &str) -> Result<(), Box<dyn Error>> {
+    let session_id: SessionId = id
+        .parse()
+        .map_err(|_| format!("invalid session id: {id}"))?;
+    if storage.delete_session(&session_id)? {
         println!("deleted session: {id}");
     } else {
         println!("no session with id: {id}");
