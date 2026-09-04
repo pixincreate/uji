@@ -7,7 +7,7 @@ use crossterm::{
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 
-use crate::{storage::session::Session, ui};
+use crate::{action, storage::session::Session, ui};
 
 /// TUI application state.
 pub struct App {
@@ -15,6 +15,7 @@ pub struct App {
     pub cursor: usize,
     pub running: bool,
     pub session: Session,
+    pub messages: Vec<String>,
 }
 
 impl App {
@@ -24,6 +25,7 @@ impl App {
             cursor: 0,
             running: true,
             session,
+            messages: Vec::new(),
         }
     }
 }
@@ -77,6 +79,13 @@ fn handle_key(key: KeyEvent, app: &mut App) {
         KeyCode::Left => app.cursor = prev_char_boundary(&app.input, app.cursor),
         KeyCode::Right => app.cursor = next_char_boundary(&app.input, app.cursor),
         KeyCode::Enter => {
+            let text = app.input.trim().to_string();
+            if !text.is_empty() {
+                app.messages.push(format!("> {text}"));
+                if let Some(response) = action::run(&text) {
+                    app.messages.push(response);
+                }
+            }
             app.input.clear();
             app.cursor = 0;
         }

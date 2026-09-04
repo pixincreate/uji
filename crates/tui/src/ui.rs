@@ -5,15 +5,24 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 
 use crate::app::App;
 
-/// Render the TUI: a single input box anchored to the bottom of the screen.
+/// Render the TUI: message history on top, input box at the bottom.
 pub fn render(frame: &mut Frame, app: &App) {
     let area = frame.area();
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(3)])
+        .constraints([Constraint::Min(1), Constraint::Length(3)])
         .split(area);
 
+    // Top: submitted message history.
+    let messages: Vec<_> = app
+        .messages
+        .iter()
+        .map(|m| Line::from(m.clone()))
+        .collect();
+    frame.render_widget(Paragraph::new(messages), chunks[0]);
+
+    // Bottom: input box.
     let block = Block::default().borders(Borders::ALL);
     let paragraph = Paragraph::new(render_input(app)).block(block);
     frame.render_widget(paragraph, chunks[1]);
