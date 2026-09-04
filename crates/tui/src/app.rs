@@ -6,32 +6,24 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
+use uji_core::action;
+use uji_core::session::model::{Message, Session, StoredMessage};
+use uji_core::session::store::SessionStorage;
 
-use crate::{action, storage::session::Session, ui};
+use crate::ui;
 
 /// TUI application state.
-pub struct App {
+pub struct App<'a, S: SessionStorage> {
     pub input: String,
     pub cursor: usize,
     pub running: bool,
     pub session: Session,
-    pub messages: Vec<String>,
-}
-
-impl App {
-    pub fn new(session: Session) -> Self {
-        Self {
-            input: String::new(),
-            cursor: 0,
-            running: true,
-            session,
-            messages: Vec::new(),
-        }
-    }
+    pub messages: Vec<StoredMessage>,
+    pub storage: &'a S,
 }
 
 /// Enter raw mode, run the TUI, and restore the terminal on the way out.
-pub fn run(session: Session) -> io::Result<()> {
+pub fn run<S: SessionStorage>(session: Session, storage: &S) -> io::Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
@@ -39,7 +31,17 @@ pub fn run(session: Session) -> io::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let mut app = App::new(session);
+    let messages = storage
+        .messages(&session.id)
+        .map_err(io::Error::other)?;
+    let mut app = App {
+        input: String::new(),
+        cursor: 0,
+        running: true,
+        session,
+        messages,
+        storage,
+    };
     let result = run_loop(&mut terminal, &mut app);
 
     disable_raw_mode()?;
@@ -49,7 +51,10 @@ pub fn run(session: Session) -> io::Result<()> {
     result
 }
 
-fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> io::Result<()> {
+fn run_loop<S: SessionStorage>(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    app: &mut App<'_, S>,
+) -> io::Result<()> {
     while app.running {
         terminal.draw(|frame| ui::render(frame, app))?;
 
@@ -60,7 +65,7 @@ fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) ->
     Ok(())
 }
 
-fn handle_key(key: KeyEvent, app: &mut App) {
+fn handle_key<S: SessionStorage>(key: KeyEvent, app: &mut App<'_, S>) {
     match key.code {
         KeyCode::Esc => app.running = false,
         KeyCode::Char('c') if key.modifiers == KeyModifiers::CONTROL => app.running = false,
@@ -78,19 +83,29 @@ fn handle_key(key: KeyEvent, app: &mut App) {
         }
         KeyCode::Left => app.cursor = prev_char_boundary(&app.input, app.cursor),
         KeyCode::Right => app.cursor = next_char_boundary(&app.input, app.cursor),
-        KeyCode::Enter => {
-            let text = app.input.trim().to_string();
-            if !text.is_empty() {
-                app.messages.push(format!("> {text}"));
-                if let Some(response) = action::run(&text) {
-                    app.messages.push(response);
-                }
-            }
-            app.input.clear();
-            app.cursor = 0;
-        }
+        KeyCode::Enter => submit(app),
         _ => {}
     }
+}
+
+/// Submit the current input: persist a user message, dispatch the action,
+/// append any response, and clear the input line.
+fn submit<S: SessionStorage>(app: &mut App<'_, S>) {
+    let text = app.input.trim().to_string();
+    if !text.is_empty() {
+        let user = Message::User { text: text.clone() };
+        if let Ok(stored) = app.storage.append_message(&app.session.id, user) {
+            app.messages.push(stored);
+        }
+        if let Some(response) = action::run(&text) {
+            let assistant = Message::Assistant { text: response };
+            if let Ok(stored) = app.storage.append_message(&app.session.id, assistant) {
+                app.messages.push(stored);
+            }
+        }
+    }
+    app.input.clear();
+    app.cursor = 0;
 }
 
 /// Move `index` back to the previous char boundary (or 0).

@@ -1,13 +1,9 @@
 [package]
 name = "tui"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
+uji-core = { path = "../core" }
 ratatui = "0.30"
 crossterm = "0.29"
-
-[[bin]]
-name = "uji"
-path = "src/bin/cli.rs"

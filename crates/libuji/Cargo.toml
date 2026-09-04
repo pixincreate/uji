@@ -1,0 +1,13 @@
+[package]
+name = "libuji"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+uji-core = { path = "../core" }
+tui = { path = "../tui" }
+clap = { version = "4", features = ["derive"] }
+
+[[bin]]
+name = "uji"
+path = "src/bin/cli.rs"
