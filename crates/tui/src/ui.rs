@@ -1,4 +1,7 @@
-//! Renderer: projects the UI model into terminal widgets.
+//! Renderer: projects the live UI state into terminal widgets.
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use ratatui::prelude::*;
 use ratatui::style::Modifier;
@@ -6,41 +9,38 @@ use ratatui::symbols;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use uji_core::session::model::{Message, StoredMessage};
-use uji_core::session::store::SessionStorage;
 
 use crate::app::App;
 use crate::model::{self, Border, BufferKind, WindowSpec};
+use crate::state::UiState;
 
 // Pi dark-theme message colors.
 const USER_BG: Color = Color::Rgb(0x34, 0x35, 0x41);
 const TEXT: Color = Color::Rgb(0xd4, 0xd4, 0xd4);
 const MUTED: Color = Color::Rgb(0x80, 0x80, 0x80);
 
-/// Render the TUI purely from the UI model: walk the declared windows and
-/// render whatever buffer each one views.
-pub fn render<S: SessionStorage>(frame: &mut Frame<'_>, app: &App<'_, S>) {
-    let rects = model::layout(frame.area(), &app.model().windows);
-    for (win, area) in app.model().windows.iter().zip(rects) {
-        render_window(frame, app, win, area);
+/// Render the TUI purely from the live UI state: walk the declared windows
+/// and render whatever buffer each one views. Borrowed per frame so runtime
+/// mutations land on the next draw.
+pub fn render(frame: &mut Frame<'_>, app: &App) {
+    let state: Rc<RefCell<UiState>> = app.state().clone();
+    let state = state.borrow();
+    let rects = model::layout(frame.area(), state.windows());
+    for (win, area) in state.windows().iter().zip(rects) {
+        render_window(frame, app, &state, win, area);
     }
 }
 
-fn render_window<S: SessionStorage>(
-    frame: &mut Frame<'_>,
-    app: &App<'_, S>,
-    win: &WindowSpec,
-    area: Rect,
-) {
+fn render_window(frame: &mut Frame<'_>, app: &App, state: &UiState, win: &WindowSpec, area: Rect) {
     let block = block_for(win);
     let inner = block.as_ref().map_or(area, |b| b.inner(area));
-    let kind = app
-        .model()
+    let kind = state
         .buffer_kind(&win.buffer)
         .unwrap_or(BufferKind::Messages);
 
     let paragraph = match kind {
         BufferKind::Messages => Paragraph::new(render_messages(app.messages(), inner.width)),
-        BufferKind::Input => Paragraph::new(render_input(app)),
+        BufferKind::Input => Paragraph::new(render_input(app, state)),
     };
     let paragraph = match block {
         Some(block) => paragraph.block(block),
@@ -106,13 +106,13 @@ fn render_messages(messages: &[StoredMessage], width: u16) -> Vec<Line<'static>>
 
 /// Render the text buffer with a cursor (blinking per `uji.opt.cursor_blink`)
 /// at the cursor position.
-fn render_input<S: SessionStorage>(app: &App<'_, S>) -> Line<'static> {
+fn render_input(app: &App, state: &UiState) -> Line<'static> {
     let cursor_offset = app.cursor_offset();
     let before = &app.input()[..cursor_offset];
     let after = app.input()[cursor_offset..].to_owned();
 
     let mut cursor_style = Style::default();
-    if app.model().opts.cursor_blink {
+    if state.opts().cursor_blink {
         cursor_style = cursor_style.add_modifier(Modifier::SLOW_BLINK);
     }
     let cursor = Span::styled("█", cursor_style);

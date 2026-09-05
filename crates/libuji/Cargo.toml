@@ -7,7 +7,10 @@ edition.workspace = true
 uji-core = { path = "../core" }
 tui = { path = "../tui" }
 clap = { version = "4", features = ["derive"] }
+calloop = "0.14.4"
+crossterm = "0.29"
 mlua = { version = "0.12", features = ["lua54", "vendored"] }
+thiserror = "2"
 
 [[bin]]
 name = "uji"

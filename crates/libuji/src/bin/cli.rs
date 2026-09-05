@@ -7,7 +7,7 @@ use libuji::core::session::id::SessionId;
 use libuji::core::session::store::SessionStorage;
 use libuji::core::storage::interface::StorageInterface;
 use libuji::core::storage::sqlite::{SqliteStorage, default_db_path};
-use libuji::tui::app;
+use libuji::runtime::{Runtime, events};
 
 /// Embeddable harness — barebones TUI.
 #[derive(Parser, Debug)]
@@ -40,19 +40,11 @@ fn main() {
     let cli = Cli::parse();
     let command = cli.command.unwrap_or(Command::New);
 
-    let mut storage = match default_db_path().and_then(SqliteStorage::open) {
-        Ok(storage) => storage,
-        Err(err) => {
-            eprintln!("uji: storage error: {err}");
-            std::process::exit(1);
-        }
-    };
-
     let result = match command {
-        Command::New => handle_new(&mut storage),
-        Command::Resume { id } => handle_resume(&mut storage, id),
-        Command::List => handle_list(&mut storage),
-        Command::Delete { id } => handle_delete(&mut storage, &id),
+        Command::New => handle_new(),
+        Command::Resume { id } => handle_resume(id),
+        Command::List => handle_list(),
+        Command::Delete { id } => handle_delete(&id),
     };
 
     if let Err(err) = result {
@@ -61,14 +53,24 @@ fn main() {
     }
 }
 
-fn handle_new(storage: &mut SqliteStorage) -> Result<(), Box<dyn Error>> {
+fn open_storage() -> Result<Box<dyn SessionStorage>, Box<dyn Error>> {
+    Ok(Box::new(SqliteStorage::open(default_db_path()?)?))
+}
+
+fn handle_new() -> Result<(), Box<dyn Error>> {
+    let mut storage = open_storage()?;
     let session = storage.create_session("new")?;
-    let model = libuji::config::load();
-    app::run(session, storage, model)?;
+    let runtime = Runtime::boot()?;
+    runtime.emit(
+        events::SESSION_CREATED,
+        &[("session_id", session.id.to_string())],
+    );
+    runtime.run(session, storage)?;
     Ok(())
 }
 
-fn handle_resume(storage: &mut SqliteStorage, id: Option<String>) -> Result<(), Box<dyn Error>> {
+fn handle_resume(id: Option<String>) -> Result<(), Box<dyn Error>> {
+    let mut storage = open_storage()?;
     let session = match id {
         Some(id) => {
             let session_id: SessionId = id
@@ -83,12 +85,17 @@ fn handle_resume(storage: &mut SqliteStorage, id: Option<String>) -> Result<(), 
             None => storage.create_session("resumed")?,
         },
     };
-    let model = libuji::config::load();
-    app::run(session, storage, model)?;
+    let runtime = Runtime::boot()?;
+    runtime.emit(
+        events::SESSION_RESUMED,
+        &[("session_id", session.id.to_string())],
+    );
+    runtime.run(session, storage)?;
     Ok(())
 }
 
-fn handle_list(storage: &mut SqliteStorage) -> Result<(), Box<dyn Error>> {
+fn handle_list() -> Result<(), Box<dyn Error>> {
+    let mut storage = open_storage()?;
     let sessions = storage.list_sessions()?;
     if sessions.is_empty() {
         println!("no sessions");
@@ -103,7 +110,8 @@ fn handle_list(storage: &mut SqliteStorage) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn handle_delete(storage: &mut SqliteStorage, id: &str) -> Result<(), Box<dyn Error>> {
+fn handle_delete(id: &str) -> Result<(), Box<dyn Error>> {
+    let mut storage = open_storage()?;
     let session_id: SessionId = id
         .parse()
         .map_err(|_| format!("invalid session id: {id}"))?;
