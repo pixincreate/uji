@@ -64,7 +64,9 @@ fn render_node(frame: &mut Frame<'_>, app: &App, state: &UiState, node: Node<'_>
                     frame.render_widget(paragraph, area);
                 }
                 BufferKind::Input => {
-                    let block = Block::default().borders(Borders::TOP | Borders::BOTTOM);
+                    let block = Block::default()
+                        .borders(Borders::TOP | Borders::BOTTOM)
+                        .style(Color::LightMagenta);
                     let paragraph = Paragraph::new(render_input(app, state)).block(block);
                     frame.render_widget(paragraph, area);
                 }
@@ -138,7 +140,7 @@ fn render_input(app: &App, state: &UiState) -> Line<'static> {
     let before = &app.input()[..cursor_offset];
     let after = app.input()[cursor_offset..].to_owned();
 
-    let mut cursor_style = Style::default();
+    let mut cursor_style = Style::default().white();
     if state.opts().cursor_blink {
         cursor_style = cursor_style.add_modifier(Modifier::SLOW_BLINK);
     }
