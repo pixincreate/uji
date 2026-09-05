@@ -18,7 +18,7 @@
 //! runtime.run(session, storage).unwrap();
 //! ```
 
-pub mod api;
+pub use uji_api as api;
 pub mod config;
 pub mod lua;
 pub mod runtime;

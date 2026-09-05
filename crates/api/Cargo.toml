@@ -1,0 +1,11 @@
+[package]
+name = "uji-api"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+tui = { path = "../tui" }
+thiserror = "2"
+
+[lints]
+workspace = true

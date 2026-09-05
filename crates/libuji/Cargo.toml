@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 uji-core = { path = "../core" }
+uji-api = { path = "../api" }
 tui = { path = "../tui" }
 clap = { version = "4", features = ["derive"] }
 calloop = "0.14.4"

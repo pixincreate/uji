@@ -1,5 +1,4 @@
-//! The `uji.*` function bindings: each parses Lua args and delegates to the
-//! canonical [`crate::api`] (or handles a Lua-only surface directly).
+//! The static registry of `uji.*` function bindings.
 
 mod buffer;
 mod event;
@@ -8,37 +7,55 @@ mod window;
 
 use std::rc::Rc;
 
-use mlua::{Lua as LuaState, Table};
+use mlua::{Function, Lua as LuaState, Table};
 
-use crate::lua::Lua;
 use crate::runtime::Inner;
 
-/// Build the `uji` API table with all built-in functions registered.
+/// One entry in the `uji` API registry: the key it's registered under, and
+/// the function that builds the callable for a given runtime.
+struct Api {
+    key: &'static str,
+    build: fn(&LuaState, &Rc<Inner>) -> mlua::Result<Function>,
+}
+
+/// Every function exposed on the `uji` table, as a static descriptor table —
+/// nvim's API metadata style: no allocation, no dynamic dispatch.
+static REGISTRY: &[Api] = &[
+    Api {
+        key: "create_buf",
+        build: buffer::create_buf,
+    },
+    Api {
+        key: "open_win",
+        build: window::open_win,
+    },
+    Api {
+        key: "close_win",
+        build: window::close_win,
+    },
+    Api {
+        key: "schedule",
+        build: schedule::schedule,
+    },
+    Api {
+        key: "on",
+        build: event::on,
+    },
+    Api {
+        key: "emit",
+        build: event::emit,
+    },
+    Api {
+        key: "notify",
+        build: event::notify,
+    },
+];
+
+/// Build the `uji` API table from the static registry.
 pub(crate) fn register_all(lua: &LuaState, inner: &Rc<Inner>) -> mlua::Result<Table> {
     let table = lua.create_table()?;
-    let functions: Vec<Box<dyn Lua>> = vec![
-        Box::new(buffer::CreateBuf {
-            inner: inner.clone(),
-        }),
-        Box::new(window::OpenWin {
-            inner: inner.clone(),
-        }),
-        Box::new(window::CloseWin {
-            inner: inner.clone(),
-        }),
-        Box::new(schedule::Schedule {
-            inner: inner.clone(),
-        }),
-        Box::new(event::On {
-            inner: inner.clone(),
-        }),
-        Box::new(event::Emit {
-            inner: inner.clone(),
-        }),
-        Box::new(event::Notify),
-    ];
-    for function in &functions {
-        function.register(lua, &table)?;
+    for entry in REGISTRY {
+        table.set(entry.key, (entry.build)(lua, inner)?)?;
     }
     Ok(table)
 }
@@ -61,7 +78,7 @@ mod tests {
             "emit",
             "notify",
         ] {
-            assert!(table.get::<mlua::Function>(key).is_ok(), "missing {key}");
+            assert!(table.get::<Function>(key).is_ok(), "missing {key}");
         }
     }
 }
