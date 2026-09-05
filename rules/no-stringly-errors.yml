@@ -1,0 +1,6 @@
+id: no-stringly-errors
+language: rust
+severity: warning
+message: Do not stringify errors; keep them typed.
+rule:
+  pattern: $X.map_err(|$E| $E.to_string())

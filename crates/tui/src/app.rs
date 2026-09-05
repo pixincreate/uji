@@ -1,90 +1,146 @@
+use std::cell::RefCell;
 use std::io::{self, Stdout};
+use std::rc::Rc;
 
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{KeyCode, KeyEvent, KeyModifiers},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
+use uji_core::session::model::{Session, StoredMessage};
 
-use crate::{storage::session::Session, ui};
+use crate::state::UiState;
+use crate::ui;
 
-/// TUI application state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeyAction {
+    None,
+    Quit,
+    Submit(String),
+}
+
 pub struct App {
-    pub input: String,
-    pub cursor: usize,
-    pub running: bool,
-    pub session: Session,
+    session: Session,
+    messages: Vec<StoredMessage>,
+    state: Rc<RefCell<UiState>>,
+    input: String,
+    cursor: usize,
+    running: bool,
 }
 
 impl App {
-    pub fn new(session: Session) -> Self {
+    pub fn new(
+        session: Session,
+        messages: Vec<StoredMessage>,
+        state: Rc<RefCell<UiState>>,
+    ) -> Self {
         Self {
+            session,
+            messages,
+            state,
             input: String::new(),
             cursor: 0,
             running: true,
-            session,
+        }
+    }
+
+    pub fn session(&self) -> &Session {
+        &self.session
+    }
+
+    pub fn messages(&self) -> &[StoredMessage] {
+        &self.messages
+    }
+
+    pub fn push_message(&mut self, message: StoredMessage) {
+        self.messages.push(message);
+    }
+
+    pub fn state(&self) -> &Rc<RefCell<UiState>> {
+        &self.state
+    }
+
+    pub fn input(&self) -> &str {
+        &self.input
+    }
+
+    pub fn cursor_offset(&self) -> usize {
+        self.cursor
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
+
+    pub fn handle_key(&mut self, key: KeyEvent) -> KeyAction {
+        match key.code {
+            KeyCode::Esc => self.quit(),
+            KeyCode::Char('c') if key.modifiers == KeyModifiers::CONTROL => self.quit(),
+            KeyCode::Char('q') if key.modifiers == KeyModifiers::NONE => self.quit(),
+            KeyCode::Char(c) => {
+                self.input.insert(self.cursor, c);
+                self.cursor += c.len_utf8();
+                KeyAction::None
+            }
+            KeyCode::Backspace => {
+                if self.cursor > 0 {
+                    let prev = prev_char_boundary(&self.input, self.cursor);
+                    self.input.remove(prev);
+                    self.cursor = prev;
+                }
+                KeyAction::None
+            }
+            KeyCode::Left => {
+                self.cursor = prev_char_boundary(&self.input, self.cursor);
+                KeyAction::None
+            }
+            KeyCode::Right => {
+                self.cursor = next_char_boundary(&self.input, self.cursor);
+                KeyAction::None
+            }
+            KeyCode::Enter => self.take_submit(),
+            _ => KeyAction::None,
+        }
+    }
+
+    fn quit(&mut self) -> KeyAction {
+        self.running = false;
+        KeyAction::Quit
+    }
+
+    fn take_submit(&mut self) -> KeyAction {
+        let text = self.input.trim().to_string();
+        self.input.clear();
+        self.cursor = 0;
+        if text.is_empty() {
+            KeyAction::None
+        } else {
+            KeyAction::Submit(text)
         }
     }
 }
 
-/// Enter raw mode, run the TUI, and restore the terminal on the way out.
-pub fn run(session: Session) -> io::Result<()> {
+pub type Term = Terminal<CrosstermBackend<Stdout>>;
+
+pub fn setup() -> io::Result<Term> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
-
     let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+    Terminal::new(backend)
+}
 
-    let mut app = App::new(session);
-    let result = run_loop(&mut terminal, &mut app);
-
+pub fn restore(terminal: &mut Term) -> io::Result<()> {
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-    terminal.show_cursor()?;
-
-    result
+    terminal.show_cursor()
 }
 
-fn run_loop(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &mut App) -> io::Result<()> {
-    while app.running {
-        terminal.draw(|frame| ui::render(frame, app))?;
-
-        if let Event::Key(key) = event::read()? {
-            handle_key(key, app);
-        }
-    }
-    Ok(())
+pub fn draw(terminal: &mut Term, app: &App) -> io::Result<()> {
+    terminal.draw(|frame| ui::render(frame, app)).map(|_| ())
 }
 
-fn handle_key(key: KeyEvent, app: &mut App) {
-    match key.code {
-        KeyCode::Esc => app.running = false,
-        KeyCode::Char('c') if key.modifiers == KeyModifiers::CONTROL => app.running = false,
-        KeyCode::Char('q') if key.modifiers == KeyModifiers::NONE => app.running = false,
-        KeyCode::Char(c) => {
-            app.input.insert(app.cursor, c);
-            app.cursor += c.len_utf8();
-        }
-        KeyCode::Backspace => {
-            if app.cursor > 0 {
-                let prev = prev_char_boundary(&app.input, app.cursor);
-                app.input.remove(prev);
-                app.cursor = prev;
-            }
-        }
-        KeyCode::Left => app.cursor = prev_char_boundary(&app.input, app.cursor),
-        KeyCode::Right => app.cursor = next_char_boundary(&app.input, app.cursor),
-        KeyCode::Enter => {
-            app.input.clear();
-            app.cursor = 0;
-        }
-        _ => {}
-    }
-}
-
-/// Move `index` back to the previous char boundary (or 0).
 fn prev_char_boundary(s: &str, index: usize) -> usize {
     if index == 0 {
         return 0;
@@ -96,7 +152,6 @@ fn prev_char_boundary(s: &str, index: usize) -> usize {
     i
 }
 
-/// Move `index` forward to the next char boundary (or `s.len()`).
 fn next_char_boundary(s: &str, index: usize) -> usize {
     if index >= s.len() {
         return s.len();

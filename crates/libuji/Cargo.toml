@@ -1,0 +1,22 @@
+[package]
+name = "libuji"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+uji-core = { path = "../core" }
+uji-api = { path = "../api" }
+tui = { path = "../tui" }
+clap = { version = "4", features = ["derive"] }
+calloop = "0.14.4"
+crossterm = "0.29"
+mlua = { version = "0.12", features = ["lua54", "vendored"] }
+notify = "8.1"
+thiserror = "2"
+
+[[bin]]
+name = "uji"
+path = "src/bin/cli.rs"
+
+[lints]
+workspace = true

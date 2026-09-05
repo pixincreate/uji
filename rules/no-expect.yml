@@ -1,0 +1,6 @@
+id: no-expect-in-lib
+language: rust
+severity: error
+message: Do not use `.expect()` in library code; propagate errors instead.
+rule:
+  pattern: $X.expect($MSG)

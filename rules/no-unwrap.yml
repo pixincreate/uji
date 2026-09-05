@@ -1,0 +1,6 @@
+id: no-unwrap-in-lib
+language: rust
+severity: error
+message: Do not use `.unwrap()` in library code; propagate errors instead.
+rule:
+  pattern: $X.unwrap()
