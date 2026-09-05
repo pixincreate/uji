@@ -1,9 +1,14 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
 
-use mlua::{Lua as LuaState, Table};
+use mlua::{Function, Lua as LuaState, Table};
 use tui::state::UiState;
+use uji_core::credential;
+use uji_core::llm::{Echo, Llm, LlmConfig};
+use uji_core::session::store::SessionStorage;
 
 use super::handlers::Handlers;
 use super::scheduled::Scheduled;
@@ -14,6 +19,9 @@ pub(crate) struct Inner {
     pub(crate) state: Rc<RefCell<UiState>>,
     pub(crate) handlers: RefCell<Handlers>,
     pub(crate) scheduled: Scheduled,
+    pub(crate) llm: RefCell<Arc<dyn Llm>>,
+    pub(crate) llm_model: RefCell<String>,
+    pub(crate) commands: RefCell<HashMap<String, Function>>,
 }
 
 impl Inner {
@@ -23,6 +31,9 @@ impl Inner {
             state: Rc::new(RefCell::new(UiState::new())),
             handlers: RefCell::default(),
             scheduled: Scheduled::default(),
+            llm: RefCell::new(Arc::new(Echo)),
+            llm_model: RefCell::default(),
+            commands: RefCell::default(),
         })
     }
 
@@ -100,14 +111,69 @@ impl Inner {
     }
 
     pub(crate) fn sync_opts(&self) {
-        let cursor_blink = self
+        let opt = self
             .lua
             .globals()
             .get::<Table>("uji")
-            .and_then(|uji| uji.get::<Table>("opt"))
             .ok()
+            .and_then(|uji| uji.get::<Table>("ui").ok())
+            .and_then(|ui| ui.get::<Table>("opt").ok());
+
+        let cursor_blink = opt
+            .as_ref()
             .and_then(|opt| opt.get::<Option<bool>>("cursor_blink").ok().flatten())
             .unwrap_or(true);
         self.state.borrow_mut().set_cursor_blink(cursor_blink);
+
+        let suggest = opt
+            .as_ref()
+            .and_then(|opt| opt.get::<Table>("suggest").ok());
+        let suggest_enabled = suggest
+            .as_ref()
+            .and_then(|suggest| suggest.get::<Option<bool>>("enabled").ok().flatten())
+            .unwrap_or(true);
+        let suggest_max_height = suggest
+            .as_ref()
+            .and_then(|suggest| suggest.get::<Option<i64>>("max_height").ok().flatten())
+            .and_then(|n| u16::try_from(n).ok())
+            .unwrap_or(5);
+        self.state.borrow_mut().set_suggest_enabled(suggest_enabled);
+        self.state
+            .borrow_mut()
+            .set_suggest_max_height(suggest_max_height);
+
+        let footer_hint = opt
+            .as_ref()
+            .and_then(|opt| opt.get::<Table>("footer").ok())
+            .and_then(|footer| footer.get::<Option<String>>("hint").ok().flatten())
+            .unwrap_or_else(|| "ctrl+c exit".into());
+        self.state.borrow_mut().set_footer_hint(footer_hint);
+    }
+
+    pub(crate) fn resolve_llm(&self, storage: &mut dyn SessionStorage) {
+        let provider = storage
+            .get_setting("llm.provider")
+            .ok()
+            .flatten()
+            .unwrap_or_else(|| "echo".into());
+        let model = storage
+            .get_setting("llm.model")
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+        let base_url = storage.get_setting("llm.base_url").ok().flatten();
+        let api_key = credential::get(&provider);
+        let config = LlmConfig {
+            provider,
+            model: model.clone(),
+            base_url,
+            api_key,
+        };
+        let resolved = uji_core::llm::resolve(&config);
+        let id = resolved.id().to_string();
+        *self.llm.borrow_mut() = resolved;
+        (*self.llm_model.borrow_mut()).clone_from(&model);
+        self.state.borrow_mut().set_current_provider(id);
+        self.state.borrow_mut().set_current_model(model);
     }
 }
