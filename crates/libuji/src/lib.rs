@@ -18,6 +18,7 @@
 //! runtime.run(session, storage).unwrap();
 //! ```
 
+pub mod api;
 pub mod config;
 pub mod lua;
 pub mod runtime;

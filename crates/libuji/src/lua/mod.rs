@@ -1,12 +1,14 @@
 //! The `uji` Lua API: functions exposed to config files and plugins.
 //!
-//! Every callable is a type implementing [`Lua`]: it carries the key it is
-//! registered under and knows how to create the underlying
-//! [`mlua::Function`] bound to a Lua state. Embedders can implement this
-//! trait to extend the API with their own functions.
+//! [`Lua`] is the binding contract: each callable carries its registration
+//! key and knows how to create the underlying [`mlua::Function`]. Embedders
+//! can implement it to extend the API with their own functions. The built-in
+//! bindings in [`functions`] delegate to the canonical, Lua-free
+//! [`crate::api`] layer; [`convert`] holds the Lua-value conversions.
 
 use mlua::{Function, Lua as LuaState, Table};
 
+pub(crate) mod convert;
 pub(crate) mod functions;
 
 /// A single callable exposed to the `uji` Lua table.

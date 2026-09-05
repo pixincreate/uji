@@ -35,7 +35,7 @@ use uji_core::session::model::Session;
 use uji_core::session::store::SessionStorage;
 
 use crate::config::{self};
-use crate::lua::functions::api_table;
+use crate::lua::functions::register_all;
 
 /// The persistent harness runtime.
 pub struct Runtime {
@@ -57,7 +57,7 @@ impl Runtime {
         plugin_dir: Option<PathBuf>,
     ) -> Result<Self, RuntimeError> {
         let inner = Inner::new(LuaState::new());
-        let uji = api_table(&inner.lua, &inner)?;
+        let uji = register_all(&inner.lua, &inner)?;
         if let Ok(opt) = inner.lua.create_table() {
             let _ = opt.set("cursor_blink", true);
             let _ = uji.set("opt", opt);

@@ -85,7 +85,7 @@ pub(crate) fn watch_paths() -> Vec<PathBuf> {
 /// Run a config chunk against a fresh `uji` API table and collect the model.
 fn from_lua(source: &str, name: &str) -> Result<UiModel, mlua::Error> {
     let inner = Inner::new(Lua::new());
-    let uji = crate::lua::functions::api_table(&inner.lua, &inner)?;
+    let uji = crate::lua::functions::register_all(&inner.lua, &inner)?;
     let opt = inner.lua.create_table()?;
     opt.set("cursor_blink", true)?;
     uji.set("opt", opt)?;

@@ -39,6 +39,13 @@ impl UiState {
         self.windows.push(WindowSpec { buffer, opts });
     }
 
+    /// Remove every window viewing `buffer`, returning how many were removed.
+    pub fn remove_windows_for(&mut self, buffer: &str) -> usize {
+        let before = self.windows.len();
+        self.windows.retain(|w| w.buffer != buffer);
+        before - self.windows.len()
+    }
+
     /// Remove all buffers and windows (used by config hot reload).
     pub fn clear(&mut self) {
         self.buffers.clear();
