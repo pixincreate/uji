@@ -1,5 +1,3 @@
-//! Storage-backed session operations (opencode's `SessionStore` surface).
-
 use diesel::insert_into;
 use diesel::prelude::*;
 use diesel::sqlite::SqliteConnection;
@@ -12,30 +10,19 @@ use super::id::{MessageId, SessionId, now_millis};
 use super::model::{Message, Session, StoredMessage, Time};
 use super::sql::{MessageRow, SessionRow};
 
-/// Domain operations over sessions and messages, layered on top of any
-/// [`StorageInterface`] backend.
 pub trait SessionStorage {
-    /// Create a new session with the given title.
     fn create_session(&mut self, title: &str) -> Result<Session>;
-    /// Fetch a session by id.
     fn get_session(&mut self, id: &SessionId) -> Result<Option<Session>>;
-    /// Fetch the most recently updated session.
     fn latest_session(&mut self) -> Result<Option<Session>>;
-    /// List all sessions, most recently updated first.
     fn list_sessions(&mut self) -> Result<Vec<Session>>;
-    /// Delete a session (messages cascade). Returns whether a row was removed.
     fn delete_session(&mut self, id: &SessionId) -> Result<bool>;
 
-    /// Append a message, assigning its `UUIDv7` id and per-session `seq`.
     fn append_message(&mut self, session_id: &SessionId, message: Message)
     -> Result<StoredMessage>;
-    /// Full ordered message history ("context" in opencode terms).
     fn messages(&mut self, session_id: &SessionId) -> Result<Vec<StoredMessage>>;
-    /// Fetch a single message with its owning session id.
     fn message(&mut self, id: &MessageId) -> Result<Option<(SessionId, StoredMessage)>>;
 }
 
-/// Every diesel-sqlite-backed storage gets the full session store for free.
 impl<T: StorageInterface<Connection = SqliteConnection>> SessionStorage for T {
     fn create_session(&mut self, title: &str) -> Result<Session> {
         let conn = self.get_connection();

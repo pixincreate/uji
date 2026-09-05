@@ -1,5 +1,3 @@
-//! Renderer: projects the live UI state into terminal widgets.
-
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -14,14 +12,10 @@ use crate::app::App;
 use crate::model::{self, Border, BufferKind, WindowSpec};
 use crate::state::UiState;
 
-// Pi dark-theme message colors.
 const USER_BG: Color = Color::Rgb(0x34, 0x35, 0x41);
 const TEXT: Color = Color::Rgb(0xd4, 0xd4, 0xd4);
 const MUTED: Color = Color::Rgb(0x80, 0x80, 0x80);
 
-/// Render the TUI purely from the live UI state: walk the declared windows
-/// and render whatever buffer each one views. Borrowed per frame so runtime
-/// mutations land on the next draw.
 pub fn render(frame: &mut Frame<'_>, app: &App) {
     let state: Rc<RefCell<UiState>> = app.state().clone();
     let state = state.borrow();
@@ -63,16 +57,7 @@ fn block_for(win: &WindowSpec) -> Option<Block<'static>> {
     Some(block)
 }
 
-/// Render messages the way pi does:
-///
-/// - user messages: full-width block on `userMessageBg`, text-colored, one
-///   padded line above/below and one column left/right
-/// - assistant messages: no background, one blank spacer line before, one
-///   column left pad
-/// - system messages: italic muted text, same spacing as assistant
 fn render_messages(messages: &[StoredMessage], width: u16) -> Vec<Line<'static>> {
-    // Full-width space fill; Paragraph clips lines at the area width, so
-    // padding with `fill` guarantees the bg spans the whole row.
     let fill = " ".repeat(usize::from(width));
     let mut lines = Vec::new();
     for stored in messages {
@@ -104,8 +89,6 @@ fn render_messages(messages: &[StoredMessage], width: u16) -> Vec<Line<'static>>
     lines
 }
 
-/// Render the text buffer with a cursor (blinking per `uji.opt.cursor_blink`)
-/// at the cursor position.
 fn render_input(app: &App, state: &UiState) -> Line<'static> {
     let cursor_offset = app.cursor_offset();
     let before = &app.input()[..cursor_offset];

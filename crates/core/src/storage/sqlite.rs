@@ -1,5 +1,3 @@
-//! SQLite-backed storage via diesel.
-
 use std::path::{Path, PathBuf};
 
 use diesel::Connection;
@@ -10,13 +8,8 @@ use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use super::error::{Result, StorageError};
 use super::interface::StorageInterface;
 
-/// Embedded diesel migrations (`crates/core/migrations`).
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
-/// SQLite-backed storage via diesel.
-///
-/// Owns a single connection; wrap it in a `Mutex` when the harness grows
-/// threads.
 pub struct SqliteStorage {
     conn: SqliteConnection,
 }
@@ -44,8 +37,6 @@ impl StorageInterface for SqliteStorage {
     }
 }
 
-/// Default database location: `$UJI_DB` override, else
-/// `~/.local/share/uji/uji.db`.
 pub fn default_db_path() -> Result<PathBuf> {
     let Some(path) = std::env::var("UJI_DB").ok().filter(|p| !p.is_empty()) else {
         let home =

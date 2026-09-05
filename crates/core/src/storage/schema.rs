@@ -1,8 +1,3 @@
-// Diesel schema for the opencode-shaped session/message tables.
-// Rust module names are plural (`sessions`, `messages`) to avoid clashing
-// with the `session` domain module; SQL table names stay singular via
-// `sql_name`. The `type` column is a Rust keyword, so it maps to `kind`.
-
 diesel::table! {
     #[sql_name = "session"]
     sessions (id) {

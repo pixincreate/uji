@@ -1,5 +1,3 @@
-//! Config/plugin file watching (hot reload).
-
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -7,18 +5,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use notify::{RecursiveMode, Watcher};
 
-/// How long to coalesce file-watcher events before a reload (ms).
 const RELOAD_DEBOUNCE: u64 = 150;
 
-/// A config/plugin change requiring the UI to re-source config.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum ConfigEvent {
-    /// The watched file(s) changed.
     Reload,
 }
 
-/// Watch `paths` and send one debounced [`ConfigEvent::Reload`] per save
-/// burst. Returns the watcher; dropping it stops watching.
 pub(crate) fn watch(
     paths: Vec<PathBuf>,
     sender: calloop::channel::Sender<ConfigEvent>,

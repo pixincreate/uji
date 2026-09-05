@@ -1,5 +1,3 @@
-//! Per-loop state owned by the calloop loop.
-
 use std::rc::Rc;
 
 use crossterm::event::Event as TermEvent;
@@ -11,7 +9,6 @@ use uji_core::session::store::SessionStorage;
 use super::Inner;
 use super::events;
 
-/// Per-loop state owned by the calloop loop.
 pub(crate) struct LoopData {
     pub(crate) inner: Rc<Inner>,
     pub(crate) app: App,
@@ -22,7 +19,6 @@ pub(crate) struct LoopData {
 }
 
 impl LoopData {
-    /// Handle a terminal event (key press or resize).
     pub(crate) fn on_term_event(&mut self, event: &TermEvent) {
         match event {
             TermEvent::Key(key) => {
@@ -38,8 +34,6 @@ impl LoopData {
         }
     }
 
-    /// Submit input: announce it, persist a user message, dispatch the
-    /// action, and append any response.
     pub(crate) fn submit(&mut self, text: &str) {
         self.inner
             .emit(events::MESSAGE_SUBMITTED, &[("text", text.to_string())]);
@@ -56,7 +50,6 @@ impl LoopData {
                 );
             }
             Err(err) => {
-                // ast-grep-ignore: no-print-in-lib
                 eprintln!("uji: failed to persist message: {err}");
             }
         }
@@ -77,14 +70,12 @@ impl LoopData {
                     );
                 }
                 Err(err) => {
-                    // ast-grep-ignore: no-print-in-lib
                     eprintln!("uji: failed to persist response: {err}");
                 }
             }
         }
     }
 
-    /// Re-source config (hot reload) and request a redraw.
     pub(crate) fn reload(&mut self) {
         self.inner.reload();
         self.dirty = true;

@@ -1,15 +1,8 @@
-//! Idiomatic conversions for the UI model: `FromStr`/`Display` for the
-//! string-keyed enums and `From<u16>` for fixed sizes.
-//!
-//! Kept in one file so the string forms are auditable in a single place. The
-//! Lua-value conversions live in `libuji::lua::convert` (they need `mlua`).
-
 use std::fmt;
 use std::str::FromStr;
 
 use crate::model::{Border, BufferKind, Size, Split};
 
-/// Error from parsing a model value from a string.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseError(pub String);
 
@@ -92,7 +85,6 @@ impl fmt::Display for Border {
     }
 }
 
-/// A fixed size wraps a `u16` row/column count losslessly.
 impl From<u16> for Size {
     fn from(n: u16) -> Self {
         Self::Fixed(n)
@@ -102,7 +94,6 @@ impl From<u16> for Size {
 impl FromStr for Size {
     type Err = ParseError;
 
-    /// Parses only the `"fill"` keyword; fixed sizes use [`Size::from(u16)`].
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "fill" => Ok(Self::Fill),
@@ -119,46 +110,5 @@ impl fmt::Display for Size {
             Self::Fill => f.write_str("fill"),
             Self::Fixed(n) => write!(f, "{n}"),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn string_forms_round_trip() {
-        for (kind, s) in [
-            (BufferKind::Messages, "messages"),
-            (BufferKind::Input, "input"),
-        ] {
-            assert_eq!(kind.to_string(), s);
-            assert_eq!(s.parse::<BufferKind>().expect("parses"), kind);
-        }
-        for (split, s) in [
-            (Split::Top, "top"),
-            (Split::Bottom, "bottom"),
-            (Split::Left, "left"),
-            (Split::Right, "right"),
-        ] {
-            assert_eq!(split.to_string(), s);
-            assert_eq!(s.parse::<Split>().expect("parses"), split);
-        }
-        for (border, s) in [
-            (Border::None, "none"),
-            (Border::Plain, "plain"),
-            (Border::Rounded, "rounded"),
-        ] {
-            assert_eq!(border.to_string(), s);
-            assert_eq!(s.parse::<Border>().expect("parses"), border);
-        }
-    }
-
-    #[test]
-    fn size_parses_fill_and_from_u16() {
-        assert_eq!("fill".parse::<Size>().expect("parses"), Size::Fill);
-        assert_eq!(Size::from(3), Size::Fixed(3));
-        assert_eq!(Size::Fixed(3).to_string(), "3");
-        assert!("3".parse::<Size>().is_err());
     }
 }

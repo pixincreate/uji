@@ -1,5 +1,3 @@
-//! The `uji` binary front-end: clap CLI + command handlers.
-
 use std::error::Error;
 
 use clap::{Parser, Subcommand};
@@ -9,7 +7,6 @@ use libuji::core::storage::interface::StorageInterface;
 use libuji::core::storage::sqlite::{SqliteStorage, default_db_path};
 use libuji::runtime::{Runtime, events};
 
-/// Embeddable harness — barebones TUI.
 #[derive(Parser, Debug)]
 #[command(name = "uji", version, about = "Embeddable harness — barebones TUI")]
 struct Cli {
@@ -19,19 +16,13 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Create a new session and open the TUI.
     New,
-    /// Resume a session (by id, or the most recent) and open the TUI.
     Resume {
-        /// Session id to resume. Defaults to the most recent session.
         #[arg(long)]
         id: Option<String>,
     },
-    /// List all sessions.
     List,
-    /// Delete a session by id.
     Delete {
-        /// Session id to delete.
         id: String,
     },
 }

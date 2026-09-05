@@ -1,5 +1,3 @@
-//! `uji.open_win` / `uji.close_win` — Lua bindings over [`crate::api::window`].
-
 use std::rc::Rc;
 
 use mlua::{Function, Lua as LuaState, Table, Value as LuaValue};
@@ -9,7 +7,6 @@ use crate::api;
 use crate::lua::convert::FromLuaValue;
 use crate::runtime::Inner;
 
-/// `uji.open_win(buffer [, opts])`
 pub(crate) fn open_win(lua: &LuaState, inner: &Rc<Inner>) -> mlua::Result<Function> {
     let state = inner.state.clone();
     lua.create_function(move |_, (buffer, opts): (String, Option<Table>)| {
@@ -24,7 +21,6 @@ pub(crate) fn open_win(lua: &LuaState, inner: &Rc<Inner>) -> mlua::Result<Functi
     })
 }
 
-/// `uji.close_win(buffer) -> removed`
 pub(crate) fn close_win(lua: &LuaState, inner: &Rc<Inner>) -> mlua::Result<Function> {
     let state = inner.state.clone();
     lua.create_function(move |_, buffer: String| {

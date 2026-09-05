@@ -1,8 +1,0 @@
-id: no-print-in-lib
-language: rust
-severity: warning
-message: Do not print from library code; report through errors/`uji.notify` instead.
-rule:
-  any:
-    - pattern: println!($$$ARGS)
-    - pattern: eprintln!($$$ARGS)

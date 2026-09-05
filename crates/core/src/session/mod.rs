@@ -1,5 +1,3 @@
-//! Session and message domain model plus the storage-backed session API.
-
 pub mod id;
 pub mod model;
 pub mod sql;
