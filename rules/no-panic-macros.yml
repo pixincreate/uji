@@ -1,0 +1,11 @@
+id: no-panic-macros
+language: rust
+severity: error
+message: Do not use panic macros; return a Result or handle the case explicitly.
+rule:
+  kind: macro_invocation
+  has:
+    pattern: todo!
+  all:
+    - pattern: todo!($$$ARGS)
+    - pattern: unimplemented!($$$ARGS)

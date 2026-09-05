@@ -1,3 +1,5 @@
+//! SQLite-backed storage via diesel.
+
 use std::path::{Path, PathBuf};
 
 use diesel::Connection;
@@ -11,8 +13,10 @@ use super::interface::StorageInterface;
 /// Embedded diesel migrations (`crates/core/migrations`).
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
-/// SQLite-backed storage via diesel. Owns a single connection (wrap it in a
-/// Mutex when the harness grows threads).
+/// SQLite-backed storage via diesel.
+///
+/// Owns a single connection; wrap it in a `Mutex` when the harness grows
+/// threads.
 pub struct SqliteStorage {
     conn: SqliteConnection,
 }
@@ -22,10 +26,8 @@ impl StorageInterface for SqliteStorage {
 
     fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
-        if let Some(parent) = path.parent() {
-            if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent)?;
-            }
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            std::fs::create_dir_all(parent)?;
         }
         let url = path
             .to_str()
@@ -42,13 +44,13 @@ impl StorageInterface for SqliteStorage {
     }
 }
 
-/// Default database location: `$UJI_DB` override, else `~/.local/share/uji/uji.db`.
+/// Default database location: `$UJI_DB` override, else
+/// `~/.local/share/uji/uji.db`.
 pub fn default_db_path() -> Result<PathBuf> {
-    if let Ok(path) = std::env::var("UJI_DB") {
-        if !path.is_empty() {
-            return Ok(PathBuf::from(path));
-        }
-    }
-    let home = std::env::var("HOME").map_err(|_| StorageError::NotFound("$HOME is not set".into()))?;
-    Ok(PathBuf::from(home).join(".local/share/uji/uji.db"))
+    let Some(path) = std::env::var("UJI_DB").ok().filter(|p| !p.is_empty()) else {
+        let home =
+            std::env::var("HOME").map_err(|_| StorageError::NotFound("$HOME is not set".into()))?;
+        return Ok(PathBuf::from(home).join(".local/share/uji/uji.db"));
+    };
+    Ok(PathBuf::from(path))
 }

@@ -1,7 +1,10 @@
+//! Storage-backed session operations (opencode's `SessionStore` surface).
+
 use diesel::insert_into;
 use diesel::prelude::*;
+use diesel::sqlite::SqliteConnection;
 
-use crate::storage::error::Result;
+use crate::storage::error::{Result, StorageError};
 use crate::storage::interface::StorageInterface;
 use crate::storage::schema::{messages, sessions};
 
@@ -9,19 +12,26 @@ use super::id::{MessageId, SessionId, now_millis};
 use super::model::{Message, Session, StoredMessage, Time};
 use super::sql::{MessageRow, SessionRow};
 
-/// Domain operations over sessions and messages — the opencode `SessionStore`
-/// surface, layered on top of any `StorageInterface` backend.
+/// Domain operations over sessions and messages, layered on top of any
+/// [`StorageInterface`] backend.
 pub trait SessionStorage {
+    /// Create a new session with the given title.
     fn create_session(&mut self, title: &str) -> Result<Session>;
+    /// Fetch a session by id.
     fn get_session(&mut self, id: &SessionId) -> Result<Option<Session>>;
+    /// Fetch the most recently updated session.
     fn latest_session(&mut self) -> Result<Option<Session>>;
+    /// List all sessions, most recently updated first.
     fn list_sessions(&mut self) -> Result<Vec<Session>>;
+    /// Delete a session (messages cascade). Returns whether a row was removed.
     fn delete_session(&mut self, id: &SessionId) -> Result<bool>;
 
-    /// Append a message, assigning its `msg` UUIDv7 id and per-session `seq`.
-    fn append_message(&mut self, session_id: &SessionId, message: Message) -> Result<StoredMessage>;
+    /// Append a message, assigning its `UUIDv7` id and per-session `seq`.
+    fn append_message(&mut self, session_id: &SessionId, message: Message)
+    -> Result<StoredMessage>;
     /// Full ordered message history ("context" in opencode terms).
     fn messages(&mut self, session_id: &SessionId) -> Result<Vec<StoredMessage>>;
+    /// Fetch a single message with its owning session id.
     fn message(&mut self, id: &MessageId) -> Result<Option<(SessionId, StoredMessage)>>;
 }
 
@@ -51,7 +61,10 @@ impl<T: StorageInterface<Connection = SqliteConnection>> SessionStorage for T {
             parent_id: None,
             title: title.to_string(),
             directory,
-            time: Time { created: now, updated: now },
+            time: Time {
+                created: now,
+                updated: now,
+            },
         })
     }
 
@@ -79,9 +92,9 @@ impl<T: StorageInterface<Connection = SqliteConnection>> SessionStorage for T {
         let rows = sessions::table
             .order_by(sessions::time_updated.desc())
             .load::<SessionRow>(conn)?;
-        Ok(rows.into_iter()
-            .map(Session::try_from)
-            .collect::<std::result::Result<Vec<_>, _>>()?)
+        rows.into_iter()
+            .map(|row| Session::try_from(row).map_err(StorageError::from))
+            .collect()
     }
 
     fn delete_session(&mut self, id: &SessionId) -> Result<bool> {
@@ -90,7 +103,11 @@ impl<T: StorageInterface<Connection = SqliteConnection>> SessionStorage for T {
         Ok(deleted > 0)
     }
 
-    fn append_message(&mut self, session_id: &SessionId, message: Message) -> Result<StoredMessage> {
+    fn append_message(
+        &mut self,
+        session_id: &SessionId,
+        message: Message,
+    ) -> Result<StoredMessage> {
         let conn = self.get_connection();
         let last_seq: Option<i64> = messages::table
             .filter(messages::session_id.eq(session_id.to_string()))
@@ -117,7 +134,12 @@ impl<T: StorageInterface<Connection = SqliteConnection>> SessionStorage for T {
             .set(sessions::time_updated.eq(now))
             .execute(conn)?;
 
-        Ok(StoredMessage { id, seq, time_created: now, message })
+        Ok(StoredMessage {
+            id,
+            seq,
+            time_created: now,
+            message,
+        })
     }
 
     fn messages(&mut self, session_id: &SessionId) -> Result<Vec<StoredMessage>> {
@@ -126,9 +148,7 @@ impl<T: StorageInterface<Connection = SqliteConnection>> SessionStorage for T {
             .filter(messages::session_id.eq(session_id.to_string()))
             .order_by(messages::seq.asc())
             .load::<MessageRow>(conn)?;
-        Ok(rows.into_iter()
-            .map(StoredMessage::try_from)
-            .collect::<std::result::Result<Vec<_>, _>>()?)
+        rows.into_iter().map(StoredMessage::try_from).collect()
     }
 
     fn message(&mut self, id: &MessageId) -> Result<Option<(SessionId, StoredMessage)>> {

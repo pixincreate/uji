@@ -1,4 +1,4 @@
-//! libuji — the embeddable uji harness API.
+//! `libuji` — the embeddable uji harness API.
 //!
 //! Everything the `uji` binary can do is available here: session storage,
 //! message history, action dispatch, the Lua UI config, and the default TUI.

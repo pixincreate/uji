@@ -1,0 +1,6 @@
+id: no-dbg
+language: rust
+severity: error
+message: Remove `dbg!` before committing.
+rule:
+  pattern: dbg!($$$ARGS)

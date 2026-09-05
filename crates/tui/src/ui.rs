@@ -1,3 +1,5 @@
+//! Renderer: projects the UI model into terminal widgets.
+
 use ratatui::prelude::*;
 use ratatui::style::Modifier;
 use ratatui::symbols;
@@ -7,7 +9,7 @@ use uji_core::session::model::{Message, StoredMessage};
 use uji_core::session::store::SessionStorage;
 
 use crate::app::App;
-use crate::model::{self, BufferKind, Border, WindowSpec};
+use crate::model::{self, Border, BufferKind, WindowSpec};
 
 // Pi dark-theme message colors.
 const USER_BG: Color = Color::Rgb(0x34, 0x35, 0x41);
@@ -16,20 +18,28 @@ const MUTED: Color = Color::Rgb(0x80, 0x80, 0x80);
 
 /// Render the TUI purely from the UI model: walk the declared windows and
 /// render whatever buffer each one views.
-pub fn render<S: SessionStorage>(frame: &mut Frame, app: &App<'_, S>) {
-    let rects = model::layout(frame.area(), &app.model.windows);
-    for (win, area) in app.model.windows.iter().zip(rects) {
+pub fn render<S: SessionStorage>(frame: &mut Frame<'_>, app: &App<'_, S>) {
+    let rects = model::layout(frame.area(), &app.model().windows);
+    for (win, area) in app.model().windows.iter().zip(rects) {
         render_window(frame, app, win, area);
     }
 }
 
-fn render_window<S: SessionStorage>(frame: &mut Frame, app: &App<'_, S>, win: &WindowSpec, area: Rect) {
+fn render_window<S: SessionStorage>(
+    frame: &mut Frame<'_>,
+    app: &App<'_, S>,
+    win: &WindowSpec,
+    area: Rect,
+) {
     let block = block_for(win);
-    let inner = block.as_ref().map(|b| b.inner(area)).unwrap_or(area);
-    let kind = app.model.buffer_kind(&win.buffer).unwrap_or(BufferKind::Messages);
+    let inner = block.as_ref().map_or(area, |b| b.inner(area));
+    let kind = app
+        .model()
+        .buffer_kind(&win.buffer)
+        .unwrap_or(BufferKind::Messages);
 
     let paragraph = match kind {
-        BufferKind::Messages => Paragraph::new(render_messages(&app.messages, inner.width)),
+        BufferKind::Messages => Paragraph::new(render_messages(app.messages(), inner.width)),
         BufferKind::Input => Paragraph::new(render_input(app)),
     };
     let paragraph = match block {
@@ -54,15 +64,16 @@ fn block_for(win: &WindowSpec) -> Option<Block<'static>> {
 }
 
 /// Render messages the way pi does:
-/// - user messages: full-width block on `userMessageBg`, text-colored,
-///   one padded line above/below and one column left/right
-/// - assistant messages: no background, one blank spacer line before,
-///   one column left pad
+///
+/// - user messages: full-width block on `userMessageBg`, text-colored, one
+///   padded line above/below and one column left/right
+/// - assistant messages: no background, one blank spacer line before, one
+///   column left pad
 /// - system messages: italic muted text, same spacing as assistant
 fn render_messages(messages: &[StoredMessage], width: u16) -> Vec<Line<'static>> {
     // Full-width space fill; Paragraph clips lines at the area width, so
     // padding with `fill` guarantees the bg spans the whole row.
-    let fill = " ".repeat(width as usize);
+    let fill = " ".repeat(usize::from(width));
     let mut lines = Vec::new();
     for stored in messages {
         match &stored.message {
@@ -96,11 +107,12 @@ fn render_messages(messages: &[StoredMessage], width: u16) -> Vec<Line<'static>>
 /// Render the text buffer with a cursor (blinking per `uji.opt.cursor_blink`)
 /// at the cursor position.
 fn render_input<S: SessionStorage>(app: &App<'_, S>) -> Line<'static> {
-    let before = &app.input[..app.cursor];
-    let after = app.input[app.cursor..].to_owned();
+    let cursor_offset = app.cursor_offset();
+    let before = &app.input()[..cursor_offset];
+    let after = app.input()[cursor_offset..].to_owned();
 
     let mut cursor_style = Style::default();
-    if app.model.opts.cursor_blink {
+    if app.model().opts.cursor_blink {
         cursor_style = cursor_style.add_modifier(Modifier::SLOW_BLINK);
     }
     let cursor = Span::styled("█", cursor_style);

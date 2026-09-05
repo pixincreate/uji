@@ -1,0 +1,6 @@
+id: no-as-cast
+language: rust
+severity: warning
+message: Avoid `as` casts; use `From`/`TryFrom` conversions so failures are explicit.
+rule:
+  pattern: $X as $T

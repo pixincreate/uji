@@ -1,3 +1,5 @@
+//! The `uji` binary front-end: clap CLI + command handlers.
+
 use std::error::Error;
 
 use clap::{Parser, Subcommand};
@@ -92,7 +94,10 @@ fn handle_list(storage: &mut SqliteStorage) -> Result<(), Box<dyn Error>> {
         println!("no sessions");
     } else {
         for session in sessions {
-            println!("{}  {}  {}", session.id, session.title, session.time.updated);
+            println!(
+                "{}  {}  {}",
+                session.id, session.title, session.time.updated
+            );
         }
     }
     Ok(())
