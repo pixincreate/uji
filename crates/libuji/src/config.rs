@@ -63,6 +63,25 @@ pub(crate) fn plugin_dir() -> Option<PathBuf> {
     path.is_dir().then_some(path)
 }
 
+/// Paths to watch for live reload: the user config file, or the config dir.
+pub(crate) fn watch_paths() -> Vec<PathBuf> {
+    if let Some(path) = std::env::var("UJI_CONFIG").ok().filter(|p| !p.is_empty()) {
+        let path = PathBuf::from(path);
+        return if path.is_file() {
+            vec![path]
+        } else {
+            Vec::new()
+        };
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        let dir = PathBuf::from(home).join(".config/uji");
+        if dir.is_dir() {
+            return vec![dir];
+        }
+    }
+    Vec::new()
+}
+
 /// Run a config chunk against a fresh `uji` API table and collect the model.
 fn from_lua(source: &str, name: &str) -> Result<UiModel, mlua::Error> {
     let inner = Inner::new(Lua::new());

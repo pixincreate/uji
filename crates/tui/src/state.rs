@@ -39,6 +39,12 @@ impl UiState {
         self.windows.push(WindowSpec { buffer, opts });
     }
 
+    /// Remove all buffers and windows (used by config hot reload).
+    pub fn clear(&mut self) {
+        self.buffers.clear();
+        self.windows.clear();
+    }
+
     /// The registered buffers.
     pub fn buffers(&self) -> &[BufferSpec] {
         &self.buffers
