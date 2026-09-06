@@ -12,7 +12,7 @@ impl Action for Help {
     }
 
     fn start<C: Context>(&mut self, ctx: &mut C, _args: &Args) {
-        ctx.open_select("commands".into(), ctx.command_names());
+        ctx.open_select("Commands".into(), ctx.command_names());
     }
 
     fn on_select<C: Context>(&mut self, ctx: &mut C, _item: String) {

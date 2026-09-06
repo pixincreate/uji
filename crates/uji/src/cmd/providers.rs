@@ -38,7 +38,7 @@ impl Action for Providers {
         self.step = Step::Provider;
         self.draft = Draft::default();
         ctx.open_select(
-            "provider".into(),
+            "Provider".into(),
             PROVIDERS.iter().map(|p| (*p).to_string()).collect(),
         );
     }
