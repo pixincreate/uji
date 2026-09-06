@@ -14,11 +14,11 @@ fmt-apply:
 # is its job.
 lint:
     cargo clippy --workspace --all-targets -- -D warnings
-    ast-grep scan crates/core/src crates/tui/src crates/libuji/src/lib.rs crates/libuji/src/config.rs
+    ast-grep scan crates/api/src crates/uji/src
 
 # Structural rules only.
 scan:
-    ast-grep scan crates/core/src crates/tui/src crates/libuji/src/lib.rs crates/libuji/src/config.rs
+    ast-grep scan crates/api/src crates/uji/src
 
 # Unit + integration tests.
 test:

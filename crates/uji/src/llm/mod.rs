@@ -2,7 +2,9 @@ pub mod providers;
 
 use std::sync::Arc;
 
+use crate::credential;
 use crate::session::model::Message;
+use crate::session::store::SessionStorage;
 
 pub use providers::echo::Echo;
 pub use providers::ollama::Ollama;
@@ -122,4 +124,53 @@ pub fn resolve(config: &LlmConfig) -> Arc<dyn Llm> {
         .iter()
         .find(|spec| spec.id == config.provider)
         .map_or_else(|| make_echo(config), |spec| (spec.create)(config))
+}
+
+pub enum StreamEvent {
+    Delta(String),
+    Done(String),
+    Failed(String),
+}
+
+pub fn stream_turn(
+    provider: &dyn Llm,
+    model: String,
+    messages: Vec<Message>,
+    on_event: &mut dyn FnMut(StreamEvent),
+) {
+    let request = LlmRequest {
+        model,
+        system: None,
+        messages,
+    };
+    let result = provider.stream(&request, &mut |delta| {
+        on_event(StreamEvent::Delta(delta.to_string()));
+    });
+    let event = match result {
+        Ok(text) => StreamEvent::Done(text),
+        Err(err) => StreamEvent::Failed(err.to_string()),
+    };
+    on_event(event);
+}
+
+pub fn resolve_from_storage(storage: &mut dyn SessionStorage) -> (Arc<dyn Llm>, String) {
+    let provider = storage
+        .get_setting("llm.provider")
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "echo".into());
+    let model = storage
+        .get_setting("llm.model")
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    let base_url = storage.get_setting("llm.base_url").ok().flatten();
+    let api_key = credential::get(&provider);
+    let config = LlmConfig {
+        provider,
+        model: model.clone(),
+        base_url,
+        api_key,
+    };
+    (resolve(&config), model)
 }

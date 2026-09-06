@@ -1,12 +1,12 @@
 use mlua::Function;
 
 #[derive(Default)]
-pub(crate) struct Handlers {
+pub struct Handlers {
     by_event: Vec<(String, Vec<Function>)>,
 }
 
 impl Handlers {
-    pub(crate) fn add(&mut self, event: String, handler: Function) {
+    pub fn add(&mut self, event: String, handler: Function) {
         if let Some((_, list)) = self.by_event.iter_mut().find(|(name, _)| *name == event) {
             list.push(handler);
         } else {
@@ -14,7 +14,7 @@ impl Handlers {
         }
     }
 
-    pub(crate) fn get(&self, event: &str) -> Vec<Function> {
+    pub fn get(&self, event: &str) -> Vec<Function> {
         self.by_event
             .iter()
             .find(|(name, _)| name == event)

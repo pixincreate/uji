@@ -1,4 +1,4 @@
-use uji_cmd::{Action, Args, Context, Help, Providers};
+use crate::cmd::{Action, Args, Context, Help, Providers};
 
 pub(crate) enum Builtin {
     Providers(Providers),

@@ -8,9 +8,9 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
-use uji_core::session::model::{Session, StoredMessage};
+use uji_api::state::UiState;
 
-use crate::state::UiState;
+use crate::session::model::{Session, StoredMessage};
 use crate::ui;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

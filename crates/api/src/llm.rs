@@ -1,9 +1,15 @@
-use tui::state::UiState;
+use std::rc::Rc;
 
-pub fn current_provider(state: &UiState) -> Option<&str> {
-    state.current_provider()
+use mlua::{Function, Lua};
+
+use super::Api;
+
+pub fn current_provider(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    let state = api.state();
+    lua.create_function(move |_, ()| Ok(state.borrow().current_provider().map(str::to_string)))
 }
 
-pub fn current_model(state: &UiState) -> Option<&str> {
-    state.current_model()
+pub fn current_model(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    let state = api.state();
+    lua.create_function(move |_, ()| Ok(state.borrow().current_model().map(str::to_string)))
 }

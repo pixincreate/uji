@@ -1,22 +1,17 @@
 use std::rc::Rc;
 
 use crossterm::event::Event as TermEvent;
-use tui::app::{self, App, KeyAction, SuggestItem};
-use uji_cmd::{Args, Context};
-use uji_core::credential;
-use uji_core::llm::LlmRequest;
-use uji_core::session::model::Message;
-use uji_core::session::store::SessionStorage;
+
+use crate::app::{self, App, KeyAction, SuggestItem};
+use crate::cmd::{Args, Context};
+use crate::credential;
+use crate::llm::{StreamEvent, stream_turn};
+use crate::session::model::Message;
+use crate::session::store::SessionStorage;
 
 use super::Inner;
 use super::builtin::Builtin;
 use super::events;
-
-pub(crate) enum LlmEvent {
-    Delta(String),
-    Done(String),
-    Failed(String),
-}
 
 enum ModalInput {
     Select(String),
@@ -31,7 +26,7 @@ pub(crate) struct LoopData {
     pub(crate) terminal: app::Term,
     pub(crate) dirty: bool,
     pub(crate) running: bool,
-    pub(crate) llm_tx: calloop::channel::Sender<LlmEvent>,
+    pub(crate) llm_tx: calloop::channel::Sender<StreamEvent>,
     pub(crate) active: Option<Builtin>,
     pub(crate) action_done: bool,
 }
@@ -87,30 +82,20 @@ impl LoopData {
             .collect();
         let sender = self.llm_tx.clone();
         std::thread::spawn(move || {
-            let request = LlmRequest {
-                model,
-                system: None,
-                messages: context,
-            };
-            let result = provider.stream(&request, &mut |delta| {
-                let _ = sender.send(LlmEvent::Delta(delta.to_string()));
+            stream_turn(provider.as_ref(), model, context, &mut |event| {
+                let _ = sender.send(event);
             });
-            let event = match result {
-                Ok(text) => LlmEvent::Done(text),
-                Err(err) => LlmEvent::Failed(err.to_string()),
-            };
-            let _ = sender.send(event);
         });
     }
 
-    pub(crate) fn on_llm_event(&mut self, event: LlmEvent) {
+    pub(crate) fn on_llm_event(&mut self, event: StreamEvent) {
         match event {
-            LlmEvent::Delta(delta) => {
+            StreamEvent::Delta(delta) => {
                 self.app.append_pending(&delta);
                 self.dirty = true;
             }
-            LlmEvent::Done(text) => self.finish_assistant(&text),
-            LlmEvent::Failed(err) => {
+            StreamEvent::Done(text) => self.finish_assistant(&text),
+            StreamEvent::Failed(err) => {
                 self.app.take_pending();
                 eprintln!("uji: llm: {err}");
                 self.dirty = true;
@@ -153,7 +138,8 @@ impl LoopData {
     }
 
     pub(crate) fn refresh_status(&mut self) {
-        let state = self.inner.state.borrow();
+        let state_rc = self.inner.state();
+        let state = state_rc.borrow();
         let provider = state.current_provider().unwrap_or("echo").to_string();
         let model = state.current_model().unwrap_or_default().to_string();
         let status = if model.is_empty() {
@@ -174,7 +160,7 @@ impl LoopData {
         if let Some(mut action) = Builtin::from_name(name) {
             action.start(self, &args);
             self.active = Some(action);
-        } else if let Some(handler) = self.inner.commands.borrow().get(name).cloned() {
+        } else if let Some(handler) = self.inner.api.commands().borrow().get(name).cloned() {
             if let Err(err) = handler.call::<()>((args.raw.clone(),)) {
                 eprintln!("uji: command error: {err}");
             }
@@ -255,7 +241,8 @@ fn suggest_pool(data: &LoopData) -> Vec<SuggestItem> {
         .collect();
     let mut lua: Vec<SuggestItem> = data
         .inner
-        .commands
+        .api
+        .commands()
         .borrow()
         .keys()
         .map(|name| SuggestItem {

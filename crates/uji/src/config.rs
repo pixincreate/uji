@@ -1,7 +1,11 @@
+use std::cell::RefCell;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use mlua::Lua;
-use tui::model::UiModel;
+use uji_api::Api;
+use uji_api::model::UiModel;
+use uji_api::state::UiState;
 
 use crate::runtime::Inner;
 
@@ -64,10 +68,12 @@ pub(crate) fn watch_paths() -> Vec<PathBuf> {
 }
 
 fn from_lua(source: &str, name: &str) -> Result<UiModel, mlua::Error> {
-    let inner = Inner::new(Lua::new());
-    let uji = crate::lua::functions::register_all(&inner.lua, &inner)?;
-    inner.lua.globals().set("uji", uji)?;
-    inner.lua.load(source).set_name(name).exec()?;
+    let lua = Lua::new();
+    let api = Api::new(Rc::new(RefCell::new(UiState::new())));
+    let uji = uji_api::register(&lua, &api)?;
+    lua.globals().set("uji", uji)?;
+    lua.load(source).set_name(name).exec()?;
+    let inner = Inner::new(lua, api);
     inner.apply_ui_config();
-    Ok(inner.state.borrow().snapshot())
+    Ok(inner.state().borrow().snapshot())
 }

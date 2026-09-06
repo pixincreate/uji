@@ -1,13 +1,14 @@
+use ratatui::layout::Rect;
 use ratatui::prelude::*;
 use ratatui::style::Modifier;
 use ratatui::symbols;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
-use uji_core::session::model::{Message, StoredMessage};
+use uji_api::model::{Border, Size, Split, WindowKind, WindowSpec};
+use uji_api::state::UiState;
 
 use crate::app::{App, Mode};
-use crate::model::{self, Border, WindowKind, WindowSpec};
-use crate::state::UiState;
+use crate::session::model::{Message, StoredMessage};
 
 const USER_BG: Color = Color::Rgb(0x34, 0x35, 0x41);
 const TEXT: Color = Color::Rgb(0xd4, 0xd4, 0xd4);
@@ -17,7 +18,7 @@ const SELECTED_BG: Color = Color::Rgb(0x3a, 0x3a, 0x4a);
 pub fn render(frame: &mut Frame<'_>, app: &App) {
     let input_rect = {
         let state = app.state().borrow();
-        let rects = model::layout(frame.area(), state.windows());
+        let rects = layout(frame.area(), state.windows());
         state
             .windows()
             .iter()
@@ -41,7 +42,7 @@ enum Node<'a> {
 fn render_node(frame: &mut Frame<'_>, app: &App, state: &UiState, node: Node<'_>, area: Rect) {
     match node {
         Node::Root => {
-            let rects = model::layout(area, state.windows());
+            let rects = layout(area, state.windows());
             for (window, rect) in state.windows().iter().zip(rects) {
                 render_node(frame, app, state, Node::Window(window), rect);
             }
@@ -266,5 +267,103 @@ fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
         y,
         width: width.min(area.width),
         height: height.min(area.height),
+    }
+}
+
+fn is_vertical(split: Split) -> bool {
+    matches!(split, Split::Top | Split::Bottom)
+}
+
+fn layout(area: Rect, windows: &[WindowSpec]) -> Vec<Rect> {
+    let mut rects = Vec::with_capacity(windows.len());
+    let mut remaining_area = area;
+
+    for (index, win) in windows.iter().enumerate() {
+        let vertical = is_vertical(win.opts.split);
+        let later = &windows[index + 1..];
+
+        let reserved: u16 = later
+            .iter()
+            .filter(|w| is_vertical(w.opts.split) == vertical)
+            .filter_map(|w| match w.opts.size {
+                Size::Fixed(n) => Some(n),
+                Size::Fill => None,
+            })
+            .sum();
+        let later_fills = later
+            .iter()
+            .filter(|w| is_vertical(w.opts.split) == vertical && w.opts.size == Size::Fill)
+            .count();
+        let fills = u16::try_from(later_fills)
+            .unwrap_or(u16::MAX)
+            .saturating_add(1);
+
+        let avail = if vertical {
+            remaining_area.height
+        } else {
+            remaining_area.width
+        };
+        let take = match win.opts.size {
+            Size::Fill => avail.saturating_sub(reserved) / fills.max(1),
+            Size::Fixed(n) => n.min(avail),
+        };
+
+        let (window_area, rest) = carve(remaining_area, win.opts.split, take);
+        rects.push(window_area);
+        remaining_area = rest;
+    }
+    rects
+}
+
+fn carve(area: Rect, split: Split, take: u16) -> (Rect, Rect) {
+    match split {
+        Split::Top => {
+            let window_area = Rect {
+                height: take,
+                ..area
+            };
+            let rest = Rect {
+                y: area.y + take,
+                height: area.height.saturating_sub(take),
+                ..area
+            };
+            (window_area, rest)
+        }
+        Split::Bottom => {
+            let window_area = Rect {
+                y: area.y + area.height.saturating_sub(take),
+                height: take,
+                ..area
+            };
+            let rest = Rect {
+                height: area.height.saturating_sub(take),
+                ..area
+            };
+            (window_area, rest)
+        }
+        Split::Left => {
+            let window_area = Rect {
+                width: take,
+                ..area
+            };
+            let rest = Rect {
+                x: area.x + take,
+                width: area.width.saturating_sub(take),
+                ..area
+            };
+            (window_area, rest)
+        }
+        Split::Right => {
+            let window_area = Rect {
+                x: area.x + area.width.saturating_sub(take),
+                width: take,
+                ..area
+            };
+            let rest = Rect {
+                width: area.width.saturating_sub(take),
+                ..area
+            };
+            (window_area, rest)
+        }
     }
 }

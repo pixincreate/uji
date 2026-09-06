@@ -1,4 +1,5 @@
-use ratatui::layout::Rect;
+use std::fmt;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WindowKind {
@@ -125,100 +126,116 @@ impl Default for UiModel {
     }
 }
 
-fn is_vertical(split: Split) -> bool {
-    matches!(split, Split::Top | Split::Bottom)
-}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseError(pub String);
 
-pub fn layout(area: Rect, windows: &[WindowSpec]) -> Vec<Rect> {
-    let mut rects = Vec::with_capacity(windows.len());
-    let mut remaining_area = area;
-
-    for (index, win) in windows.iter().enumerate() {
-        let vertical = is_vertical(win.opts.split);
-        let later = &windows[index + 1..];
-
-        let reserved: u16 = later
-            .iter()
-            .filter(|w| is_vertical(w.opts.split) == vertical)
-            .filter_map(|w| match w.opts.size {
-                Size::Fixed(n) => Some(n),
-                Size::Fill => None,
-            })
-            .sum();
-        let later_fills = later
-            .iter()
-            .filter(|w| is_vertical(w.opts.split) == vertical && w.opts.size == Size::Fill)
-            .count();
-        let fills = u16::try_from(later_fills)
-            .unwrap_or(u16::MAX)
-            .saturating_add(1);
-
-        let avail = if vertical {
-            remaining_area.height
-        } else {
-            remaining_area.width
-        };
-        let take = match win.opts.size {
-            Size::Fill => avail.saturating_sub(reserved) / fills.max(1),
-            Size::Fixed(n) => n.min(avail),
-        };
-
-        let (window_area, rest) = carve(remaining_area, win.opts.split, take);
-        rects.push(window_area);
-        remaining_area = rest;
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
     }
-    rects
 }
 
-fn carve(area: Rect, split: Split, take: u16) -> (Rect, Rect) {
-    match split {
-        Split::Top => {
-            let window_area = Rect {
-                height: take,
-                ..area
-            };
-            let rest = Rect {
-                y: area.y + take,
-                height: area.height.saturating_sub(take),
-                ..area
-            };
-            (window_area, rest)
+impl std::error::Error for ParseError {}
+
+impl FromStr for WindowKind {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "messages" => Ok(Self::Messages),
+            "input" => Ok(Self::Input),
+            "status" => Ok(Self::Status),
+            "text" => Ok(Self::Text),
+            other => Err(ParseError(format!(
+                "unknown window kind: {other} (expected \"messages\", \"input\", \"status\" or \"text\")"
+            ))),
         }
-        Split::Bottom => {
-            let window_area = Rect {
-                y: area.y + area.height.saturating_sub(take),
-                height: take,
-                ..area
-            };
-            let rest = Rect {
-                height: area.height.saturating_sub(take),
-                ..area
-            };
-            (window_area, rest)
+    }
+}
+
+impl fmt::Display for WindowKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Messages => "messages",
+            Self::Input => "input",
+            Self::Status => "status",
+            Self::Text => "text",
+        })
+    }
+}
+
+impl FromStr for Split {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "top" => Ok(Self::Top),
+            "bottom" => Ok(Self::Bottom),
+            "left" => Ok(Self::Left),
+            "right" => Ok(Self::Right),
+            other => Err(ParseError(format!("unknown split: {other}"))),
         }
-        Split::Left => {
-            let window_area = Rect {
-                width: take,
-                ..area
-            };
-            let rest = Rect {
-                x: area.x + take,
-                width: area.width.saturating_sub(take),
-                ..area
-            };
-            (window_area, rest)
+    }
+}
+
+impl fmt::Display for Split {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Top => "top",
+            Self::Bottom => "bottom",
+            Self::Left => "left",
+            Self::Right => "right",
+        })
+    }
+}
+
+impl FromStr for Border {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "none" => Ok(Self::None),
+            "plain" => Ok(Self::Plain),
+            "rounded" => Ok(Self::Rounded),
+            other => Err(ParseError(format!("unknown border: {other}"))),
         }
-        Split::Right => {
-            let window_area = Rect {
-                x: area.x + area.width.saturating_sub(take),
-                width: take,
-                ..area
-            };
-            let rest = Rect {
-                width: area.width.saturating_sub(take),
-                ..area
-            };
-            (window_area, rest)
+    }
+}
+
+impl fmt::Display for Border {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::None => "none",
+            Self::Plain => "plain",
+            Self::Rounded => "rounded",
+        })
+    }
+}
+
+impl From<u16> for Size {
+    fn from(n: u16) -> Self {
+        Self::Fixed(n)
+    }
+}
+
+impl FromStr for Size {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "fill" => Ok(Self::Fill),
+            other => Err(ParseError(format!(
+                "unknown size: {other} (expected \"fill\")"
+            ))),
+        }
+    }
+}
+
+impl fmt::Display for Size {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Fill => f.write_str("fill"),
+            Self::Fixed(n) => write!(f, "{n}"),
         }
     }
 }

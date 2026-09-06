@@ -1,42 +1,36 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use mlua::{Function, Lua as LuaState, Table};
-use tui::model::{Border, Size, Split, WinOpts, WindowKind};
-use tui::state::UiState;
-use uji_core::credential;
-use uji_core::llm::{Echo, Llm, LlmConfig};
-use uji_core::session::store::SessionStorage;
+use mlua::{Lua as LuaState, Table};
+use uji_api::Api;
+use uji_api::model::{Border, Size, Split, WinOpts, WindowKind};
+use uji_api::state::UiState;
 
-use super::handlers::Handlers;
-use super::scheduled::Scheduled;
-use crate::api;
 use crate::config::{self, DEFAULT_LUA};
+use crate::llm::{Echo, Llm};
+use crate::session::store::SessionStorage;
 
 pub(crate) struct Inner {
     pub(crate) lua: LuaState,
-    pub(crate) state: Rc<RefCell<UiState>>,
-    pub(crate) handlers: RefCell<Handlers>,
-    pub(crate) scheduled: Scheduled,
+    pub(crate) api: Rc<Api>,
     pub(crate) llm: RefCell<Arc<dyn Llm>>,
     pub(crate) llm_model: RefCell<String>,
-    pub(crate) commands: RefCell<HashMap<String, Function>>,
 }
 
 impl Inner {
-    pub(crate) fn new(lua: LuaState) -> Rc<Self> {
+    pub(crate) fn new(lua: LuaState, api: Rc<Api>) -> Rc<Self> {
         Rc::new(Self {
             lua,
-            state: Rc::new(RefCell::new(UiState::new())),
-            handlers: RefCell::default(),
-            scheduled: Scheduled::default(),
+            api,
             llm: RefCell::new(Arc::new(Echo)),
             llm_model: RefCell::default(),
-            commands: RefCell::default(),
         })
+    }
+
+    pub(crate) fn state(&self) -> Rc<RefCell<UiState>> {
+        self.api.state()
     }
 
     pub(crate) fn emit(&self, event: &str, fields: &[(&str, String)]) {
@@ -46,19 +40,11 @@ impl Inner {
         for (key, value) in fields {
             let _ = ctx.set(*key, value.clone());
         }
-        self.dispatch(event, &ctx);
-    }
-
-    pub(crate) fn dispatch(&self, event: &str, ctx: &Table) {
-        for handler in self.handlers.borrow().get(event) {
-            if let Err(err) = handler.call::<()>((event, ctx.clone())) {
-                eprintln!("uji: handler error for {event}: {err}");
-            }
-        }
+        self.api.dispatch(event, &ctx);
     }
 
     pub(crate) fn reload(&self) {
-        self.state.borrow_mut().clear();
+        self.state().borrow_mut().clear();
         self.run_init(None);
         self.load_plugins(None);
         self.apply_ui_config();
@@ -148,8 +134,9 @@ impl Inner {
             .and_then(|n| u16::try_from(n).ok())
             .unwrap_or(5);
 
-        let mut state = self.state.borrow_mut();
-        let _ = api::window::open(
+        let state_rc = self.state();
+        let mut state = state_rc.borrow_mut();
+        let _ = uji_api::window::open(
             &mut state,
             WindowKind::Messages,
             Vec::new(),
@@ -160,7 +147,7 @@ impl Inner {
                 title: None,
             },
         );
-        let _ = api::window::open(
+        let _ = uji_api::window::open(
             &mut state,
             WindowKind::Status,
             Vec::new(),
@@ -171,7 +158,7 @@ impl Inner {
                 title: None,
             },
         );
-        let _ = api::window::open(
+        let _ = uji_api::window::open(
             &mut state,
             WindowKind::Input,
             Vec::new(),
@@ -189,29 +176,11 @@ impl Inner {
     }
 
     pub(crate) fn resolve_llm(&self, storage: &mut dyn SessionStorage) {
-        let provider = storage
-            .get_setting("llm.provider")
-            .ok()
-            .flatten()
-            .unwrap_or_else(|| "echo".into());
-        let model = storage
-            .get_setting("llm.model")
-            .ok()
-            .flatten()
-            .unwrap_or_default();
-        let base_url = storage.get_setting("llm.base_url").ok().flatten();
-        let api_key = credential::get(&provider);
-        let config = LlmConfig {
-            provider,
-            model: model.clone(),
-            base_url,
-            api_key,
-        };
-        let resolved = uji_core::llm::resolve(&config);
+        let (resolved, model) = crate::llm::resolve_from_storage(storage);
         let id = resolved.id().to_string();
         *self.llm.borrow_mut() = resolved;
         (*self.llm_model.borrow_mut()).clone_from(&model);
-        self.state.borrow_mut().set_current_provider(id);
-        self.state.borrow_mut().set_current_model(model);
+        self.state().borrow_mut().set_current_provider(id);
+        self.state().borrow_mut().set_current_model(model);
     }
 }

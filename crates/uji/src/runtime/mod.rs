@@ -1,16 +1,14 @@
 mod builtin;
 mod error;
 pub mod events;
-mod handlers;
 mod inner;
 mod input;
 mod loop_data;
-mod scheduled;
 mod watcher;
 
 pub use error::RuntimeError;
 pub(crate) use inner::Inner;
-pub(crate) use loop_data::{LlmEvent, LoopData};
+pub(crate) use loop_data::LoopData;
 
 use std::cell::RefCell;
 use std::io;
@@ -22,13 +20,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use calloop::{EventLoop, LoopHandle};
 use crossterm::event::Event as TermEvent;
 use mlua::Lua as LuaState;
-use tui::app::{self, App};
-use tui::state::UiState;
-use uji_core::session::model::Session;
-use uji_core::session::store::SessionStorage;
+use uji_api::Api;
+use uji_api::state::UiState;
 
+use crate::app::{self, App};
 use crate::config::{self};
-use crate::lua::functions::register_all;
+use crate::llm::StreamEvent;
+use crate::session::model::Session;
+use crate::session::store::SessionStorage;
 
 pub struct Runtime {
     inner: Rc<Inner>,
@@ -45,8 +44,11 @@ impl Runtime {
         config_path: Option<PathBuf>,
         plugin_dir: Option<PathBuf>,
     ) -> Result<Self, RuntimeError> {
-        let inner = Inner::new(LuaState::new());
-        let uji = register_all(&inner.lua, &inner)?;
+        let inner = Inner::new(
+            LuaState::new(),
+            Api::new(Rc::new(RefCell::new(UiState::new()))),
+        );
+        let uji = uji_api::register(&inner.lua, &inner.api)?;
         let _ = inner.lua.globals().set("uji", uji);
 
         let event_loop = EventLoop::try_new()?;
@@ -68,7 +70,7 @@ impl Runtime {
     }
 
     pub fn state(&self) -> Rc<RefCell<UiState>> {
-        self.inner.state.clone()
+        self.inner.state()
     }
 
     pub fn eval(&self, chunk: &str) -> mlua::Result<()> {
@@ -83,14 +85,14 @@ impl Runtime {
         } = self;
 
         let messages = storage.messages(&session.id).map_err(io::Error::other)?;
-        let app = App::new(session, messages, inner.state.clone());
+        let app = App::new(session, messages, inner.state());
 
         let terminal = app::setup()?;
         let (sender, channel) = calloop::channel::channel::<TermEvent>();
         let reader_running = Arc::new(AtomicBool::new(true));
         input::spawn(sender, reader_running.clone());
 
-        let (llm_sender, llm_channel) = calloop::channel::channel::<LlmEvent>();
+        let (llm_sender, llm_channel) = calloop::channel::channel::<StreamEvent>();
 
         let mut data = LoopData {
             inner,
@@ -163,7 +165,7 @@ impl Runtime {
                 .dispatch(None, &mut data)
                 .map_err(io::Error::other)?;
 
-            for callback in data.inner.scheduled.take() {
+            for callback in data.inner.api.scheduled().take() {
                 let _ = loop_handle.insert_idle(move |data: &mut LoopData| {
                     if let Err(err) = callback.call::<()>(()) {
                         eprintln!("uji: scheduled callback error: {err}");

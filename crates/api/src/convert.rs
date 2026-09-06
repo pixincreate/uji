@@ -1,5 +1,5 @@
+use crate::model::{Border, Size, Split, WinOpts};
 use mlua::Value as LuaValue;
-use tui::model::{Border, Size, Split, WinOpts};
 
 pub(crate) trait FromLuaValue: Sized {
     fn from_lua_value(value: &LuaValue) -> mlua::Result<Self>;

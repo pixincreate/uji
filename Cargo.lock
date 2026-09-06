@@ -1654,21 +1654,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libuji"
-version = "0.1.0"
-dependencies = [
- "calloop",
- "crossterm",
- "mlua",
- "notify",
- "thiserror 2.0.20",
- "tui",
- "uji-api",
- "uji-cmd",
- "uji-core",
-]
-
-[[package]]
 name = "line-clipping"
 version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3354,15 +3339,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
-name = "tui"
-version = "0.1.0"
-dependencies = [
- "crossterm",
- "ratatui",
- "uji-core",
-]
-
-[[package]]
 name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3386,10 +3362,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "uji"
+version = "0.1.0"
+dependencies = [
+ "calloop",
+ "crossterm",
+ "diesel",
+ "diesel_migrations",
+ "keyring",
+ "mlua",
+ "notify",
+ "ratatui",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "uji-api",
+ "uuid",
+]
+
+[[package]]
 name = "uji-api"
 version = "0.1.0"
 dependencies = [
- "tui",
+ "mlua",
 ]
 
 [[package]]
@@ -3397,25 +3393,7 @@ name = "uji-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
- "libuji",
-]
-
-[[package]]
-name = "uji-cmd"
-version = "0.1.0"
-
-[[package]]
-name = "uji-core"
-version = "0.1.0"
-dependencies = [
- "diesel",
- "diesel_migrations",
- "keyring",
- "reqwest",
- "serde",
- "serde_json",
- "thiserror 2.0.20",
- "uuid",
+ "uji",
 ]
 
 [[package]]

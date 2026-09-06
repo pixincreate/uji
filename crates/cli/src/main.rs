@@ -1,11 +1,11 @@
 use std::error::Error;
 
 use clap::{Parser, Subcommand};
-use libuji::core::session::id::SessionId;
-use libuji::core::session::store::SessionStorage;
-use libuji::core::storage::interface::StorageInterface;
-use libuji::core::storage::sqlite::{SqliteStorage, default_db_path};
-use libuji::runtime::{Runtime, events};
+use uji::runtime::{Runtime, events};
+use uji::session::id::SessionId;
+use uji::session::store::SessionStorage;
+use uji::storage::interface::StorageInterface;
+use uji::storage::sqlite::{SqliteStorage, default_db_path};
 
 #[derive(Parser, Debug)]
 #[command(name = "uji", version, about = "Embeddable harness — barebones TUI")]
