@@ -6,7 +6,7 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use uji_core::session::model::{Message, StoredMessage};
 
 use crate::app::{App, Mode};
-use crate::model::{self, Border, BufferKind, WindowSpec};
+use crate::model::{self, Border, WindowKind, WindowSpec};
 use crate::state::UiState;
 
 const USER_BG: Color = Color::Rgb(0x34, 0x35, 0x41);
@@ -22,7 +22,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
             .windows()
             .iter()
             .zip(rects)
-            .find(|(window, _)| state.buffer_kind(&window.buffer) == Some(BufferKind::Input))
+            .find(|(window, _)| window.kind == WindowKind::Input)
             .map(|(_, rect)| rect)
     };
     {
@@ -46,35 +46,43 @@ fn render_node(frame: &mut Frame<'_>, app: &App, state: &UiState, node: Node<'_>
                 render_node(frame, app, state, Node::Window(window), rect);
             }
         }
-        Node::Window(window) => {
-            let kind = state
-                .buffer_kind(&window.buffer)
-                .unwrap_or(BufferKind::Messages);
-
-            match kind {
-                BufferKind::Messages => {
-                    let block = block_for(window);
-                    let inner = block.as_ref().map_or(area, |b| b.inner(area));
-                    let paragraph =
-                        Paragraph::new(render_messages(app.messages(), app.pending(), inner.width));
-                    let paragraph = match block {
-                        Some(block) => paragraph.block(block),
-                        None => paragraph,
-                    };
-                    frame.render_widget(paragraph, area);
-                }
-                BufferKind::Input => {
-                    let block = Block::default()
-                        .borders(Borders::TOP | Borders::BOTTOM)
-                        .style(Color::LightMagenta);
-                    let paragraph = Paragraph::new(render_input(app, state)).block(block);
-                    frame.render_widget(paragraph, area);
-                }
-                BufferKind::Status => {
-                    frame.render_widget(Paragraph::new(render_status(app, state)), area);
-                }
+        Node::Window(window) => match window.kind {
+            WindowKind::Messages => {
+                let block = block_for(window);
+                let inner = block.as_ref().map_or(area, |b| b.inner(area));
+                let paragraph =
+                    Paragraph::new(render_messages(app.messages(), app.pending(), inner.width));
+                let paragraph = match block {
+                    Some(block) => paragraph.block(block),
+                    None => paragraph,
+                };
+                frame.render_widget(paragraph, area);
             }
-        }
+            WindowKind::Input => {
+                let block = Block::default()
+                    .borders(Borders::TOP | Borders::BOTTOM)
+                    .style(Color::LightMagenta);
+                let paragraph = Paragraph::new(render_input(app, state)).block(block);
+                frame.render_widget(paragraph, area);
+            }
+            WindowKind::Status => {
+                frame.render_widget(Paragraph::new(render_status(app, state)), area);
+            }
+            WindowKind::Text => {
+                let block = block_for(window);
+                let lines = window
+                    .lines
+                    .iter()
+                    .map(|line| Line::raw(line.clone()))
+                    .collect::<Vec<_>>();
+                let paragraph = Paragraph::new(lines);
+                let paragraph = match block {
+                    Some(block) => paragraph.block(block),
+                    None => paragraph,
+                };
+                frame.render_widget(paragraph, area);
+            }
+        },
     }
 }
 

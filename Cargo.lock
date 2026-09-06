@@ -3389,7 +3389,6 @@ dependencies = [
 name = "uji-api"
 version = "0.1.0"
 dependencies = [
- "thiserror 2.0.20",
  "tui",
 ]
 

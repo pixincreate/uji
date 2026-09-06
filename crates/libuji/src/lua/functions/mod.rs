@@ -1,4 +1,3 @@
-mod buffer;
 mod command;
 mod event;
 mod llm;
@@ -17,10 +16,6 @@ struct Api {
 }
 
 static UI_REGISTRY: &[Api] = &[
-    Api {
-        key: "create_buf",
-        build: buffer::create_buf,
-    },
     Api {
         key: "open_win",
         build: window::open_win,
@@ -61,9 +56,6 @@ pub(crate) fn register_all(lua: &LuaState, inner: &Rc<Inner>) -> mlua::Result<Ta
     for entry in UI_REGISTRY {
         ui.set(entry.key, (entry.build)(lua, inner)?)?;
     }
-    let opt = lua.create_table()?;
-    opt.set("cursor_blink", true)?;
-    ui.set("opt", opt)?;
     uji.set("ui", ui)?;
 
     let llm = lua.create_table()?;

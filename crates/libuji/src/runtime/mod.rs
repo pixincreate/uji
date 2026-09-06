@@ -54,8 +54,7 @@ impl Runtime {
 
         inner.run_init(config_path);
         inner.load_plugins(plugin_dir);
-        inner.ensure_default_layout();
-        inner.sync_opts();
+        inner.apply_ui_config();
 
         Ok(Self {
             inner,

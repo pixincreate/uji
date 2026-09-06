@@ -1,16 +1,11 @@
 use ratatui::layout::Rect;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BufferKind {
+pub enum WindowKind {
     Messages,
     Input,
     Status,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BufferSpec {
-    pub name: String,
-    pub kind: BufferKind,
+    Text,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -57,7 +52,9 @@ impl Default for WinOpts {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WindowSpec {
-    pub buffer: String,
+    pub id: u32,
+    pub kind: WindowKind,
+    pub lines: Vec<String>,
     pub opts: WinOpts,
 }
 
@@ -82,7 +79,6 @@ impl Default for GlobalOpts {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UiModel {
-    pub buffers: Vec<BufferSpec>,
     pub windows: Vec<WindowSpec>,
     pub opts: GlobalOpts,
 }
@@ -90,19 +86,11 @@ pub struct UiModel {
 impl Default for UiModel {
     fn default() -> Self {
         Self {
-            buffers: vec![
-                BufferSpec {
-                    name: "messages".into(),
-                    kind: BufferKind::Messages,
-                },
-                BufferSpec {
-                    name: "input".into(),
-                    kind: BufferKind::Input,
-                },
-            ],
             windows: vec![
                 WindowSpec {
-                    buffer: "messages".into(),
+                    id: 0,
+                    kind: WindowKind::Messages,
+                    lines: Vec::new(),
                     opts: WinOpts {
                         split: Split::Top,
                         size: Size::Fill,
@@ -110,23 +98,30 @@ impl Default for UiModel {
                     },
                 },
                 WindowSpec {
-                    buffer: "input".into(),
+                    id: 1,
+                    kind: WindowKind::Status,
+                    lines: Vec::new(),
+                    opts: WinOpts {
+                        split: Split::Bottom,
+                        size: Size::Fixed(1),
+                        border: Border::None,
+                        ..WinOpts::default()
+                    },
+                },
+                WindowSpec {
+                    id: 2,
+                    kind: WindowKind::Input,
+                    lines: Vec::new(),
                     opts: WinOpts {
                         split: Split::Bottom,
                         size: Size::Fixed(3),
-                        border: Border::Plain,
+                        border: Border::None,
                         ..WinOpts::default()
                     },
                 },
             ],
             opts: GlobalOpts::default(),
         }
-    }
-}
-
-impl UiModel {
-    pub fn buffer_kind(&self, name: &str) -> Option<BufferKind> {
-        self.buffers.iter().find(|b| b.name == name).map(|b| b.kind)
     }
 }
 

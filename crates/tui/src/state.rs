@@ -1,12 +1,12 @@
-use crate::model::{BufferKind, BufferSpec, GlobalOpts, UiModel, WinOpts, WindowSpec};
+use crate::model::{GlobalOpts, UiModel, WinOpts, WindowKind, WindowSpec};
 
 #[derive(Debug, Default)]
 pub struct UiState {
-    buffers: Vec<BufferSpec>,
     windows: Vec<WindowSpec>,
     opts: GlobalOpts,
     current_provider: Option<String>,
     current_model: Option<String>,
+    next_window_id: u32,
 }
 
 impl UiState {
@@ -14,34 +14,26 @@ impl UiState {
         Self::default()
     }
 
-    pub fn push_buffer(&mut self, name: &str, kind: BufferKind) {
-        self.buffers.push(BufferSpec {
-            name: name.to_owned(),
+    pub fn push_window(&mut self, kind: WindowKind, lines: Vec<String>, opts: WinOpts) -> u32 {
+        let id = self.next_window_id;
+        self.next_window_id += 1;
+        self.windows.push(WindowSpec {
+            id,
             kind,
+            lines,
+            opts,
         });
+        id
     }
 
-    pub fn has_buffer(&self, name: &str) -> bool {
-        self.buffers.iter().any(|b| b.name == name)
-    }
-
-    pub fn push_window(&mut self, buffer: String, opts: WinOpts) {
-        self.windows.push(WindowSpec { buffer, opts });
-    }
-
-    pub fn remove_windows_for(&mut self, buffer: &str) -> usize {
+    pub fn close_window(&mut self, id: u32) -> bool {
         let before = self.windows.len();
-        self.windows.retain(|w| w.buffer != buffer);
-        before - self.windows.len()
+        self.windows.retain(|w| w.id != id);
+        self.windows.len() != before
     }
 
     pub fn clear(&mut self) {
-        self.buffers.clear();
         self.windows.clear();
-    }
-
-    pub fn buffers(&self) -> &[BufferSpec] {
-        &self.buffers
     }
 
     pub fn windows(&self) -> &[WindowSpec] {
@@ -84,13 +76,8 @@ impl UiState {
         self.current_model = Some(model);
     }
 
-    pub fn buffer_kind(&self, name: &str) -> Option<BufferKind> {
-        self.buffers.iter().find(|b| b.name == name).map(|b| b.kind)
-    }
-
     pub fn snapshot(&self) -> UiModel {
         UiModel {
-            buffers: self.buffers.clone(),
             windows: self.windows.clone(),
             opts: self.opts.clone(),
         }

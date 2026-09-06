@@ -1,21 +1,19 @@
--- Default uji UI.
--- Message history fills the top (Pi-style blocks); input bar + status footer
--- at the bottom.
+-- Default uji UI, configured via component objects (nvim-style).
 
-uji.ui.open_win("messages", {
-    split = "top",
-    size = "fill",
+uji.ui.messages = {
     border = "none",
-})
+}
 
-uji.ui.open_win("status", {
-    split = "bottom",
-    size = 1,
-    border = "none",
-})
+uji.ui.input = {
+    height = 3,
+    cursor_blink = true,
+}
 
-uji.ui.open_win("input", {
-    split = "bottom",
-    size = 3,
-    border = "none",
-})
+uji.ui.footer = {
+    hint = "ctrl+c exit",
+}
+
+uji.ui.suggest = {
+    enabled = true,
+    max_height = 5,
+}

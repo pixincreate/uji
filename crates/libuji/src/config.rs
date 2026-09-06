@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use mlua::{Lua, Table};
-use tui::model::{GlobalOpts, UiModel};
+use mlua::Lua;
+use tui::model::UiModel;
 
 use crate::runtime::Inner;
 
@@ -68,24 +68,6 @@ fn from_lua(source: &str, name: &str) -> Result<UiModel, mlua::Error> {
     let uji = crate::lua::functions::register_all(&inner.lua, &inner)?;
     inner.lua.globals().set("uji", uji)?;
     inner.lua.load(source).set_name(name).exec()?;
-
-    let cursor_blink = inner
-        .lua
-        .globals()
-        .get::<Table>("uji")
-        .and_then(|uji| uji.get::<Table>("ui"))
-        .and_then(|ui| ui.get::<Table>("opt"))
-        .ok()
-        .and_then(|opt| opt.get::<Option<bool>>("cursor_blink").ok().flatten())
-        .unwrap_or(true);
-
-    let state = inner.state.borrow();
-    Ok(UiModel {
-        buffers: state.buffers().to_vec(),
-        windows: state.windows().to_vec(),
-        opts: GlobalOpts {
-            cursor_blink,
-            ..GlobalOpts::default()
-        },
-    })
+    inner.apply_ui_config();
+    Ok(inner.state.borrow().snapshot())
 }

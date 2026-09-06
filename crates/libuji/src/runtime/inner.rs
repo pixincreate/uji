@@ -5,6 +5,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use mlua::{Function, Lua as LuaState, Table};
+use tui::model::{Border, Size, Split, WinOpts, WindowKind};
 use tui::state::UiState;
 use uji_core::credential;
 use uji_core::llm::{Echo, Llm, LlmConfig};
@@ -12,6 +13,7 @@ use uji_core::session::store::SessionStorage;
 
 use super::handlers::Handlers;
 use super::scheduled::Scheduled;
+use crate::api;
 use crate::config::{self, DEFAULT_LUA};
 
 pub(crate) struct Inner {
@@ -59,8 +61,7 @@ impl Inner {
         self.state.borrow_mut().clear();
         self.run_init(None);
         self.load_plugins(None);
-        self.ensure_default_layout();
-        self.sync_opts();
+        self.apply_ui_config();
     }
 
     pub(crate) fn run_init(&self, config_path: Option<PathBuf>) {
@@ -104,50 +105,87 @@ impl Inner {
         }
     }
 
-    pub(crate) fn ensure_default_layout(&self) {
-        if self.state.borrow().windows().is_empty() {
-            let _ = self.lua.load(DEFAULT_LUA).set_name("default.lua").exec();
-        }
-    }
-
-    pub(crate) fn sync_opts(&self) {
-        let opt = self
+    pub(crate) fn apply_ui_config(&self) {
+        let ui = self
             .lua
             .globals()
             .get::<Table>("uji")
             .ok()
-            .and_then(|uji| uji.get::<Table>("ui").ok())
-            .and_then(|ui| ui.get::<Table>("opt").ok());
+            .and_then(|uji| uji.get::<Table>("ui").ok());
 
-        let cursor_blink = opt
+        let messages_border = ui
             .as_ref()
-            .and_then(|opt| opt.get::<Option<bool>>("cursor_blink").ok().flatten())
+            .and_then(|ui| ui.get::<Table>("messages").ok())
+            .and_then(|m| m.get::<Option<String>>("border").ok().flatten())
+            .and_then(|b| b.parse::<Border>().ok())
+            .unwrap_or(Border::None);
+
+        let input = ui.as_ref().and_then(|ui| ui.get::<Table>("input").ok());
+        let input_height = input
+            .as_ref()
+            .and_then(|i| i.get::<Option<i64>>("height").ok().flatten())
+            .and_then(|n| u16::try_from(n).ok())
+            .unwrap_or(3);
+        let cursor_blink = input
+            .as_ref()
+            .and_then(|i| i.get::<Option<bool>>("cursor_blink").ok().flatten())
             .unwrap_or(true);
-        self.state.borrow_mut().set_cursor_blink(cursor_blink);
 
-        let suggest = opt
+        let footer_hint = ui
             .as_ref()
-            .and_then(|opt| opt.get::<Table>("suggest").ok());
+            .and_then(|ui| ui.get::<Table>("footer").ok())
+            .and_then(|f| f.get::<Option<String>>("hint").ok().flatten())
+            .unwrap_or_else(|| "ctrl+c exit".into());
+
+        let suggest = ui.as_ref().and_then(|ui| ui.get::<Table>("suggest").ok());
         let suggest_enabled = suggest
             .as_ref()
-            .and_then(|suggest| suggest.get::<Option<bool>>("enabled").ok().flatten())
+            .and_then(|s| s.get::<Option<bool>>("enabled").ok().flatten())
             .unwrap_or(true);
         let suggest_max_height = suggest
             .as_ref()
-            .and_then(|suggest| suggest.get::<Option<i64>>("max_height").ok().flatten())
+            .and_then(|s| s.get::<Option<i64>>("max_height").ok().flatten())
             .and_then(|n| u16::try_from(n).ok())
             .unwrap_or(5);
-        self.state.borrow_mut().set_suggest_enabled(suggest_enabled);
-        self.state
-            .borrow_mut()
-            .set_suggest_max_height(suggest_max_height);
 
-        let footer_hint = opt
-            .as_ref()
-            .and_then(|opt| opt.get::<Table>("footer").ok())
-            .and_then(|footer| footer.get::<Option<String>>("hint").ok().flatten())
-            .unwrap_or_else(|| "ctrl+c exit".into());
-        self.state.borrow_mut().set_footer_hint(footer_hint);
+        let mut state = self.state.borrow_mut();
+        let _ = api::window::open(
+            &mut state,
+            WindowKind::Messages,
+            Vec::new(),
+            WinOpts {
+                split: Split::Top,
+                size: Size::Fill,
+                border: messages_border,
+                title: None,
+            },
+        );
+        let _ = api::window::open(
+            &mut state,
+            WindowKind::Status,
+            Vec::new(),
+            WinOpts {
+                split: Split::Bottom,
+                size: Size::Fixed(1),
+                border: Border::None,
+                title: None,
+            },
+        );
+        let _ = api::window::open(
+            &mut state,
+            WindowKind::Input,
+            Vec::new(),
+            WinOpts {
+                split: Split::Bottom,
+                size: Size::Fixed(input_height),
+                border: Border::None,
+                title: None,
+            },
+        );
+        state.set_cursor_blink(cursor_blink);
+        state.set_footer_hint(footer_hint);
+        state.set_suggest_enabled(suggest_enabled);
+        state.set_suggest_max_height(suggest_max_height);
     }
 
     pub(crate) fn resolve_llm(&self, storage: &mut dyn SessionStorage) {
