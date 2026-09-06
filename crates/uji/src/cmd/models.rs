@@ -36,7 +36,6 @@ impl Action for Models {
     fn on_select<C: Context>(&mut self, ctx: &mut C, item: String) {
         ctx.set_setting("llm.model", &item);
         ctx.resolve_llm();
-        ctx.notify(&format!("default model: {item}"));
         ctx.finish();
     }
 
