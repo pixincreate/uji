@@ -17,7 +17,7 @@ pub(crate) struct Inner {
     pub(crate) api: Rc<Api>,
     pub(crate) llm: RefCell<Arc<dyn Llm>>,
     pub(crate) llm_model: RefCell<String>,
-    pub(crate) client: Arc<reqwest::blocking::Client>,
+    pub(crate) client: Arc<reqwest::Client>,
 }
 
 impl Inner {
@@ -27,7 +27,7 @@ impl Inner {
             api,
             llm: RefCell::new(Arc::new(NotConfigured)),
             llm_model: RefCell::default(),
-            client: Arc::new(reqwest::blocking::Client::new()),
+            client: Arc::new(reqwest::Client::new()),
         })
     }
 

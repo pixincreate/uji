@@ -49,24 +49,6 @@ pub(crate) fn plugin_dir() -> Option<PathBuf> {
     path.is_dir().then_some(path)
 }
 
-pub(crate) fn watch_paths() -> Vec<PathBuf> {
-    if let Some(path) = std::env::var("UJI_CONFIG").ok().filter(|p| !p.is_empty()) {
-        let path = PathBuf::from(path);
-        return if path.is_file() {
-            vec![path]
-        } else {
-            Vec::new()
-        };
-    }
-    if let Ok(home) = std::env::var("HOME") {
-        let dir = PathBuf::from(home).join(".config/uji");
-        if dir.is_dir() {
-            return vec![dir];
-        }
-    }
-    Vec::new()
-}
-
 fn from_lua(source: &str, name: &str) -> Result<UiModel, mlua::Error> {
     let lua = Lua::new();
     let api = Api::new(Rc::new(RefCell::new(UiState::new())));

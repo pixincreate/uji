@@ -28,6 +28,7 @@ pub(crate) struct LoopData {
     pub(crate) dirty: bool,
     pub(crate) running: bool,
     pub(crate) llm_tx: calloop::channel::Sender<StreamEvent>,
+    pub(crate) runtime: tokio::runtime::Runtime,
     pub(crate) active: Option<Builtin>,
     pub(crate) action_done: bool,
 }
@@ -83,10 +84,11 @@ impl LoopData {
             .map(|stored| stored.message.clone())
             .collect();
         let sender = self.llm_tx.clone();
-        std::thread::spawn(move || {
-            stream_turn(&client, provider.as_ref(), model, context, &mut |event| {
+        self.runtime.spawn(async move {
+            let mut on_event = |event: StreamEvent| {
                 let _ = sender.send(event);
-            });
+            };
+            stream_turn(&client, provider.as_ref(), model, context, &mut on_event).await;
         });
     }
 
@@ -125,12 +127,6 @@ impl LoopData {
                 eprintln!("uji: failed to persist response: {err}");
             }
         }
-        self.dirty = true;
-    }
-
-    pub(crate) fn reload(&mut self) {
-        self.inner.reload();
-        self.refresh_suggestions();
         self.dirty = true;
     }
 
@@ -215,6 +211,12 @@ impl Context for LoopData {
     fn resolve_llm(&mut self) {
         self.inner.resolve_llm(&mut *self.storage);
         self.refresh_status();
+    }
+
+    fn reload(&mut self) {
+        self.inner.reload();
+        self.refresh_suggestions();
+        self.dirty = true;
     }
 
     fn notify(&mut self, message: &str) {

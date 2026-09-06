@@ -4,6 +4,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
+use async_trait::async_trait;
+use futures_util::StreamExt;
+
 use crate::credential;
 use crate::session::model::Message;
 use crate::session::store::SessionStorage;
@@ -21,10 +24,7 @@ pub enum Auth {
 }
 
 impl Auth {
-    pub(crate) fn apply(
-        &self,
-        builder: reqwest::blocking::RequestBuilder,
-    ) -> reqwest::blocking::RequestBuilder {
+    pub(crate) fn apply(&self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         match self {
             Auth::None => builder,
             Auth::Bearer { token } => builder.bearer_auth(token),
@@ -49,9 +49,9 @@ pub enum LlmError {
     Provider(String),
 }
 
-pub(crate) fn status_error(response: reqwest::blocking::Response) -> LlmError {
+pub(crate) async fn status_error(response: reqwest::Response) -> LlmError {
     let status = response.status().as_u16();
-    let body = response.text().unwrap_or_default();
+    let body = response.text().await.unwrap_or_default();
     if status == 401 || status == 403 {
         LlmError::Auth
     } else {
@@ -59,21 +59,22 @@ pub(crate) fn status_error(response: reqwest::blocking::Response) -> LlmError {
     }
 }
 
+#[async_trait]
 pub trait Llm: Send + Sync {
     fn id(&self) -> &'static str;
-    fn send_request(
+    async fn send_request(
         &self,
-        client: &reqwest::blocking::Client,
+        client: &reqwest::Client,
         request: &LlmRequest,
     ) -> Result<String, LlmError>;
-    fn stream(
+    async fn stream(
         &self,
-        client: &reqwest::blocking::Client,
+        client: &reqwest::Client,
         request: &LlmRequest,
-        on_delta: &mut dyn FnMut(&str),
+        on_delta: &mut (dyn FnMut(String) + Send),
     ) -> Result<String, LlmError> {
-        let text = self.send_request(client, request)?;
-        on_delta(&text);
+        let text = self.send_request(client, request).await?;
+        on_delta(text.clone());
         Ok(text)
     }
 }
@@ -315,26 +316,46 @@ pub enum StreamEvent {
     Failed(String),
 }
 
-pub fn stream_turn(
-    client: &reqwest::blocking::Client,
+pub async fn stream_turn(
+    client: &reqwest::Client,
     provider: &dyn Llm,
     model: String,
     messages: Vec<Message>,
-    on_event: &mut dyn FnMut(StreamEvent),
+    on_event: &mut (dyn FnMut(StreamEvent) + Send),
 ) {
     let request = LlmRequest {
         model,
         system: None,
         messages,
     };
-    let result = provider.stream(client, &request, &mut |delta| {
-        on_event(StreamEvent::Delta(delta.to_string()));
-    });
+    let result = provider
+        .stream(client, &request, &mut |delta| {
+            on_event(StreamEvent::Delta(delta));
+        })
+        .await;
     let event = match result {
         Ok(text) => StreamEvent::Done(text),
         Err(err) => StreamEvent::Failed(err.to_string()),
     };
     on_event(event);
+}
+
+pub(crate) async fn response_lines(
+    response: reqwest::Response,
+    mut on_line: impl FnMut(&str) + Send,
+) -> Result<(), LlmError> {
+    let mut buf = String::new();
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|err| LlmError::Http(err.to_string()))?;
+        buf.push_str(&String::from_utf8_lossy(&chunk));
+        while let Some(pos) = buf.find('\n') {
+            let line = buf[..pos].trim_end_matches('\r').to_string();
+            buf.drain(..=pos);
+            on_line(&line);
+        }
+    }
+    Ok(())
 }
 
 pub fn resolve_from_storage(storage: &mut dyn SessionStorage) -> (Arc<dyn Llm>, String, String) {

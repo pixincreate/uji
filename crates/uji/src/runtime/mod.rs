@@ -4,7 +4,6 @@ pub mod events;
 mod inner;
 mod input;
 mod loop_data;
-mod watcher;
 
 pub use error::RuntimeError;
 pub(crate) use inner::Inner;
@@ -24,7 +23,6 @@ use uji_api::Api;
 use uji_api::state::UiState;
 
 use crate::app::{self, App};
-use crate::config::{self};
 use crate::llm::StreamEvent;
 use crate::session::model::Session;
 use crate::session::store::SessionStorage;
@@ -94,6 +92,7 @@ impl Runtime {
 
         let (llm_sender, llm_channel) = calloop::channel::channel::<StreamEvent>();
 
+        let runtime = tokio::runtime::Runtime::new()?;
         let mut data = LoopData {
             inner,
             app,
@@ -104,6 +103,7 @@ impl Runtime {
             llm_tx: llm_sender,
             active: None,
             action_done: false,
+            runtime,
         };
 
         data.inner.resolve_llm(&mut *data.storage);
@@ -126,36 +126,6 @@ impl Runtime {
                 }
             })
             .map_err(|err| io::Error::other(format!("register llm source: {err}")))?;
-
-        let _watcher = {
-            let paths = config::watch_paths();
-            if paths.is_empty() {
-                None
-            } else {
-                let (sender, channel) = calloop::channel::channel::<watcher::ConfigEvent>();
-                match watcher::watch(paths, sender) {
-                    Ok(watcher) => {
-                        event_loop
-                            .handle()
-                            .insert_source(channel, |event, _meta, data: &mut LoopData| {
-                                if let calloop::channel::Event::Msg(watcher::ConfigEvent::Reload) =
-                                    event
-                                {
-                                    data.reload();
-                                }
-                            })
-                            .map_err(|err| {
-                                io::Error::other(format!("register config watcher: {err}"))
-                            })?;
-                        Some(watcher)
-                    }
-                    Err(err) => {
-                        eprintln!("uji: config watcher failed: {err}");
-                        None
-                    }
-                }
-            }
-        };
 
         app::draw(&mut data.terminal, &data.app)?;
         data.dirty = false;

@@ -1,6 +1,6 @@
-use std::io::{BufRead, BufReader};
+use async_trait::async_trait;
 
-use crate::llm::{Llm, LlmConfig, LlmError, LlmRequest, status_error};
+use crate::llm::{Llm, LlmConfig, LlmError, LlmRequest, response_lines, status_error};
 
 use super::transformer::{GeminiRequest, GeminiResponse};
 
@@ -26,13 +26,13 @@ impl Gemini {
         }
     }
 
-    fn post(
+    async fn post(
         &self,
-        client: &reqwest::blocking::Client,
+        client: &reqwest::Client,
         model: &str,
         stream: bool,
         request: &GeminiRequest,
-    ) -> Result<reqwest::blocking::Response, LlmError> {
+    ) -> Result<reqwest::Response, LlmError> {
         let suffix = if stream {
             ":streamGenerateContent?alt=sse"
         } else {
@@ -46,27 +46,32 @@ impl Gemini {
         builder
             .json(request)
             .send()
+            .await
             .map_err(|err| LlmError::Http(err.to_string()))
     }
 }
 
+#[async_trait]
 impl Llm for Gemini {
     fn id(&self) -> &'static str {
         "google"
     }
 
-    fn send_request(
+    async fn send_request(
         &self,
-        client: &reqwest::blocking::Client,
+        client: &reqwest::Client,
         request: &LlmRequest,
     ) -> Result<String, LlmError> {
         let provider_request = GeminiRequest::from(request);
-        let response = self.post(client, &request.model, false, &provider_request)?;
+        let response = self
+            .post(client, &request.model, false, &provider_request)
+            .await?;
         if !response.status().is_success() {
-            return Err(status_error(response));
+            return Err(status_error(response).await);
         }
         let body = response
             .text()
+            .await
             .map_err(|err| LlmError::Http(err.to_string()))?;
         let parsed: GeminiResponse =
             serde_json::from_str(&body).map_err(|err| LlmError::Provider(err.to_string()))?;
@@ -77,34 +82,34 @@ impl Llm for Gemini {
         Ok(text)
     }
 
-    fn stream(
+    async fn stream(
         &self,
-        client: &reqwest::blocking::Client,
+        client: &reqwest::Client,
         request: &LlmRequest,
-        on_delta: &mut dyn FnMut(&str),
+        on_delta: &mut (dyn FnMut(String) + Send),
     ) -> Result<String, LlmError> {
         let provider_request = GeminiRequest::from(request);
-        let response = self.post(client, &request.model, true, &provider_request)?;
+        let response = self
+            .post(client, &request.model, true, &provider_request)
+            .await?;
         if !response.status().is_success() {
-            return Err(status_error(response));
+            return Err(status_error(response).await);
         }
 
         let mut full = String::new();
-        let reader = BufReader::new(response);
-        for line in reader.lines() {
-            let line = line.map_err(|err| LlmError::Http(err.to_string()))?;
+        response_lines(response, |line| {
             let Some(data) = line.strip_prefix("data: ") else {
-                continue;
+                return;
             };
-            let Ok(parsed) = serde_json::from_str::<GeminiResponse>(data) else {
-                continue;
-            };
-            let text = parsed.text();
-            if !text.is_empty() {
-                on_delta(&text);
-                full.push_str(&text);
+            if let Ok(parsed) = serde_json::from_str::<GeminiResponse>(data) {
+                let text = parsed.text();
+                if !text.is_empty() {
+                    on_delta(text.clone());
+                    full.push_str(&text);
+                }
             }
-        }
+        })
+        .await?;
         Ok(full)
     }
 }

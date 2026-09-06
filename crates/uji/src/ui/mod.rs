@@ -52,42 +52,32 @@ pub trait Render {
 }
 
 pub fn render(frame: &mut Frame<'_>, app: &App) {
-    let input_rect = {
-        let state = app.state().borrow();
-        let rects = layout::layout(frame.area(), state.windows());
-        state
-            .windows()
-            .iter()
-            .zip(rects)
-            .find(|(window, _)| window.kind == WindowKind::Input)
-            .map(|(_, rect)| rect)
-    };
-    {
-        let state = app.state().borrow();
-        let ctx = Context { app, state: &state };
-        let rects = layout::layout(frame.area(), state.windows());
-        for (window, rect) in state.windows().iter().zip(rects) {
-            let mut surface = Surface::new(rect, frame.buffer_mut());
-            match window.kind {
-                WindowKind::Messages => {
-                    messages::Messages { window }.render(&ctx, &mut surface);
-                }
-                WindowKind::Input => {
-                    input::Input.render(&ctx, &mut surface);
-                }
-                WindowKind::Status => {
-                    status::Status.render(&ctx, &mut surface);
-                }
-                WindowKind::Text => {
-                    text::Text { window }.render(&ctx, &mut surface);
-                }
+    let state = app.state().borrow();
+    let ctx = Context { app, state: &state };
+    let rects = layout::layout(frame.area(), state.windows());
+    let input_rect = state
+        .windows()
+        .iter()
+        .zip(rects.iter().copied())
+        .find(|(window, _)| window.kind == WindowKind::Input)
+        .map(|(_, rect)| rect);
+    for (window, rect) in state.windows().iter().zip(rects.iter().copied()) {
+        let mut surface = Surface::new(rect, frame.buffer_mut());
+        match window.kind {
+            WindowKind::Messages => {
+                messages::Messages { window }.render(&ctx, &mut surface);
+            }
+            WindowKind::Input => {
+                input::Input.render(&ctx, &mut surface);
+            }
+            WindowKind::Status => {
+                status::Status.render(&ctx, &mut surface);
+            }
+            WindowKind::Text => {
+                text::Text { window }.render(&ctx, &mut surface);
             }
         }
     }
-    {
-        let state = app.state().borrow();
-        let ctx = Context { app, state: &state };
-        let mut surface = Surface::new(frame.area(), frame.buffer_mut());
-        modal::Modal { input_rect }.render(&ctx, &mut surface);
-    }
+    let mut surface = Surface::new(frame.area(), frame.buffer_mut());
+    modal::Modal { input_rect }.render(&ctx, &mut surface);
 }

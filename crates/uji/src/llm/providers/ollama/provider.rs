@@ -1,6 +1,6 @@
-use std::io::{BufRead, BufReader};
+use async_trait::async_trait;
 
-use crate::llm::{Auth, Llm, LlmConfig, LlmError, LlmRequest, status_error};
+use crate::llm::{Auth, Llm, LlmConfig, LlmError, LlmRequest, response_lines, status_error};
 
 use super::transformer::{OllamaChunk, OllamaRequest, OllamaResponse};
 
@@ -27,37 +27,40 @@ impl Ollama {
         }
     }
 
-    fn post(
+    async fn post(
         &self,
-        client: &reqwest::blocking::Client,
+        client: &reqwest::Client,
         request: &OllamaRequest,
-    ) -> Result<reqwest::blocking::Response, LlmError> {
+    ) -> Result<reqwest::Response, LlmError> {
         let url = format!("{}/api/chat", self.base_url);
         self.auth
             .apply(client.post(&url))
             .json(request)
             .send()
+            .await
             .map_err(|err| LlmError::Http(err.to_string()))
     }
 }
 
+#[async_trait]
 impl Llm for Ollama {
     fn id(&self) -> &'static str {
         "ollama"
     }
 
-    fn send_request(
+    async fn send_request(
         &self,
-        client: &reqwest::blocking::Client,
+        client: &reqwest::Client,
         request: &LlmRequest,
     ) -> Result<String, LlmError> {
         let provider_request = OllamaRequest::from(request);
-        let response = self.post(client, &provider_request)?;
+        let response = self.post(client, &provider_request).await?;
         if !response.status().is_success() {
-            return Err(status_error(response));
+            return Err(status_error(response).await);
         }
         let body = response
             .text()
+            .await
             .map_err(|err| LlmError::Http(err.to_string()))?;
         let parsed: OllamaResponse =
             serde_json::from_str(&body).map_err(|err| LlmError::Provider(err.to_string()))?;
@@ -68,37 +71,32 @@ impl Llm for Ollama {
         Ok(text.to_string())
     }
 
-    fn stream(
+    async fn stream(
         &self,
-        client: &reqwest::blocking::Client,
+        client: &reqwest::Client,
         request: &LlmRequest,
-        on_delta: &mut dyn FnMut(&str),
+        on_delta: &mut (dyn FnMut(String) + Send),
     ) -> Result<String, LlmError> {
         let mut provider_request = OllamaRequest::from(request);
         provider_request.stream = true;
-        let response = self.post(client, &provider_request)?;
+        let response = self.post(client, &provider_request).await?;
         if !response.status().is_success() {
-            return Err(status_error(response));
+            return Err(status_error(response).await);
         }
 
         let mut full = String::new();
-        let reader = BufReader::new(response);
-        for line in reader.lines() {
-            let line = line.map_err(|err| LlmError::Http(err.to_string()))?;
+        response_lines(response, |line| {
             if line.is_empty() {
-                continue;
+                return;
             }
-            let Ok(chunk) = serde_json::from_str::<OllamaChunk>(&line) else {
-                continue;
-            };
-            if let Some(delta) = chunk.delta_text() {
-                on_delta(delta);
+            if let Ok(chunk) = serde_json::from_str::<OllamaChunk>(line)
+                && let Some(delta) = chunk.delta_text()
+            {
+                on_delta(delta.to_string());
                 full.push_str(delta);
             }
-            if chunk.done {
-                break;
-            }
-        }
+        })
+        .await?;
         Ok(full)
     }
 }

@@ -1,6 +1,6 @@
-use std::io::{BufRead, BufReader};
+use async_trait::async_trait;
 
-use crate::llm::{Llm, LlmConfig, LlmError, LlmRequest, status_error};
+use crate::llm::{Llm, LlmConfig, LlmError, LlmRequest, response_lines, status_error};
 
 use super::transformer::{AnthropicRequest, AnthropicResponse, AnthropicStreamEvent};
 
@@ -25,11 +25,11 @@ impl Anthropic {
         }
     }
 
-    fn post(
+    async fn post(
         &self,
-        client: &reqwest::blocking::Client,
+        client: &reqwest::Client,
         request: &AnthropicRequest,
-    ) -> Result<reqwest::blocking::Response, LlmError> {
+    ) -> Result<reqwest::Response, LlmError> {
         let url = format!("{}/messages", self.base_url);
         let mut builder = client.post(&url).header("anthropic-version", "2023-06-01");
         if let Some(key) = &self.api_key {
@@ -38,27 +38,30 @@ impl Anthropic {
         builder
             .json(request)
             .send()
+            .await
             .map_err(|err| LlmError::Http(err.to_string()))
     }
 }
 
+#[async_trait]
 impl Llm for Anthropic {
     fn id(&self) -> &'static str {
         "anthropic"
     }
 
-    fn send_request(
+    async fn send_request(
         &self,
-        client: &reqwest::blocking::Client,
+        client: &reqwest::Client,
         request: &LlmRequest,
     ) -> Result<String, LlmError> {
         let provider_request = AnthropicRequest::from(request);
-        let response = self.post(client, &provider_request)?;
+        let response = self.post(client, &provider_request).await?;
         if !response.status().is_success() {
-            return Err(status_error(response));
+            return Err(status_error(response).await);
         }
         let body = response
             .text()
+            .await
             .map_err(|err| LlmError::Http(err.to_string()))?;
         let parsed: AnthropicResponse =
             serde_json::from_str(&body).map_err(|err| LlmError::Provider(err.to_string()))?;
@@ -69,34 +72,32 @@ impl Llm for Anthropic {
         Ok(text)
     }
 
-    fn stream(
+    async fn stream(
         &self,
-        client: &reqwest::blocking::Client,
+        client: &reqwest::Client,
         request: &LlmRequest,
-        on_delta: &mut dyn FnMut(&str),
+        on_delta: &mut (dyn FnMut(String) + Send),
     ) -> Result<String, LlmError> {
         let mut provider_request = AnthropicRequest::from(request);
         provider_request.stream = true;
-        let response = self.post(client, &provider_request)?;
+        let response = self.post(client, &provider_request).await?;
         if !response.status().is_success() {
-            return Err(status_error(response));
+            return Err(status_error(response).await);
         }
 
         let mut full = String::new();
-        let reader = BufReader::new(response);
-        for line in reader.lines() {
-            let line = line.map_err(|err| LlmError::Http(err.to_string()))?;
+        response_lines(response, |line| {
             let Some(data) = line.strip_prefix("data: ") else {
-                continue;
+                return;
             };
-            let Ok(event) = serde_json::from_str::<AnthropicStreamEvent>(data) else {
-                continue;
-            };
-            if let Some(delta) = event.delta_text() {
-                on_delta(delta);
+            if let Ok(event) = serde_json::from_str::<AnthropicStreamEvent>(data)
+                && let Some(delta) = event.delta_text()
+            {
+                on_delta(delta.to_string());
                 full.push_str(delta);
             }
-        }
+        })
+        .await?;
         Ok(full)
     }
 }
