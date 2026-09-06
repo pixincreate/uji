@@ -6,6 +6,7 @@ use std::sync::LazyLock;
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
+use serde::{Deserialize, Serialize};
 
 use crate::credential;
 use crate::session::model::Message;
@@ -87,188 +88,38 @@ pub struct LlmConfig {
     pub api_key: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Wire {
+    #[serde(rename = "openai-chat")]
     OpenAiChat,
+    #[serde(rename = "anthropic")]
     Anthropic,
+    #[serde(rename = "gemini")]
     Gemini,
+    #[serde(rename = "ollama")]
     OllamaNative,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Provider {
-    pub id: &'static str,
-    pub name: &'static str,
+    pub id: String,
+    pub name: String,
     pub wire: Wire,
-    pub base_url: &'static str,
-    pub auth_env: Option<&'static str>,
+    pub base_url: String,
+    pub auth_env: Option<String>,
 }
 
 impl Provider {
     pub fn default_model(&self) -> &'static str {
-        models(self.id).first().copied().unwrap_or("")
+        models(&self.id).first().copied().unwrap_or("")
     }
 }
 
-static PROVIDERS: &[Provider] = &[
-    Provider {
-        id: "openai",
-        name: "OpenAI",
-        wire: Wire::OpenAiChat,
-        base_url: "https://api.openai.com/v1",
-        auth_env: Some("OPENAI_API_KEY"),
-    },
-    Provider {
-        id: "anthropic",
-        name: "Anthropic",
-        wire: Wire::Anthropic,
-        base_url: "https://api.anthropic.com/v1",
-        auth_env: Some("ANTHROPIC_API_KEY"),
-    },
-    Provider {
-        id: "google",
-        name: "Google",
-        wire: Wire::Gemini,
-        base_url: "https://generativelanguage.googleapis.com/v1beta",
-        auth_env: Some("GEMINI_API_KEY"),
-    },
-    Provider {
-        id: "ollama",
-        name: "Ollama",
-        wire: Wire::OllamaNative,
-        base_url: "http://localhost:11434",
-        auth_env: None,
-    },
-    Provider {
-        id: "custom",
-        name: "Custom",
-        wire: Wire::OpenAiChat,
-        base_url: "",
-        auth_env: None,
-    },
-    Provider {
-        id: "lmstudio",
-        name: "LM Studio",
-        wire: Wire::OpenAiChat,
-        base_url: "http://127.0.0.1:1234/v1",
-        auth_env: None,
-    },
-    Provider {
-        id: "openrouter",
-        name: "OpenRouter",
-        wire: Wire::OpenAiChat,
-        base_url: "https://openrouter.ai/api/v1",
-        auth_env: Some("OPENROUTER_API_KEY"),
-    },
-    Provider {
-        id: "deepseek",
-        name: "DeepSeek",
-        wire: Wire::OpenAiChat,
-        base_url: "https://api.deepseek.com",
-        auth_env: Some("DEEPSEEK_API_KEY"),
-    },
-    Provider {
-        id: "xai",
-        name: "xAI",
-        wire: Wire::OpenAiChat,
-        base_url: "https://api.x.ai/v1",
-        auth_env: Some("XAI_API_KEY"),
-    },
-    Provider {
-        id: "groq",
-        name: "Groq",
-        wire: Wire::OpenAiChat,
-        base_url: "https://api.groq.com/openai/v1",
-        auth_env: Some("GROQ_API_KEY"),
-    },
-    Provider {
-        id: "mistral",
-        name: "Mistral",
-        wire: Wire::OpenAiChat,
-        base_url: "https://api.mistral.ai/v1",
-        auth_env: Some("MISTRAL_API_KEY"),
-    },
-    Provider {
-        id: "perplexity",
-        name: "Perplexity",
-        wire: Wire::OpenAiChat,
-        base_url: "https://api.perplexity.ai",
-        auth_env: Some("PERPLEXITY_API_KEY"),
-    },
-    Provider {
-        id: "together",
-        name: "Together",
-        wire: Wire::OpenAiChat,
-        base_url: "https://api.together.xyz/v1",
-        auth_env: Some("TOGETHER_API_KEY"),
-    },
-    Provider {
-        id: "cerebras",
-        name: "Cerebras",
-        wire: Wire::OpenAiChat,
-        base_url: "https://api.cerebras.ai/v1",
-        auth_env: Some("CEREBRAS_API_KEY"),
-    },
-    Provider {
-        id: "moonshotai",
-        name: "Moonshot AI",
-        wire: Wire::OpenAiChat,
-        base_url: "https://api.moonshot.ai/v1",
-        auth_env: Some("MOONSHOT_API_KEY"),
-    },
-    Provider {
-        id: "zhipuai",
-        name: "Zhipu AI",
-        wire: Wire::OpenAiChat,
-        base_url: "https://open.bigmodel.cn/api/paas/v4",
-        auth_env: Some("ZHIPU_API_KEY"),
-    },
-    Provider {
-        id: "huggingface",
-        name: "Hugging Face",
-        wire: Wire::OpenAiChat,
-        base_url: "https://router.huggingface.co/v1",
-        auth_env: Some("HF_TOKEN"),
-    },
-    Provider {
-        id: "fireworks",
-        name: "Fireworks",
-        wire: Wire::OpenAiChat,
-        base_url: "https://api.fireworks.ai/inference/v1",
-        auth_env: Some("FIREWORKS_API_KEY"),
-    },
-    Provider {
-        id: "baseten",
-        name: "Baseten",
-        wire: Wire::OpenAiChat,
-        base_url: "https://inference.baseten.co/v1",
-        auth_env: Some("BASETEN_API_KEY"),
-    },
-    Provider {
-        id: "nvidia",
-        name: "NVIDIA",
-        wire: Wire::OpenAiChat,
-        base_url: "https://integrate.api.nvidia.com/v1",
-        auth_env: Some("NVIDIA_API_KEY"),
-    },
-    Provider {
-        id: "github-models",
-        name: "GitHub Models",
-        wire: Wire::OpenAiChat,
-        base_url: "https://models.github.ai/inference",
-        auth_env: Some("GITHUB_TOKEN"),
-    },
-    Provider {
-        id: "opencode-zen",
-        name: "OpenCode Zen",
-        wire: Wire::OpenAiChat,
-        base_url: "https://opencode.ai/zen/v1",
-        auth_env: Some("OPENCODE_API_KEY"),
-    },
-];
+static PROVIDERS: LazyLock<Vec<Provider>> =
+    LazyLock::new(|| serde_json::from_str(include_str!("providers.json")).unwrap_or_default());
 
 pub fn providers() -> &'static [Provider] {
-    PROVIDERS
+    PROVIDERS.as_slice()
 }
 
 pub fn provider(id: &str) -> Option<&'static Provider> {
@@ -299,7 +150,7 @@ pub fn resolve(config: &LlmConfig) -> Arc<dyn Llm> {
     let resolved = LlmConfig {
         provider: config.provider.clone(),
         model: config.model.clone(),
-        base_url: Some(provider.base_url.to_string()),
+        base_url: Some(provider.base_url.clone()),
         api_key: config.api_key.clone(),
     };
     match provider.wire {

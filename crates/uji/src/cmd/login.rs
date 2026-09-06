@@ -14,7 +14,7 @@ enum Step {
 struct Draft {
     provider_id: String,
     is_custom: bool,
-    auth_env: Option<&'static str>,
+    auth_env: Option<String>,
     base_url: String,
     model: String,
 }
@@ -37,10 +37,7 @@ impl Action for Login {
     fn start<C: Context>(&mut self, ctx: &mut C, _args: &Args) {
         self.step = Step::Provider;
         self.draft = Draft::default();
-        let names = llm::providers()
-            .iter()
-            .map(|p| p.name.to_string())
-            .collect();
+        let names = llm::providers().iter().map(|p| p.name.clone()).collect();
         ctx.open_select("Provider".into(), names);
     }
 
@@ -52,15 +49,18 @@ impl Action for Login {
             ctx.finish();
             return;
         };
-        self.draft.provider_id = provider.id.to_string();
+        provider.id.clone_into(&mut self.draft.provider_id);
         self.draft.is_custom = provider.id == "custom";
-        self.draft.auth_env = provider.auth_env;
+        provider.auth_env.clone_into(&mut self.draft.auth_env);
         if self.draft.is_custom {
             self.step = Step::BaseUrl;
             ctx.open_prompt("base_url".into(), String::new(), false);
         } else if self.draft.auth_env.is_some() {
             self.step = Step::ApiKey;
-            let title = format!("{} (enter to skip)", self.draft.auth_env.unwrap_or(""));
+            let title = format!(
+                "{} (enter to skip)",
+                self.draft.auth_env.as_deref().unwrap_or("")
+            );
             ctx.open_prompt(title, String::new(), true);
         } else {
             self.finish_configure(ctx);
