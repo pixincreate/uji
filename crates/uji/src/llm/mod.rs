@@ -1,6 +1,8 @@
 pub mod providers;
 
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 use crate::credential;
 use crate::session::model::Message;
@@ -99,12 +101,11 @@ pub struct Provider {
     pub wire: Wire,
     pub base_url: &'static str,
     pub auth_env: Option<&'static str>,
-    pub models: &'static [&'static str],
 }
 
 impl Provider {
     pub fn default_model(&self) -> &'static str {
-        self.models.first().copied().unwrap_or("")
+        models(self.id).first().copied().unwrap_or("")
     }
 }
 
@@ -115,7 +116,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://api.openai.com/v1",
         auth_env: Some("OPENAI_API_KEY"),
-        models: &["gpt-5.2", "gpt-5.2-mini", "gpt-5", "o3"],
     },
     Provider {
         id: "anthropic",
@@ -123,7 +123,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::Anthropic,
         base_url: "https://api.anthropic.com/v1",
         auth_env: Some("ANTHROPIC_API_KEY"),
-        models: &["claude-sonnet-4-5", "claude-opus-4-5", "claude-haiku-4-5"],
     },
     Provider {
         id: "google",
@@ -131,7 +130,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::Gemini,
         base_url: "https://generativelanguage.googleapis.com/v1beta",
         auth_env: Some("GEMINI_API_KEY"),
-        models: &["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.1-flash"],
     },
     Provider {
         id: "ollama",
@@ -139,7 +137,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OllamaNative,
         base_url: "http://localhost:11434",
         auth_env: None,
-        models: &["llama3.2", "llama3.1", "qwen3", "mistral"],
     },
     Provider {
         id: "custom",
@@ -147,7 +144,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "",
         auth_env: None,
-        models: &[],
     },
     Provider {
         id: "lmstudio",
@@ -155,7 +151,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "http://127.0.0.1:1234/v1",
         auth_env: None,
-        models: &["qwen/qwen3-coder-30b", "openai/gpt-oss-20b"],
     },
     Provider {
         id: "openrouter",
@@ -163,11 +158,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://openrouter.ai/api/v1",
         auth_env: Some("OPENROUTER_API_KEY"),
-        models: &[
-            "moonshotai/kimi-k2.6",
-            "anthropic/claude-sonnet-4-5",
-            "openai/gpt-5.2",
-        ],
     },
     Provider {
         id: "deepseek",
@@ -175,7 +165,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://api.deepseek.com",
         auth_env: Some("DEEPSEEK_API_KEY"),
-        models: &["deepseek-chat", "deepseek-reasoner", "deepseek-v4-flash"],
     },
     Provider {
         id: "xai",
@@ -183,7 +172,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://api.x.ai/v1",
         auth_env: Some("XAI_API_KEY"),
-        models: &["grok-4.3", "grok-4.20"],
     },
     Provider {
         id: "groq",
@@ -191,7 +179,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://api.groq.com/openai/v1",
         auth_env: Some("GROQ_API_KEY"),
-        models: &["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
     },
     Provider {
         id: "mistral",
@@ -199,11 +186,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://api.mistral.ai/v1",
         auth_env: Some("MISTRAL_API_KEY"),
-        models: &[
-            "mistral-large-latest",
-            "codestral-latest",
-            "open-mistral-7b",
-        ],
     },
     Provider {
         id: "perplexity",
@@ -211,7 +193,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://api.perplexity.ai",
         auth_env: Some("PERPLEXITY_API_KEY"),
-        models: &["sonar", "sonar-pro", "sonar-reasoning-pro"],
     },
     Provider {
         id: "together",
@@ -219,10 +200,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://api.together.xyz/v1",
         auth_env: Some("TOGETHER_API_KEY"),
-        models: &[
-            "moonshotai/Kimi-K2.6",
-            "meta-llama/Llama-3.3-70B-Instruct-Turbo",
-        ],
     },
     Provider {
         id: "cerebras",
@@ -230,7 +207,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://api.cerebras.ai/v1",
         auth_env: Some("CEREBRAS_API_KEY"),
-        models: &["gpt-oss-120b", "gemma-4-31b"],
     },
     Provider {
         id: "moonshotai",
@@ -238,7 +214,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://api.moonshot.ai/v1",
         auth_env: Some("MOONSHOT_API_KEY"),
-        models: &["kimi-k2-turbo-preview", "kimi-k2-thinking"],
     },
     Provider {
         id: "zhipuai",
@@ -246,7 +221,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://open.bigmodel.cn/api/paas/v4",
         auth_env: Some("ZHIPU_API_KEY"),
-        models: &["glm-5", "glm-4.7-flash"],
     },
     Provider {
         id: "huggingface",
@@ -254,7 +228,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://router.huggingface.co/v1",
         auth_env: Some("HF_TOKEN"),
-        models: &["meta-llama/Llama-3.3-70B-Instruct", "moonshotai/Kimi-K2.6"],
     },
     Provider {
         id: "fireworks",
@@ -262,10 +235,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://api.fireworks.ai/inference/v1",
         auth_env: Some("FIREWORKS_API_KEY"),
-        models: &[
-            "accounts/fireworks/models/deepseek-v4-flash",
-            "accounts/fireworks/models/kimi-k2p6",
-        ],
     },
     Provider {
         id: "baseten",
@@ -273,7 +242,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://inference.baseten.co/v1",
         auth_env: Some("BASETEN_API_KEY"),
-        models: &["moonshotai/Kimi-K2.6", "openai/gpt-oss-120b"],
     },
     Provider {
         id: "nvidia",
@@ -281,7 +249,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://integrate.api.nvidia.com/v1",
         auth_env: Some("NVIDIA_API_KEY"),
-        models: &["nvidia/nemotron-3-super-120b-a12b", "moonshotai/kimi-k2.6"],
     },
     Provider {
         id: "github-models",
@@ -289,7 +256,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://models.github.ai/inference",
         auth_env: Some("GITHUB_TOKEN"),
-        models: &["gpt-5", "claude-sonnet-4-5"],
     },
     Provider {
         id: "opencode-zen",
@@ -297,7 +263,6 @@ static PROVIDERS: &[Provider] = &[
         wire: Wire::OpenAiChat,
         base_url: "https://opencode.ai/zen/v1",
         auth_env: Some("OPENCODE_API_KEY"),
-        models: &["kimi-k2.6", "glm-4.7"],
     },
 ];
 
@@ -311,6 +276,13 @@ pub fn provider(id: &str) -> Option<&'static Provider> {
 
 pub fn provider_by_name(name: &str) -> Option<&'static Provider> {
     PROVIDERS.iter().find(|p| p.name == name)
+}
+
+static MODELS: LazyLock<HashMap<&'static str, Vec<&'static str>>> =
+    LazyLock::new(|| serde_json::from_str(include_str!("models.json")).unwrap_or_default());
+
+pub fn models(id: &str) -> &'static [&'static str] {
+    MODELS.get(id).map_or(&[], Vec::as_slice)
 }
 
 pub fn resolve(config: &LlmConfig) -> Arc<dyn Llm> {

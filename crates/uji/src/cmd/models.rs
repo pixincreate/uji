@@ -20,16 +20,13 @@ impl Action for Models {
             ctx.finish();
             return;
         };
-        if provider.models.is_empty() {
+        let model_ids = llm::models(&provider_id);
+        if model_ids.is_empty() {
             ctx.notify(&format!("no models listed for {}", provider.name));
             ctx.finish();
             return;
         }
-        let items = provider
-            .models
-            .iter()
-            .map(|model| (*model).to_string())
-            .collect();
+        let items = model_ids.iter().map(|model| (*model).to_string()).collect();
         ctx.open_select(format!("{} models", provider.name), items);
     }
 
