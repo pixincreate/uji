@@ -7,7 +7,6 @@ use super::transformer::{OllamaChunk, OllamaRequest, OllamaResponse};
 pub struct Ollama {
     pub base_url: String,
     pub auth: Auth,
-    client: reqwest::blocking::Client,
 }
 
 impl Ollama {
@@ -25,14 +24,17 @@ impl Ollama {
                 .clone()
                 .unwrap_or_else(|| "http://localhost:11434".into()),
             auth,
-            client: reqwest::blocking::Client::new(),
         }
     }
 
-    fn post(&self, request: &OllamaRequest) -> Result<reqwest::blocking::Response, LlmError> {
+    fn post(
+        &self,
+        client: &reqwest::blocking::Client,
+        request: &OllamaRequest,
+    ) -> Result<reqwest::blocking::Response, LlmError> {
         let url = format!("{}/api/chat", self.base_url);
         self.auth
-            .apply(self.client.post(&url))
+            .apply(client.post(&url))
             .json(request)
             .send()
             .map_err(|err| LlmError::Http(err.to_string()))
@@ -44,9 +46,13 @@ impl Llm for Ollama {
         "ollama"
     }
 
-    fn send_request(&self, request: &LlmRequest) -> Result<String, LlmError> {
+    fn send_request(
+        &self,
+        client: &reqwest::blocking::Client,
+        request: &LlmRequest,
+    ) -> Result<String, LlmError> {
         let provider_request = OllamaRequest::from(request);
-        let response = self.post(&provider_request)?;
+        let response = self.post(client, &provider_request)?;
         if !response.status().is_success() {
             return Err(status_error(response));
         }
@@ -64,12 +70,13 @@ impl Llm for Ollama {
 
     fn stream(
         &self,
+        client: &reqwest::blocking::Client,
         request: &LlmRequest,
         on_delta: &mut dyn FnMut(&str),
     ) -> Result<String, LlmError> {
         let mut provider_request = OllamaRequest::from(request);
         provider_request.stream = true;
-        let response = self.post(&provider_request)?;
+        let response = self.post(client, &provider_request)?;
         if !response.status().is_success() {
             return Err(status_error(response));
         }

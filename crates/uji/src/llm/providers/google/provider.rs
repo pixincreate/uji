@@ -1,49 +1,58 @@
 use std::io::{BufRead, BufReader};
 
-use crate::llm::{Auth, Llm, LlmConfig, LlmError, LlmRequest, status_error};
+use crate::llm::{Llm, LlmConfig, LlmError, LlmRequest, status_error};
 
-use super::transformer::{OpenAiChunk, OpenAiRequest, OpenAiResponse};
+use super::transformer::{GeminiRequest, GeminiResponse};
 
-pub struct OpenAi {
+pub struct Gemini {
     pub base_url: String,
-    pub auth: Auth,
+    pub api_key: Option<String>,
 }
 
-impl OpenAi {
+impl Gemini {
     pub fn new(config: &LlmConfig) -> Self {
-        let auth = match &config.api_key {
-            Some(key) => Auth::Bearer { token: key.clone() },
-            None => std::env::var("OPENAI_API_KEY")
+        let api_key = config.api_key.clone().or_else(|| {
+            std::env::var("GEMINI_API_KEY")
+                .or_else(|_| std::env::var("GOOGLE_API_KEY"))
                 .ok()
                 .filter(|key| !key.is_empty())
-                .map_or(Auth::None, |token| Auth::Bearer { token }),
-        };
+        });
         Self {
             base_url: config
                 .base_url
                 .clone()
-                .unwrap_or_else(|| "https://api.openai.com/v1".into()),
-            auth,
+                .unwrap_or_else(|| "https://generativelanguage.googleapis.com/v1beta".into()),
+            api_key,
         }
     }
 
     fn post(
         &self,
         client: &reqwest::blocking::Client,
-        request: &OpenAiRequest,
+        model: &str,
+        stream: bool,
+        request: &GeminiRequest,
     ) -> Result<reqwest::blocking::Response, LlmError> {
-        let url = format!("{}/chat/completions", self.base_url);
-        self.auth
-            .apply(client.post(&url))
+        let suffix = if stream {
+            ":streamGenerateContent?alt=sse"
+        } else {
+            ":generateContent"
+        };
+        let url = format!("{}/models/{model}{suffix}", self.base_url);
+        let mut builder = client.post(&url);
+        if let Some(key) = &self.api_key {
+            builder = builder.header("x-goog-api-key", key);
+        }
+        builder
             .json(request)
             .send()
             .map_err(|err| LlmError::Http(err.to_string()))
     }
 }
 
-impl Llm for OpenAi {
+impl Llm for Gemini {
     fn id(&self) -> &'static str {
-        "openai"
+        "google"
     }
 
     fn send_request(
@@ -51,20 +60,21 @@ impl Llm for OpenAi {
         client: &reqwest::blocking::Client,
         request: &LlmRequest,
     ) -> Result<String, LlmError> {
-        let provider_request = OpenAiRequest::from(request);
-        let response = self.post(client, &provider_request)?;
+        let provider_request = GeminiRequest::from(request);
+        let response = self.post(client, &request.model, false, &provider_request)?;
         if !response.status().is_success() {
             return Err(status_error(response));
         }
         let body = response
             .text()
             .map_err(|err| LlmError::Http(err.to_string()))?;
-        let parsed: OpenAiResponse =
+        let parsed: GeminiResponse =
             serde_json::from_str(&body).map_err(|err| LlmError::Provider(err.to_string()))?;
-        parsed
-            .text()
-            .map(str::to_string)
-            .ok_or_else(|| LlmError::Provider("empty response".into()))
+        let text = parsed.text();
+        if text.is_empty() {
+            return Err(LlmError::Provider("empty response".into()));
+        }
+        Ok(text)
     }
 
     fn stream(
@@ -73,9 +83,8 @@ impl Llm for OpenAi {
         request: &LlmRequest,
         on_delta: &mut dyn FnMut(&str),
     ) -> Result<String, LlmError> {
-        let mut provider_request = OpenAiRequest::from(request);
-        provider_request.stream = true;
-        let response = self.post(client, &provider_request)?;
+        let provider_request = GeminiRequest::from(request);
+        let response = self.post(client, &request.model, true, &provider_request)?;
         if !response.status().is_success() {
             return Err(status_error(response));
         }
@@ -87,15 +96,13 @@ impl Llm for OpenAi {
             let Some(data) = line.strip_prefix("data: ") else {
                 continue;
             };
-            if data.trim() == "[DONE]" {
-                break;
-            }
-            let Ok(chunk) = serde_json::from_str::<OpenAiChunk>(data) else {
+            let Ok(parsed) = serde_json::from_str::<GeminiResponse>(data) else {
                 continue;
             };
-            if let Some(delta) = chunk.delta_text() {
-                on_delta(delta);
-                full.push_str(delta);
+            let text = parsed.text();
+            if !text.is_empty() {
+                on_delta(&text);
+                full.push_str(&text);
             }
         }
         Ok(full)

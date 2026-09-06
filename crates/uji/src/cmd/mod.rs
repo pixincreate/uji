@@ -1,8 +1,10 @@
 pub mod help;
-pub mod providers;
+pub mod login;
+pub mod models;
 
 pub use help::Help;
-pub use providers::Providers;
+pub use login::Login;
+pub use models::Models;
 
 pub struct Args {
     pub raw: String,

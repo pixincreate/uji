@@ -9,7 +9,7 @@ use uji_api::model::{Border, Size, Split, WinOpts, WindowKind};
 use uji_api::state::UiState;
 
 use crate::config::{self, DEFAULT_LUA};
-use crate::llm::{Echo, Llm};
+use crate::llm::{Llm, NotConfigured};
 use crate::session::store::SessionStorage;
 
 pub(crate) struct Inner {
@@ -17,6 +17,7 @@ pub(crate) struct Inner {
     pub(crate) api: Rc<Api>,
     pub(crate) llm: RefCell<Arc<dyn Llm>>,
     pub(crate) llm_model: RefCell<String>,
+    pub(crate) client: Arc<reqwest::blocking::Client>,
 }
 
 impl Inner {
@@ -24,8 +25,9 @@ impl Inner {
         Rc::new(Self {
             lua,
             api,
-            llm: RefCell::new(Arc::new(Echo)),
+            llm: RefCell::new(Arc::new(NotConfigured)),
             llm_model: RefCell::default(),
+            client: Arc::new(reqwest::blocking::Client::new()),
         })
     }
 
@@ -176,11 +178,12 @@ impl Inner {
     }
 
     pub(crate) fn resolve_llm(&self, storage: &mut dyn SessionStorage) {
-        let (resolved, model) = crate::llm::resolve_from_storage(storage);
-        let id = resolved.id().to_string();
+        let (resolved, model, provider_id) = crate::llm::resolve_from_storage(storage);
+        let name = crate::llm::provider(&provider_id)
+            .map_or_else(|| provider_id.clone(), |p| p.name.to_string());
         *self.llm.borrow_mut() = resolved;
         (*self.llm_model.borrow_mut()).clone_from(&model);
-        self.state().borrow_mut().set_current_provider(id);
+        self.state().borrow_mut().set_current_provider(name);
         self.state().borrow_mut().set_current_model(model);
     }
 }

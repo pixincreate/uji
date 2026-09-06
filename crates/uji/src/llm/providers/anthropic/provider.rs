@@ -1,49 +1,50 @@
 use std::io::{BufRead, BufReader};
 
-use crate::llm::{Auth, Llm, LlmConfig, LlmError, LlmRequest, status_error};
+use crate::llm::{Llm, LlmConfig, LlmError, LlmRequest, status_error};
 
-use super::transformer::{OpenAiChunk, OpenAiRequest, OpenAiResponse};
+use super::transformer::{AnthropicRequest, AnthropicResponse, AnthropicStreamEvent};
 
-pub struct OpenAi {
+pub struct Anthropic {
     pub base_url: String,
-    pub auth: Auth,
+    pub api_key: Option<String>,
 }
 
-impl OpenAi {
+impl Anthropic {
     pub fn new(config: &LlmConfig) -> Self {
-        let auth = match &config.api_key {
-            Some(key) => Auth::Bearer { token: key.clone() },
-            None => std::env::var("OPENAI_API_KEY")
+        let api_key = config.api_key.clone().or_else(|| {
+            std::env::var("ANTHROPIC_API_KEY")
                 .ok()
                 .filter(|key| !key.is_empty())
-                .map_or(Auth::None, |token| Auth::Bearer { token }),
-        };
+        });
         Self {
             base_url: config
                 .base_url
                 .clone()
-                .unwrap_or_else(|| "https://api.openai.com/v1".into()),
-            auth,
+                .unwrap_or_else(|| "https://api.anthropic.com/v1".into()),
+            api_key,
         }
     }
 
     fn post(
         &self,
         client: &reqwest::blocking::Client,
-        request: &OpenAiRequest,
+        request: &AnthropicRequest,
     ) -> Result<reqwest::blocking::Response, LlmError> {
-        let url = format!("{}/chat/completions", self.base_url);
-        self.auth
-            .apply(client.post(&url))
+        let url = format!("{}/messages", self.base_url);
+        let mut builder = client.post(&url).header("anthropic-version", "2023-06-01");
+        if let Some(key) = &self.api_key {
+            builder = builder.header("x-api-key", key);
+        }
+        builder
             .json(request)
             .send()
             .map_err(|err| LlmError::Http(err.to_string()))
     }
 }
 
-impl Llm for OpenAi {
+impl Llm for Anthropic {
     fn id(&self) -> &'static str {
-        "openai"
+        "anthropic"
     }
 
     fn send_request(
@@ -51,7 +52,7 @@ impl Llm for OpenAi {
         client: &reqwest::blocking::Client,
         request: &LlmRequest,
     ) -> Result<String, LlmError> {
-        let provider_request = OpenAiRequest::from(request);
+        let provider_request = AnthropicRequest::from(request);
         let response = self.post(client, &provider_request)?;
         if !response.status().is_success() {
             return Err(status_error(response));
@@ -59,12 +60,13 @@ impl Llm for OpenAi {
         let body = response
             .text()
             .map_err(|err| LlmError::Http(err.to_string()))?;
-        let parsed: OpenAiResponse =
+        let parsed: AnthropicResponse =
             serde_json::from_str(&body).map_err(|err| LlmError::Provider(err.to_string()))?;
-        parsed
-            .text()
-            .map(str::to_string)
-            .ok_or_else(|| LlmError::Provider("empty response".into()))
+        let text = parsed.text();
+        if text.is_empty() {
+            return Err(LlmError::Provider("empty response".into()));
+        }
+        Ok(text)
     }
 
     fn stream(
@@ -73,7 +75,7 @@ impl Llm for OpenAi {
         request: &LlmRequest,
         on_delta: &mut dyn FnMut(&str),
     ) -> Result<String, LlmError> {
-        let mut provider_request = OpenAiRequest::from(request);
+        let mut provider_request = AnthropicRequest::from(request);
         provider_request.stream = true;
         let response = self.post(client, &provider_request)?;
         if !response.status().is_success() {
@@ -87,13 +89,10 @@ impl Llm for OpenAi {
             let Some(data) = line.strip_prefix("data: ") else {
                 continue;
             };
-            if data.trim() == "[DONE]" {
-                break;
-            }
-            let Ok(chunk) = serde_json::from_str::<OpenAiChunk>(data) else {
+            let Ok(event) = serde_json::from_str::<AnthropicStreamEvent>(data) else {
                 continue;
             };
-            if let Some(delta) = chunk.delta_text() {
+            if let Some(delta) = event.delta_text() {
                 on_delta(delta);
                 full.push_str(delta);
             }

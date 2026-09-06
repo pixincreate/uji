@@ -6,7 +6,9 @@ use crate::credential;
 use crate::session::model::Message;
 use crate::session::store::SessionStorage;
 
-pub use providers::echo::Echo;
+pub use providers::anthropic::Anthropic;
+pub use providers::google::Gemini;
+pub use providers::not_configured::NotConfigured;
 pub use providers::ollama::Ollama;
 pub use providers::openai::OpenAi;
 
@@ -57,18 +59,24 @@ pub(crate) fn status_error(response: reqwest::blocking::Response) -> LlmError {
 
 pub trait Llm: Send + Sync {
     fn id(&self) -> &'static str;
-    fn send_request(&self, request: &LlmRequest) -> Result<String, LlmError>;
+    fn send_request(
+        &self,
+        client: &reqwest::blocking::Client,
+        request: &LlmRequest,
+    ) -> Result<String, LlmError>;
     fn stream(
         &self,
+        client: &reqwest::blocking::Client,
         request: &LlmRequest,
         on_delta: &mut dyn FnMut(&str),
     ) -> Result<String, LlmError> {
-        let text = self.send_request(request)?;
+        let text = self.send_request(client, request)?;
         on_delta(&text);
         Ok(text)
     }
 }
 
+#[derive(Default)]
 pub struct LlmConfig {
     pub provider: String,
     pub model: String,
@@ -76,54 +84,257 @@ pub struct LlmConfig {
     pub api_key: Option<String>,
 }
 
-impl Default for LlmConfig {
-    fn default() -> Self {
-        Self {
-            provider: "echo".into(),
-            model: String::new(),
-            base_url: None,
-            api_key: None,
-        }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Wire {
+    OpenAiChat,
+    Anthropic,
+    Gemini,
+    OllamaNative,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Provider {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub wire: Wire,
+    pub base_url: &'static str,
+    pub auth_env: Option<&'static str>,
+    pub models: &'static [&'static str],
+}
+
+impl Provider {
+    pub fn default_model(&self) -> &'static str {
+        self.models.first().copied().unwrap_or("")
     }
 }
 
-struct ProviderSpec {
-    id: &'static str,
-    create: fn(&LlmConfig) -> Arc<dyn Llm>,
-}
-
-fn make_openai(config: &LlmConfig) -> Arc<dyn Llm> {
-    Arc::new(OpenAi::new(config))
-}
-
-fn make_ollama(config: &LlmConfig) -> Arc<dyn Llm> {
-    Arc::new(Ollama::new(config))
-}
-
-fn make_echo(_config: &LlmConfig) -> Arc<dyn Llm> {
-    Arc::new(Echo)
-}
-
-static PROVIDERS: &[ProviderSpec] = &[
-    ProviderSpec {
+static PROVIDERS: &[Provider] = &[
+    Provider {
         id: "openai",
-        create: make_openai,
+        name: "OpenAI",
+        wire: Wire::OpenAiChat,
+        base_url: "https://api.openai.com/v1",
+        auth_env: Some("OPENAI_API_KEY"),
+        models: &["gpt-5.2", "gpt-5.2-mini", "gpt-5", "o3"],
     },
-    ProviderSpec {
+    Provider {
+        id: "anthropic",
+        name: "Anthropic",
+        wire: Wire::Anthropic,
+        base_url: "https://api.anthropic.com/v1",
+        auth_env: Some("ANTHROPIC_API_KEY"),
+        models: &["claude-sonnet-4-5", "claude-opus-4-5", "claude-haiku-4-5"],
+    },
+    Provider {
+        id: "google",
+        name: "Google",
+        wire: Wire::Gemini,
+        base_url: "https://generativelanguage.googleapis.com/v1beta",
+        auth_env: Some("GEMINI_API_KEY"),
+        models: &["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3.1-flash"],
+    },
+    Provider {
         id: "ollama",
-        create: make_ollama,
+        name: "Ollama",
+        wire: Wire::OllamaNative,
+        base_url: "http://localhost:11434",
+        auth_env: None,
+        models: &["llama3.2", "llama3.1", "qwen3", "mistral"],
     },
-    ProviderSpec {
-        id: "echo",
-        create: make_echo,
+    Provider {
+        id: "custom",
+        name: "Custom",
+        wire: Wire::OpenAiChat,
+        base_url: "",
+        auth_env: None,
+        models: &[],
+    },
+    Provider {
+        id: "lmstudio",
+        name: "LM Studio",
+        wire: Wire::OpenAiChat,
+        base_url: "http://127.0.0.1:1234/v1",
+        auth_env: None,
+        models: &["qwen/qwen3-coder-30b", "openai/gpt-oss-20b"],
+    },
+    Provider {
+        id: "openrouter",
+        name: "OpenRouter",
+        wire: Wire::OpenAiChat,
+        base_url: "https://openrouter.ai/api/v1",
+        auth_env: Some("OPENROUTER_API_KEY"),
+        models: &[
+            "moonshotai/kimi-k2.6",
+            "anthropic/claude-sonnet-4-5",
+            "openai/gpt-5.2",
+        ],
+    },
+    Provider {
+        id: "deepseek",
+        name: "DeepSeek",
+        wire: Wire::OpenAiChat,
+        base_url: "https://api.deepseek.com",
+        auth_env: Some("DEEPSEEK_API_KEY"),
+        models: &["deepseek-chat", "deepseek-reasoner", "deepseek-v4-flash"],
+    },
+    Provider {
+        id: "xai",
+        name: "xAI",
+        wire: Wire::OpenAiChat,
+        base_url: "https://api.x.ai/v1",
+        auth_env: Some("XAI_API_KEY"),
+        models: &["grok-4.3", "grok-4.20"],
+    },
+    Provider {
+        id: "groq",
+        name: "Groq",
+        wire: Wire::OpenAiChat,
+        base_url: "https://api.groq.com/openai/v1",
+        auth_env: Some("GROQ_API_KEY"),
+        models: &["llama-3.3-70b-versatile", "llama-3.1-8b-instant"],
+    },
+    Provider {
+        id: "mistral",
+        name: "Mistral",
+        wire: Wire::OpenAiChat,
+        base_url: "https://api.mistral.ai/v1",
+        auth_env: Some("MISTRAL_API_KEY"),
+        models: &[
+            "mistral-large-latest",
+            "codestral-latest",
+            "open-mistral-7b",
+        ],
+    },
+    Provider {
+        id: "perplexity",
+        name: "Perplexity",
+        wire: Wire::OpenAiChat,
+        base_url: "https://api.perplexity.ai",
+        auth_env: Some("PERPLEXITY_API_KEY"),
+        models: &["sonar", "sonar-pro", "sonar-reasoning-pro"],
+    },
+    Provider {
+        id: "together",
+        name: "Together",
+        wire: Wire::OpenAiChat,
+        base_url: "https://api.together.xyz/v1",
+        auth_env: Some("TOGETHER_API_KEY"),
+        models: &[
+            "moonshotai/Kimi-K2.6",
+            "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        ],
+    },
+    Provider {
+        id: "cerebras",
+        name: "Cerebras",
+        wire: Wire::OpenAiChat,
+        base_url: "https://api.cerebras.ai/v1",
+        auth_env: Some("CEREBRAS_API_KEY"),
+        models: &["gpt-oss-120b", "gemma-4-31b"],
+    },
+    Provider {
+        id: "moonshotai",
+        name: "Moonshot AI",
+        wire: Wire::OpenAiChat,
+        base_url: "https://api.moonshot.ai/v1",
+        auth_env: Some("MOONSHOT_API_KEY"),
+        models: &["kimi-k2-turbo-preview", "kimi-k2-thinking"],
+    },
+    Provider {
+        id: "zhipuai",
+        name: "Zhipu AI",
+        wire: Wire::OpenAiChat,
+        base_url: "https://open.bigmodel.cn/api/paas/v4",
+        auth_env: Some("ZHIPU_API_KEY"),
+        models: &["glm-5", "glm-4.7-flash"],
+    },
+    Provider {
+        id: "huggingface",
+        name: "Hugging Face",
+        wire: Wire::OpenAiChat,
+        base_url: "https://router.huggingface.co/v1",
+        auth_env: Some("HF_TOKEN"),
+        models: &["meta-llama/Llama-3.3-70B-Instruct", "moonshotai/Kimi-K2.6"],
+    },
+    Provider {
+        id: "fireworks",
+        name: "Fireworks",
+        wire: Wire::OpenAiChat,
+        base_url: "https://api.fireworks.ai/inference/v1",
+        auth_env: Some("FIREWORKS_API_KEY"),
+        models: &[
+            "accounts/fireworks/models/deepseek-v4-flash",
+            "accounts/fireworks/models/kimi-k2p6",
+        ],
+    },
+    Provider {
+        id: "baseten",
+        name: "Baseten",
+        wire: Wire::OpenAiChat,
+        base_url: "https://inference.baseten.co/v1",
+        auth_env: Some("BASETEN_API_KEY"),
+        models: &["moonshotai/Kimi-K2.6", "openai/gpt-oss-120b"],
+    },
+    Provider {
+        id: "nvidia",
+        name: "NVIDIA",
+        wire: Wire::OpenAiChat,
+        base_url: "https://integrate.api.nvidia.com/v1",
+        auth_env: Some("NVIDIA_API_KEY"),
+        models: &["nvidia/nemotron-3-super-120b-a12b", "moonshotai/kimi-k2.6"],
+    },
+    Provider {
+        id: "github-models",
+        name: "GitHub Models",
+        wire: Wire::OpenAiChat,
+        base_url: "https://models.github.ai/inference",
+        auth_env: Some("GITHUB_TOKEN"),
+        models: &["gpt-5", "claude-sonnet-4-5"],
+    },
+    Provider {
+        id: "opencode-zen",
+        name: "OpenCode Zen",
+        wire: Wire::OpenAiChat,
+        base_url: "https://opencode.ai/zen/v1",
+        auth_env: Some("OPENCODE_API_KEY"),
+        models: &["kimi-k2.6", "glm-4.7"],
     },
 ];
 
-pub fn resolve(config: &LlmConfig) -> Arc<dyn Llm> {
+pub fn providers() -> &'static [Provider] {
     PROVIDERS
-        .iter()
-        .find(|spec| spec.id == config.provider)
-        .map_or_else(|| make_echo(config), |spec| (spec.create)(config))
+}
+
+pub fn provider(id: &str) -> Option<&'static Provider> {
+    PROVIDERS.iter().find(|p| p.id == id)
+}
+
+pub fn provider_by_name(name: &str) -> Option<&'static Provider> {
+    PROVIDERS.iter().find(|p| p.name == name)
+}
+
+pub fn resolve(config: &LlmConfig) -> Arc<dyn Llm> {
+    if config.provider.is_empty() {
+        return Arc::new(NotConfigured);
+    }
+    let Some(provider) = provider(&config.provider) else {
+        return Arc::new(OpenAi::new(config));
+    };
+    if provider.id == "custom" {
+        return Arc::new(OpenAi::new(config));
+    }
+    let resolved = LlmConfig {
+        provider: config.provider.clone(),
+        model: config.model.clone(),
+        base_url: Some(provider.base_url.to_string()),
+        api_key: config.api_key.clone(),
+    };
+    match provider.wire {
+        Wire::OpenAiChat => Arc::new(OpenAi::new(&resolved)),
+        Wire::Anthropic => Arc::new(Anthropic::new(&resolved)),
+        Wire::Gemini => Arc::new(Gemini::new(&resolved)),
+        Wire::OllamaNative => Arc::new(Ollama::new(&resolved)),
+    }
 }
 
 pub enum StreamEvent {
@@ -133,6 +344,7 @@ pub enum StreamEvent {
 }
 
 pub fn stream_turn(
+    client: &reqwest::blocking::Client,
     provider: &dyn Llm,
     model: String,
     messages: Vec<Message>,
@@ -143,7 +355,7 @@ pub fn stream_turn(
         system: None,
         messages,
     };
-    let result = provider.stream(&request, &mut |delta| {
+    let result = provider.stream(client, &request, &mut |delta| {
         on_event(StreamEvent::Delta(delta.to_string()));
     });
     let event = match result {
@@ -153,24 +365,26 @@ pub fn stream_turn(
     on_event(event);
 }
 
-pub fn resolve_from_storage(storage: &mut dyn SessionStorage) -> (Arc<dyn Llm>, String) {
-    let provider = storage
+pub fn resolve_from_storage(storage: &mut dyn SessionStorage) -> (Arc<dyn Llm>, String, String) {
+    let provider_id = storage
         .get_setting("llm.provider")
         .ok()
         .flatten()
-        .unwrap_or_else(|| "echo".into());
+        .unwrap_or_default();
     let model = storage
         .get_setting("llm.model")
         .ok()
         .flatten()
-        .unwrap_or_default();
+        .unwrap_or_else(|| {
+            provider(&provider_id).map_or_else(String::new, |p| p.default_model().to_string())
+        });
     let base_url = storage.get_setting("llm.base_url").ok().flatten();
-    let api_key = credential::get(&provider);
+    let api_key = credential::get(&provider_id);
     let config = LlmConfig {
-        provider,
+        provider: provider_id.clone(),
         model: model.clone(),
         base_url,
         api_key,
     };
-    (resolve(&config), model)
+    (resolve(&config), model, provider_id)
 }

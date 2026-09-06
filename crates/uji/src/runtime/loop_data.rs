@@ -1,4 +1,5 @@
 use std::rc::Rc;
+use std::sync::Arc;
 
 use crossterm::event::Event as TermEvent;
 
@@ -74,6 +75,7 @@ impl LoopData {
 
         let provider = self.inner.llm.borrow().clone();
         let model = self.inner.llm_model.borrow().clone();
+        let client = Arc::clone(&self.inner.client);
         let context: Vec<Message> = self
             .app
             .messages()
@@ -82,7 +84,7 @@ impl LoopData {
             .collect();
         let sender = self.llm_tx.clone();
         std::thread::spawn(move || {
-            stream_turn(provider.as_ref(), model, context, &mut |event| {
+            stream_turn(&client, provider.as_ref(), model, context, &mut |event| {
                 let _ = sender.send(event);
             });
         });
@@ -140,7 +142,7 @@ impl LoopData {
     pub(crate) fn refresh_status(&mut self) {
         let state_rc = self.inner.state();
         let state = state_rc.borrow();
-        let provider = state.current_provider().unwrap_or("echo").to_string();
+        let provider = state.current_provider().unwrap_or("").to_string();
         let model = state.current_model().unwrap_or_default().to_string();
         let status = if model.is_empty() {
             provider
