@@ -1,6 +1,10 @@
 default:
     @just --list
 
+# Install git hooks (one-time setup).
+setup:
+    git config core.hooksPath .githooks
+
 # Format check (no writes).
 fmt:
     cargo fmt --all --check
