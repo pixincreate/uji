@@ -89,10 +89,10 @@ fn handle_list() -> Result<(), Box<dyn Error>> {
     let mut storage = open_storage()?;
     let sessions = storage.list_sessions()?;
     if sessions.is_empty() {
-        println!("no sessions");
+        eprintln!("no sessions");
     } else {
         for session in sessions {
-            println!(
+            eprintln!(
                 "{}  {}  {}",
                 session.id, session.title, session.time.updated
             );
@@ -107,9 +107,9 @@ fn handle_delete(id: &str) -> Result<(), Box<dyn Error>> {
         .parse()
         .map_err(|_| format!("invalid session id: {id}"))?;
     if storage.delete_session(&session_id)? {
-        println!("deleted session: {id}");
+        eprintln!("deleted session: {id}");
     } else {
-        println!("no session with id: {id}");
+        eprintln!("no session with id: {id}");
     }
     Ok(())
 }
