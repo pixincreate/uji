@@ -1,6 +1,9 @@
 id: no-println
 language: rust
 severity: error
-message: Do not use `println!`; write to stderr or return a value.
+message: Do not use `println!` in library code; the CLI binary prints to stdout.
 rule:
   pattern: println!($$$ARGS)
+files:
+  - "crates/api/**"
+  - "crates/uji/**"
