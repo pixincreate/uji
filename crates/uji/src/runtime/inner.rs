@@ -3,9 +3,8 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use mlua::{Lua as LuaState, Table};
+use mlua::Lua as LuaState;
 use uji_api::Api;
-use uji_api::model::{Border, Size, Split, WinOpts, WindowKind};
 use uji_api::state::UiState;
 
 use crate::config::{self, DEFAULT_LUA};
@@ -49,7 +48,6 @@ impl Inner {
         self.state().borrow_mut().clear();
         self.run_init(None);
         self.load_plugins(None);
-        self.apply_ui_config();
     }
 
     pub(crate) fn run_init(&self, config_path: Option<PathBuf>) {
@@ -91,90 +89,6 @@ impl Inner {
                 eprintln!("uji: plugin error in {name}: {err}");
             }
         }
-    }
-
-    pub(crate) fn apply_ui_config(&self) {
-        let ui = self
-            .lua
-            .globals()
-            .get::<Table>("uji")
-            .ok()
-            .and_then(|uji| uji.get::<Table>("ui").ok());
-
-        let messages_border = ui
-            .as_ref()
-            .and_then(|ui| ui.get::<Table>("messages").ok())
-            .and_then(|m| m.get::<Option<String>>("border").ok().flatten())
-            .and_then(|b| b.parse::<Border>().ok())
-            .unwrap_or(Border::None);
-
-        let input = ui.as_ref().and_then(|ui| ui.get::<Table>("input").ok());
-        let input_height = input
-            .as_ref()
-            .and_then(|i| i.get::<Option<i64>>("height").ok().flatten())
-            .and_then(|n| u16::try_from(n).ok())
-            .unwrap_or(3);
-        let cursor_blink = input
-            .as_ref()
-            .and_then(|i| i.get::<Option<bool>>("cursor_blink").ok().flatten())
-            .unwrap_or(true);
-
-        let footer_hint = ui
-            .as_ref()
-            .and_then(|ui| ui.get::<Table>("footer").ok())
-            .and_then(|f| f.get::<Option<String>>("hint").ok().flatten())
-            .unwrap_or_else(|| "ctrl+c exit".into());
-
-        let suggest = ui.as_ref().and_then(|ui| ui.get::<Table>("suggest").ok());
-        let suggest_enabled = suggest
-            .as_ref()
-            .and_then(|s| s.get::<Option<bool>>("enabled").ok().flatten())
-            .unwrap_or(true);
-        let suggest_max_height = suggest
-            .as_ref()
-            .and_then(|s| s.get::<Option<i64>>("max_height").ok().flatten())
-            .and_then(|n| u16::try_from(n).ok())
-            .unwrap_or(5);
-
-        let state_rc = self.state();
-        let mut state = state_rc.borrow_mut();
-        let _ = uji_api::window::open(
-            &mut state,
-            WindowKind::Messages,
-            Vec::new(),
-            WinOpts {
-                split: Split::Top,
-                size: Size::Fill,
-                border: messages_border,
-                title: None,
-            },
-        );
-        let _ = uji_api::window::open(
-            &mut state,
-            WindowKind::Status,
-            Vec::new(),
-            WinOpts {
-                split: Split::Bottom,
-                size: Size::Fixed(1),
-                border: Border::None,
-                title: None,
-            },
-        );
-        let _ = uji_api::window::open(
-            &mut state,
-            WindowKind::Input,
-            Vec::new(),
-            WinOpts {
-                split: Split::Bottom,
-                size: Size::Fixed(input_height),
-                border: Border::None,
-                title: None,
-            },
-        );
-        state.set_cursor_blink(cursor_blink);
-        state.set_footer_hint(footer_hint);
-        state.set_suggest_enabled(suggest_enabled);
-        state.set_suggest_max_height(suggest_max_height);
     }
 
     pub(crate) fn resolve_llm(&self, storage: &mut dyn SessionStorage) {

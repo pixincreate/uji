@@ -54,7 +54,6 @@ impl Runtime {
 
         inner.run_init(config_path);
         inner.load_plugins(plugin_dir);
-        inner.apply_ui_config();
 
         Ok(Self {
             inner,
@@ -107,8 +106,8 @@ impl Runtime {
         };
 
         data.inner.resolve_llm(&mut *data.storage);
+        data.inner.emit("status_changed", &[]);
         data.refresh_suggestions();
-        data.refresh_status();
 
         event_loop
             .handle()
@@ -126,6 +125,15 @@ impl Runtime {
                 }
             })
             .map_err(|err| io::Error::other(format!("register llm source: {err}")))?;
+
+        let timer = calloop::timer::Timer::from_duration(data.timer_interval());
+        event_loop
+            .handle()
+            .insert_source(timer, |_event, _meta, data: &mut LoopData| {
+                data.on_timer();
+                calloop::timer::TimeoutAction::ToDuration(data.timer_interval())
+            })
+            .map_err(|err| io::Error::other(format!("register timer source: {err}")))?;
 
         app::draw(&mut data.terminal, &data.app)?;
         data.dirty = false;
