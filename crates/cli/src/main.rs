@@ -86,18 +86,7 @@ fn handle_resume(id: Option<String>) -> Result<(), Box<dyn Error>> {
 }
 
 fn handle_list() -> Result<(), Box<dyn Error>> {
-    let mut storage = open_storage()?;
-    let sessions = storage.list_sessions()?;
-    if sessions.is_empty() {
-        eprintln!("no sessions");
-    } else {
-        for session in sessions {
-            eprintln!(
-                "{}  {}  {}",
-                session.id, session.title, session.time.updated
-            );
-        }
-    }
+    let _ = open_storage()?.list_sessions()?;
     Ok(())
 }
 
@@ -106,10 +95,6 @@ fn handle_delete(id: &str) -> Result<(), Box<dyn Error>> {
     let session_id: SessionId = id
         .parse()
         .map_err(|_| format!("invalid session id: {id}"))?;
-    if storage.delete_session(&session_id)? {
-        eprintln!("deleted session: {id}");
-    } else {
-        eprintln!("no session with id: {id}");
-    }
+    let _ = storage.delete_session(&session_id)?;
     Ok(())
 }
