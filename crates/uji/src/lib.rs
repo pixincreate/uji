@@ -5,6 +5,7 @@ pub mod credential;
 pub mod list;
 pub mod llm;
 pub mod memory;
+pub mod pack;
 pub mod runtime;
 pub mod session;
 pub mod storage;

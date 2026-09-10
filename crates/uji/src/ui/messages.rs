@@ -26,6 +26,18 @@ impl Render for Messages<'_> {
         let mut lines = Vec::new();
         let mut first = true;
 
+        for notice in ctx.app.notices() {
+            push_wrapped(
+                &mut lines,
+                notice,
+                width.saturating_sub(3),
+                Style::default().fg(Color::Red),
+                " ! ",
+                false,
+            );
+            first = false;
+        }
+
         let mut in_tool_group = false;
         for stored in ctx.app.messages() {
             let grouped = in_tool_group && matches!(stored.message, Message::Tool { .. });

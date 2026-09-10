@@ -1,4 +1,32 @@
 -- Default uji UI, configured via windows + buffers (nvim-style).
+--
+-- Config lives in ~/.config/uji (override with UJI_CONFIG_DIR):
+--   init.lua        entry point, this file when you have none
+--   lua/            module root; require("foo.bar") finds lua/foo/bar.lua
+--                   or lua/foo/bar/init.lua
+--   plugin/         *.lua here is sourced automatically after init.lua,
+--                   sorted by name; number prefixes control order
+--
+-- Packs are extra directories with the same lua/ + plugin/ layout. Declaring
+-- one clones it into ~/.local/share/uji/site if missing, then makes its
+-- modules requirable and its plugin/ files auto-source:
+--
+--   uji.pack.add({
+--     "user/repo",                      -- github shorthand
+--     { "user/repo", tag = "v1.2" },    -- or branch = / commit =
+--     { url = "https://git.sr.ht/~x/y" },
+--     { dir = "~/code/my-plugin" },     -- local, never cloned
+--   })
+--   uji.pack.list()                     -- every root being searched
+--
+-- /sync updates installed packs and reloads. Versions are pinned in
+-- ~/.local/share/uji/uji-lock.json.
+--
+-- SECURITY: a pack is arbitrary code from the internet, executed on the next
+-- start. Read what you install.
+--
+-- BREAKING: lua/plugins/*.lua no longer auto-sources. Move those files to
+-- plugin/ (lua/ is for require() only).
 
 uji.ui.open_win({ view = "messages", split = "top", size = "fill", wrap = true })
 local status = uji.ui.open_win({ split = "bottom", size = 1 })

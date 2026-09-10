@@ -20,9 +20,10 @@ pub fn emit(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     })
 }
 
-pub fn notify(lua: &Lua) -> mlua::Result<Function> {
+pub fn notify(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    let api = api.clone();
     lua.create_function(move |_, message: String| {
-        eprintln!("uji: {message}");
+        api.notify(message);
         Ok(())
     })
 }

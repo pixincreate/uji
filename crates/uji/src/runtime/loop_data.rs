@@ -1,4 +1,5 @@
 use std::collections::{HashSet, VecDeque};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -22,6 +23,13 @@ use super::Inner;
 use super::builtin::Builtin;
 use super::events;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Control {
+    Run,
+    Reload,
+    Quit,
+}
+
 enum ModalInput {
     Select(String),
     Prompt(String),
@@ -40,7 +48,7 @@ pub(crate) struct LoopData {
     pub(crate) storage: Box<dyn SessionStorage>,
     pub(crate) terminal: app::Term,
     pub(crate) dirty: bool,
-    pub(crate) running: bool,
+    pub(crate) control: Control,
     pub(crate) llm_tx: calloop::channel::Sender<StreamEvent>,
     pub(crate) runtime: tokio::runtime::Runtime,
     pub(crate) active: Option<Builtin>,
@@ -48,6 +56,7 @@ pub(crate) struct LoopData {
     pub(crate) pending_tool: Option<(String, tokio::sync::oneshot::Sender<ToolDecision>)>,
     pub(crate) queued: VecDeque<String>,
     pub(crate) cancel: Option<CancelToken>,
+    pub(crate) config_dir: Option<PathBuf>,
 }
 
 impl LoopData {
@@ -59,7 +68,7 @@ impl LoopData {
                     return;
                 };
                 match action {
-                    KeyAction::Quit => self.running = false,
+                    KeyAction::Quit => self.control = Control::Quit,
                     KeyAction::Submit(text) => self.submit(&text),
                     KeyAction::Command(command) => self.on_command(&command),
                     KeyAction::Selected(item) => {
@@ -79,7 +88,7 @@ impl LoopData {
                     }
                     KeyAction::Interrupt => {
                         if !self.interrupt() {
-                            self.running = false;
+                            self.control = Control::Quit;
                         }
                     }
                     KeyAction::None => {}
@@ -105,7 +114,7 @@ impl LoopData {
                 if let Some(action) = KeyBinding::parse(&name) {
                     Some(self.app.apply(action))
                 } else {
-                    eprintln!("uji: unknown keymap action: {name}");
+                    self.inner.report(format!("unknown keymap action: {name}"));
                     None
                 }
             }
@@ -118,6 +127,7 @@ impl LoopData {
             self.queued.push_back(text.to_string());
             return;
         }
+        self.app.clear_notices();
         self.app.reset_scroll();
         self.inner
             .emit(events::MESSAGE_SUBMITTED, &[("text", text.to_string())]);
@@ -245,6 +255,27 @@ impl LoopData {
                 self.maybe_submit_queued();
             }
         }
+    }
+
+    pub(crate) fn drain_diagnostics(&mut self) {
+        let notices = self.inner.take_diagnostics();
+        if !notices.is_empty() {
+            self.app.push_notices(notices);
+            self.dirty = true;
+        }
+    }
+
+    pub(crate) fn perform_reload(&mut self) {
+        self.control = Control::Run;
+        let state = self.inner.state();
+        state.borrow_mut().clear();
+        let client = Arc::clone(&self.inner.client);
+        self.inner = Inner::boot(state, client, self.config_dir.clone());
+        self.inner.resolve_llm(&mut *self.storage);
+        self.refresh_suggestions();
+        self.drain_diagnostics();
+        self.inner.emit("status_changed", &[]);
+        self.dirty = true;
     }
 
     pub(crate) fn interrupt(&mut self) -> bool {
@@ -515,10 +546,10 @@ impl LoopData {
             self.active = Some(action);
         } else if let Some(handler) = self.inner.api.commands().borrow().get(name).cloned() {
             if let Err(err) = handler.call::<()>((args.raw.clone(),)) {
-                eprintln!("uji: command error: {err}");
+                self.inner.report(format!("{name}: {err}"));
             }
         } else {
-            eprintln!("uji: unknown command: {name}");
+            self.inner.report(format!("unknown command: {name}"));
         }
     }
 
@@ -570,13 +601,17 @@ impl Context for LoopData {
     }
 
     fn reload(&mut self) {
-        self.inner.reload();
-        self.refresh_suggestions();
-        self.dirty = true;
+        self.control = Control::Reload;
+    }
+
+    fn sync_packs(&mut self) {
+        crate::pack::update_all(&self.inner.api);
+        self.control = Control::Reload;
     }
 
     fn notify(&mut self, message: &str) {
-        eprintln!("uji: {message}");
+        self.app.push_notices(vec![message.to_string()]);
+        self.dirty = true;
     }
 
     fn finish(&mut self) {

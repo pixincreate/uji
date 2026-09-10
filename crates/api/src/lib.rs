@@ -14,6 +14,7 @@ pub mod window;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use mlua::{Function, Lua, Table, Value};
@@ -32,6 +33,8 @@ pub struct Api {
     commands: RefCell<HashMap<String, Function>>,
     tools: RefCell<HashMap<String, LuaTool>>,
     keymap: RefCell<Keymap>,
+    packs: RefCell<Vec<PathBuf>>,
+    notices: RefCell<Vec<String>>,
 }
 
 impl Api {
@@ -43,6 +46,8 @@ impl Api {
             commands: RefCell::default(),
             tools: RefCell::default(),
             keymap: RefCell::default(),
+            packs: RefCell::default(),
+            notices: RefCell::default(),
         })
     }
 
@@ -64,6 +69,18 @@ impl Api {
 
     pub fn keymap(&self) -> &RefCell<Keymap> {
         &self.keymap
+    }
+
+    pub fn packs(&self) -> &RefCell<Vec<PathBuf>> {
+        &self.packs
+    }
+
+    pub fn notify(&self, message: String) {
+        self.notices.borrow_mut().push(message);
+    }
+
+    pub fn take_notices(&self) -> Vec<String> {
+        std::mem::take(&mut *self.notices.borrow_mut())
     }
 
     pub(crate) fn handlers(&self) -> &RefCell<Handlers> {
@@ -119,7 +136,7 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     uji.set("schedule", schedule::schedule(lua, api)?)?;
     uji.set("on", event::on(lua, api)?)?;
     uji.set("emit", event::emit(lua, api)?)?;
-    uji.set("notify", event::notify(lua)?)?;
+    uji.set("notify", event::notify(lua, api)?)?;
     uji.set("command", command::command(lua, api)?)?;
 
     let tool = lua.create_table()?;

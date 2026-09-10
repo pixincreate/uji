@@ -2,11 +2,13 @@ pub mod help;
 pub mod login;
 pub mod models;
 pub mod reload;
+pub mod sync;
 
 pub use help::Help;
 pub use login::Login;
 pub use models::Models;
 pub use reload::Reload;
+pub use sync::Sync;
 
 pub struct Args {
     pub raw: String,
@@ -29,6 +31,7 @@ pub trait Context {
     fn save_credential(&mut self, provider: &str, key: &str);
     fn resolve_llm(&mut self);
     fn reload(&mut self);
+    fn sync_packs(&mut self);
     fn notify(&mut self, message: &str);
     fn finish(&mut self);
     fn command_names(&self) -> Vec<String>;

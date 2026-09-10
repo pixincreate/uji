@@ -3,11 +3,12 @@ mod error;
 pub mod events;
 mod inner;
 mod input;
+mod loader;
 mod loop_data;
 
 pub use error::RuntimeError;
 pub(crate) use inner::Inner;
-pub(crate) use loop_data::LoopData;
+pub(crate) use loop_data::{Control, LoopData};
 
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -19,8 +20,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use calloop::{EventLoop, LoopHandle};
 use crossterm::event::Event as TermEvent;
-use mlua::Lua as LuaState;
-use uji_api::Api;
 use uji_api::state::UiState;
 
 use crate::app::{self, App};
@@ -32,35 +31,27 @@ pub struct Runtime {
     inner: Rc<Inner>,
     loop_handle: LoopHandle<'static, LoopData>,
     event_loop: EventLoop<'static, LoopData>,
+    config_dir: Option<PathBuf>,
 }
 
 impl Runtime {
     pub fn boot() -> Result<Self, RuntimeError> {
-        Self::boot_in(None, None)
+        Self::boot_in(None)
     }
 
-    pub fn boot_in(
-        config_path: Option<PathBuf>,
-        plugin_dir: Option<PathBuf>,
-    ) -> Result<Self, RuntimeError> {
-        let inner = Inner::new(
-            LuaState::new(),
-            Api::new(Rc::new(RefCell::new(UiState::new()))),
-        );
-        let uji = uji_api::register(&inner.lua, &inner.api)?;
-        let _ = inner.lua.globals().set("uji", uji);
+    pub fn boot_in(config_dir: Option<PathBuf>) -> Result<Self, RuntimeError> {
+        let state = Rc::new(RefCell::new(UiState::new()));
+        let client = Arc::new(reqwest::Client::new());
+        let inner = Inner::boot(state, client, config_dir.clone());
 
         let event_loop = EventLoop::try_new()?;
         let loop_handle = event_loop.handle();
-
-        inner.run_init(config_path);
-        inner.load_plugins(plugin_dir);
-        inner.compile_policy();
 
         Ok(Self {
             inner,
             loop_handle,
             event_loop,
+            config_dir,
         })
     }
 
@@ -72,6 +63,10 @@ impl Runtime {
         self.inner.state()
     }
 
+    pub fn diagnostics(&self) -> Vec<String> {
+        self.inner.take_diagnostics()
+    }
+
     pub fn eval(&self, chunk: &str) -> mlua::Result<()> {
         self.inner.lua.load(chunk).exec()
     }
@@ -81,6 +76,7 @@ impl Runtime {
             inner,
             loop_handle,
             mut event_loop,
+            config_dir,
         } = self;
 
         let messages = storage.messages(&session.id).map_err(io::Error::other)?;
@@ -100,13 +96,14 @@ impl Runtime {
             storage,
             terminal,
             dirty: false,
-            running: true,
+            control: Control::Run,
             llm_tx: llm_sender,
             active: None,
             action_done: false,
             pending_tool: None,
             queued: VecDeque::new(),
             cancel: None,
+            config_dir,
             runtime,
         };
 
@@ -118,7 +115,7 @@ impl Runtime {
             .handle()
             .insert_source(channel, |event, _meta, data: &mut LoopData| match event {
                 calloop::channel::Event::Msg(event) => data.on_term_event(&event),
-                calloop::channel::Event::Closed => data.running = false,
+                calloop::channel::Event::Closed => data.control = Control::Quit,
             })
             .map_err(|err| io::Error::other(format!("register input source: {err}")))?;
 
@@ -143,10 +140,12 @@ impl Runtime {
         app::draw(&mut data.terminal, &data.app)?;
         data.dirty = false;
 
-        while data.running {
+        while data.control != Control::Quit {
             event_loop
                 .dispatch(None, &mut data)
                 .map_err(io::Error::other)?;
+
+            data.drain_diagnostics();
 
             for callback in data.inner.api.scheduled().take() {
                 let _ = loop_handle.insert_idle(move |data: &mut LoopData| {
@@ -155,6 +154,10 @@ impl Runtime {
                     }
                     data.dirty = true;
                 });
+            }
+
+            if data.control == Control::Reload {
+                data.perform_reload();
             }
 
             if data.dirty {

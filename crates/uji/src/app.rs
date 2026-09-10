@@ -130,6 +130,7 @@ pub struct App {
     scroll: Cell<usize>,
     viewport: Cell<usize>,
     last_max: Cell<usize>,
+    notices: Vec<String>,
 }
 
 impl App {
@@ -151,6 +152,7 @@ impl App {
             scroll: Cell::new(usize::MAX),
             viewport: Cell::new(0),
             last_max: Cell::new(0),
+            notices: Vec::new(),
         }
     }
 
@@ -240,6 +242,18 @@ impl App {
 
     pub fn mode(&self) -> &Mode {
         &self.mode
+    }
+
+    pub fn notices(&self) -> &[String] {
+        &self.notices
+    }
+
+    pub fn push_notices(&mut self, notices: Vec<String>) {
+        self.notices.extend(notices);
+    }
+
+    pub fn clear_notices(&mut self) {
+        self.notices.clear();
     }
 
     pub fn open_select(&mut self, title: String, items: Vec<String>) {

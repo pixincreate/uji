@@ -9,9 +9,12 @@ use uji_api::state::UiState;
 
 use crate::config::{self, DEFAULT_LUA};
 use crate::llm::{Llm, NotConfigured};
+use crate::pack;
 use crate::session::store::SessionStorage;
 use crate::tools::policy::ToolPolicy;
 use crate::tools::policy_lua;
+
+use super::loader;
 
 pub(crate) struct Inner {
     pub(crate) lua: LuaState,
@@ -23,15 +26,57 @@ pub(crate) struct Inner {
 }
 
 impl Inner {
-    pub(crate) fn new(lua: LuaState, api: Rc<Api>) -> Rc<Self> {
-        Rc::new(Self {
-            lua,
-            api,
+    pub(crate) fn boot(
+        state: Rc<RefCell<UiState>>,
+        client: Arc<reqwest::Client>,
+        config_dir: Option<PathBuf>,
+    ) -> Rc<Self> {
+        let inner = Rc::new(Self {
+            lua: LuaState::new(),
+            api: Api::new(state),
             llm: RefCell::new(Arc::new(NotConfigured)),
             llm_model: RefCell::default(),
-            client: Arc::new(reqwest::Client::new()),
+            client,
             policy: RefCell::new(ToolPolicy::default()),
-        })
+        });
+
+        let dir = config_dir.or_else(config::config_dir);
+        if let Some(dir) = dir {
+            inner.api.packs().borrow_mut().push(dir);
+        }
+
+        match uji_api::register(&inner.lua, &inner.api) {
+            Ok(uji) => {
+                match pack::register(&inner.lua, &inner.api) {
+                    Ok(table) => {
+                        if let Err(err) = uji.set("pack", table) {
+                            inner.report(format!("cannot expose uji.pack: {err}"));
+                        }
+                    }
+                    Err(err) => inner.report(format!("cannot build uji.pack: {err}")),
+                }
+                if let Err(err) = inner.lua.globals().set("uji", uji) {
+                    inner.report(format!("cannot expose the uji table: {err}"));
+                }
+            }
+            Err(err) => inner.report(format!("cannot build the uji table: {err}")),
+        }
+        if let Err(err) = loader::install(&inner.lua, &inner.api) {
+            inner.report(format!("cannot install the module loader: {err}"));
+        }
+
+        inner.run_init();
+        inner.source_plugins();
+        inner.compile_policy();
+        inner
+    }
+
+    pub(crate) fn report(&self, message: String) {
+        self.api.notify(message);
+    }
+
+    pub(crate) fn take_diagnostics(&self) -> Vec<String> {
+        self.api.take_notices()
     }
 
     pub(crate) fn compile_policy(&self) {
@@ -52,50 +97,41 @@ impl Inner {
         self.api.dispatch(event, &ctx);
     }
 
-    pub(crate) fn reload(&self) {
-        self.state().borrow_mut().clear();
-        self.run_init(None);
-        self.load_plugins(None);
-        self.compile_policy();
-    }
-
-    pub(crate) fn run_init(&self, config_path: Option<PathBuf>) {
-        let path = config_path.or_else(config::config_path);
+    fn run_init(&self) {
+        let path = self
+            .api
+            .packs()
+            .borrow()
+            .first()
+            .and_then(|dir| config::init_path(dir));
         let (source, name) = match path {
             Some(path) => match std::fs::read_to_string(&path) {
                 Ok(source) => (source, path.display().to_string()),
                 Err(err) => {
-                    eprintln!("uji: cannot read config {}: {err}", path.display());
+                    self.report(format!("cannot read {}: {err}", path.display()));
                     return;
                 }
             },
-            None => (DEFAULT_LUA.to_owned(), "default.lua".to_owned()),
+            None => (DEFAULT_LUA.to_owned(), String::from("default.lua")),
         };
         if let Err(err) = self.lua.load(&source).set_name(&name).exec() {
-            eprintln!("uji: config error in {name}: {err}");
+            self.report(format!("{name}: {err}"));
         }
     }
 
-    pub(crate) fn load_plugins(&self, plugin_dir: Option<PathBuf>) {
-        let Some(dir) = plugin_dir.or_else(config::plugin_dir) else {
-            return;
-        };
-        let Ok(entries) = std::fs::read_dir(&dir) else {
-            return;
-        };
-        let mut paths: Vec<PathBuf> = entries
-            .filter_map(Result::ok)
-            .map(|entry| entry.path())
-            .filter(|path| path.extension().is_some_and(|ext| ext == "lua"))
-            .collect();
-        paths.sort();
-        for path in paths {
-            let Ok(source) = std::fs::read_to_string(&path) else {
-                continue;
-            };
-            let name = path.display().to_string();
-            if let Err(err) = self.lua.load(&source).set_name(&name).exec() {
-                eprintln!("uji: plugin error in {name}: {err}");
+    fn source_plugins(&self) {
+        let roots = self.api.packs().borrow().clone();
+        for root in roots {
+            for path in plugin_files(&root.join(config::PLUGIN_DIR)) {
+                match std::fs::read_to_string(&path) {
+                    Ok(source) => {
+                        let name = path.display().to_string();
+                        if let Err(err) = self.lua.load(&source).set_name(&name).exec() {
+                            self.report(format!("{name}: {err}"));
+                        }
+                    }
+                    Err(err) => self.report(format!("cannot read {}: {err}", path.display())),
+                }
             }
         }
     }
@@ -109,4 +145,17 @@ impl Inner {
         self.state().borrow_mut().set_current_provider(name);
         self.state().borrow_mut().set_current_model(model);
     }
+}
+
+fn plugin_files(dir: &std::path::Path) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut paths: Vec<PathBuf> = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "lua"))
+        .collect();
+    paths.sort();
+    paths
 }

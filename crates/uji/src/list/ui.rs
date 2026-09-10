@@ -127,14 +127,11 @@ fn draw(
             .style(Style::default().fg(MUTED).add_modifier(Modifier::BOLD));
 
         let rows = if sessions.is_empty() {
-            vec![
-                Row::new([
-                    Cell::from(""),
-                    Cell::from("No sessions in current directory"),
-                    Cell::from(""),
-                ])
-                .style(Style::default().fg(MUTED)),
-            ]
+            vec![Row::new([
+                Cell::from("No sessions in current directory").style(Style::default().fg(MUTED)),
+                Cell::from(""),
+                Cell::from(""),
+            ])]
         } else {
             let start = visible_start(state.cursor, sessions.len(), available);
             let end = (start + available).min(sessions.len());
