@@ -3,7 +3,7 @@ use std::io::{self, Stdout};
 use std::rc::Rc;
 
 use crossterm::{
-    event::{KeyCode, KeyEvent, KeyModifiers},
+    event::{DisableMouseCapture, EnableMouseCapture, KeyCode, KeyEvent, KeyModifiers},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -778,14 +778,18 @@ pub type Term = Terminal<CrosstermBackend<Stdout>>;
 pub fn setup() -> io::Result<Term> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     Terminal::new(backend)
 }
 
 pub fn restore(terminal: &mut Term) -> io::Result<()> {
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    execute!(
+        terminal.backend_mut(),
+        DisableMouseCapture,
+        LeaveAlternateScreen
+    )?;
     terminal.show_cursor()
 }
 

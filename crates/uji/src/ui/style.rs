@@ -7,6 +7,7 @@ pub(crate) const USER_BG: TColor = TColor::Rgb(0x34, 0x35, 0x41);
 pub(crate) const TEXT: TColor = TColor::Rgb(0xd4, 0xd4, 0xd4);
 pub(crate) const MUTED: TColor = TColor::Rgb(0x80, 0x80, 0x80);
 pub(crate) const SELECTED_BG: TColor = TColor::Rgb(0x3a, 0x3a, 0x4a);
+pub(crate) const CODE: TColor = TColor::Rgb(0xe0, 0xaf, 0x68);
 
 pub(crate) fn accent_style() -> Style {
     Style::default()

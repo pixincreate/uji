@@ -82,19 +82,7 @@ impl Render for Messages<'_> {
                 }
             }
         }
-        if let Some(pending) = ctx.app.pending().filter(|text| !text.is_empty()) {
-            if !lines.is_empty() {
-                lines.push(Line::from(""));
-            }
-            push_wrapped(
-                &mut lines,
-                pending,
-                width.saturating_sub(1),
-                Style::default().fg(TEXT),
-                " ",
-                false,
-            );
-        }
+        push_pending(&mut lines, ctx, width);
 
         let total = lines.len();
         let max_scroll = total.saturating_sub(height);
@@ -215,5 +203,42 @@ fn push_tool_output(lines: &mut Vec<Line<'static>>, content: &str, width: usize)
             format!("     … +{omitted} lines"),
             Style::default().fg(MUTED).add_modifier(Modifier::DIM),
         )));
+    }
+}
+
+fn push_pending(lines: &mut Vec<Line<'static>>, ctx: &Context<'_>, width: usize) {
+    let Some(pending) = ctx.app.pending().filter(|text| !text.is_empty()) else {
+        return;
+    };
+    if !lines.is_empty() {
+        lines.push(Line::from(""));
+    }
+    let (committed, tail) = split_committed(pending);
+    if !committed.is_empty() {
+        push_markdown(lines, committed, width);
+    }
+    if !tail.is_empty() {
+        push_wrapped(
+            lines,
+            tail,
+            width.saturating_sub(1),
+            Style::default().fg(TEXT),
+            " ",
+            false,
+        );
+    }
+}
+
+fn split_committed(pending: &str) -> (&str, &str) {
+    match pending.rfind('\n') {
+        Some(at) => (&pending[..=at], &pending[at + 1..]),
+        None => ("", pending),
+    }
+}
+
+fn push_markdown(lines: &mut Vec<Line<'static>>, text: &str, width: usize) {
+    for mut line in crate::ui::markdown::render(text, width.saturating_sub(1)) {
+        line.spans.insert(0, Span::raw(" "));
+        lines.push(line);
     }
 }

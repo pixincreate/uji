@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crossterm::event::{Event as TermEvent, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{Event as TermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEventKind};
 use uji_api::keymap::{Binding, Chord, Key};
 use uji_api::model::RunState;
 
@@ -92,6 +92,14 @@ impl LoopData {
                         }
                     }
                     KeyAction::None => {}
+                }
+                self.dirty = true;
+            }
+            TermEvent::Mouse(mouse) => {
+                match mouse.kind {
+                    MouseEventKind::ScrollUp => self.app.scroll_up(3),
+                    MouseEventKind::ScrollDown => self.app.scroll_down(3),
+                    _ => return,
                 }
                 self.dirty = true;
             }

@@ -24,6 +24,7 @@ regex = "1"
 globset = "0.4"
 chrono-humanize = "0.2.3"
 chrono = { version = "0.4.45", default-features = false }
+pulldown-cmark = { version = "0.13.4", default-features = false }
 
 [lints]
 workspace = true
