@@ -10,6 +10,7 @@ pub(crate) use inner::Inner;
 pub(crate) use loop_data::LoopData;
 
 use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::io;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -54,6 +55,7 @@ impl Runtime {
 
         inner.run_init(config_path);
         inner.load_plugins(plugin_dir);
+        inner.compile_policy();
 
         Ok(Self {
             inner,
@@ -102,6 +104,9 @@ impl Runtime {
             llm_tx: llm_sender,
             active: None,
             action_done: false,
+            pending_tool: None,
+            queued: VecDeque::new(),
+            cancel: None,
             runtime,
         };
 

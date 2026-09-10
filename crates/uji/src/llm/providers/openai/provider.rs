@@ -1,8 +1,10 @@
 use async_trait::async_trait;
 
-use crate::llm::{Auth, Llm, LlmConfig, LlmError, LlmRequest, response_lines, status_error};
+use crate::llm::{
+    Auth, Llm, LlmConfig, LlmError, LlmRequest, LlmResponse, response_lines, status_error,
+};
 
-use super::transformer::{OpenAiChunk, OpenAiRequest, OpenAiResponse};
+use super::transformer::{OpenAiChunk, OpenAiRequest, OpenAiResponse, OpenAiToolAcc};
 
 pub struct OpenAi {
     pub base_url: String,
@@ -42,6 +44,15 @@ impl OpenAi {
     }
 }
 
+fn truncated(finish_reason: Option<&str>) -> Result<(), LlmError> {
+    if finish_reason == Some("length") {
+        return Err(LlmError::Provider(
+            "response hit the model's output limit and was cut off".into(),
+        ));
+    }
+    Ok(())
+}
+
 #[async_trait]
 impl Llm for OpenAi {
     fn id(&self) -> &'static str {
@@ -52,7 +63,7 @@ impl Llm for OpenAi {
         &self,
         client: &reqwest::Client,
         request: &LlmRequest,
-    ) -> Result<String, LlmError> {
+    ) -> Result<LlmResponse, LlmError> {
         let provider_request = OpenAiRequest::from(request);
         let response = self.post(client, &provider_request).await?;
         if !response.status().is_success() {
@@ -64,10 +75,20 @@ impl Llm for OpenAi {
             .map_err(|err| LlmError::Http(err.to_string()))?;
         let parsed: OpenAiResponse =
             serde_json::from_str(&body).map_err(|err| LlmError::Provider(err.to_string()))?;
-        parsed
-            .text()
-            .map(str::to_string)
-            .ok_or_else(|| LlmError::Provider("empty response".into()))
+        let text = parsed.text().unwrap_or_default().to_string();
+        let tool_calls = parsed.tool_calls();
+        if tool_calls.is_empty() {
+            truncated(parsed.finish_reason())?;
+            if text.is_empty() {
+                return Err(LlmError::Provider("empty response".into()));
+            }
+        }
+        let reasoning_content = parsed.reasoning_content().map(str::to_string);
+        Ok(LlmResponse {
+            text,
+            tool_calls,
+            reasoning_content,
+        })
     }
 
     async fn stream(
@@ -75,7 +96,7 @@ impl Llm for OpenAi {
         client: &reqwest::Client,
         request: &LlmRequest,
         on_delta: &mut (dyn FnMut(String) + Send),
-    ) -> Result<String, LlmError> {
+    ) -> Result<LlmResponse, LlmError> {
         let mut provider_request = OpenAiRequest::from(request);
         provider_request.stream = true;
         let response = self.post(client, &provider_request).await?;
@@ -84,6 +105,9 @@ impl Llm for OpenAi {
         }
 
         let mut full = String::new();
+        let mut reasoning = String::new();
+        let mut finish_reason = None;
+        let mut acc = OpenAiToolAcc::default();
         response_lines(response, |line| {
             let Some(data) = line.strip_prefix("data: ") else {
                 return;
@@ -91,14 +115,32 @@ impl Llm for OpenAi {
             if data == "[DONE]" {
                 return;
             }
-            if let Ok(chunk) = serde_json::from_str::<OpenAiChunk>(data)
-                && let Some(delta) = chunk.delta_text()
-            {
-                on_delta(delta.to_string());
-                full.push_str(delta);
+            if let Ok(chunk) = serde_json::from_str::<OpenAiChunk>(data) {
+                if let Some(delta) = chunk.delta_text() {
+                    on_delta(delta.to_string());
+                    full.push_str(delta);
+                }
+                if let Some(delta) = chunk.delta_reasoning() {
+                    reasoning.push_str(delta);
+                }
+                if let Some(reason) = chunk.finish_reason() {
+                    finish_reason = Some(reason.to_string());
+                }
+                acc.apply(&chunk);
             }
         })
         .await?;
-        Ok(full)
+        let tool_calls = acc.finish();
+        if tool_calls.is_empty() {
+            truncated(finish_reason.as_deref())?;
+            if full.is_empty() {
+                return Err(LlmError::Provider("empty response".into()));
+            }
+        }
+        Ok(LlmResponse {
+            text: full,
+            tool_calls,
+            reasoning_content: (!reasoning.is_empty()).then_some(reasoning),
+        })
     }
 }

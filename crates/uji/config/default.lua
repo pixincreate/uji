@@ -3,7 +3,7 @@
 uji.ui.open_win({ view = "messages", split = "top", size = "fill", wrap = true })
 local status = uji.ui.open_win({ split = "bottom", size = 1 })
 uji.ui.open_win({ view = "input", split = "bottom", size = 3, border = "horizontal" })
-local activity = uji.ui.open_win({ split = "bottom", size = 0 })
+local activity = uji.ui.open_win({ split = "bottom", size = 0, padding = 1 })
 
 uji.ui.configure({
     input = { cursor_blink = true },
@@ -15,6 +15,18 @@ uji.ui.configure({
         },
     },
 })
+
+uji.on("tool_call", function(event)
+    if event.name == "run_command" then
+        local cmd = event.arguments.command or ""
+        if string.match(cmd, "^rm %-rf") then
+            return { deny = "Refusing to run rm -rf" }
+        end
+        return { ask = true }
+    end
+    -- reads and writes fall through to the default policy (allow / ask)
+    return nil
+end)
 
 local waiting_text = "Working"
 
@@ -30,7 +42,7 @@ end
 
 local function render_activity()
     if uji.status.state() == "working" then
-        uji.ui.set_size(activity, 1)
+        uji.ui.set_size(activity, 3)
         local elapsed = math.floor(uji.status.elapsed() or 0)
         uji.ui.set_lines(activity, {
             {
@@ -49,3 +61,18 @@ uji.on("status_changed", function()
 end)
 uji.on("tick", render_activity)
 render_status()
+
+-- Keybindings. Every key is remappable per mode: normal, suggest, select,
+-- prompt, confirm. A binding is either a builtin action name, a slash command
+-- via { command = "models" }, or nil to unbind the key entirely.
+--
+-- Actions: quit, interrupt, submit, clear_input, backspace, cursor_left,
+-- cursor_right, cursor_start, cursor_end, scroll_up, scroll_down, page_up,
+-- page_down, scroll_top, scroll_bottom, modal_up, modal_down, modal_accept,
+-- modal_cancel, suggest_complete, confirm_allow, confirm_deny, confirm_toggle,
+-- nothing.
+--
+-- uji.keymap.set("normal", "<C-p>", { command = "models" })
+-- uji.keymap.set("normal", "<C-u>", "clear_input")
+-- uji.keymap.set("normal", "<C-c>", nil)
+-- uji.keymap.list()

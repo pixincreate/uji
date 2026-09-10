@@ -2,11 +2,13 @@ pub mod app;
 pub mod cmd;
 pub mod config;
 pub mod credential;
+pub mod list;
 pub mod llm;
 pub mod memory;
 pub mod runtime;
 pub mod session;
 pub mod storage;
+pub mod tools;
 pub mod ui;
 
 pub use uji_api as api;

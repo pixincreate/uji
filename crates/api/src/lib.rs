@@ -2,30 +2,36 @@ pub mod command;
 mod convert;
 pub mod event;
 pub mod handlers;
+pub mod keymap;
 pub mod llm;
 pub mod model;
 pub mod schedule;
 pub mod scheduled;
 pub mod state;
 pub mod status;
+pub mod tools;
 pub mod window;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use mlua::{Function, Lua, Table};
+use mlua::{Function, Lua, Table, Value};
 
 use crate::state::UiState;
 
 use self::handlers::Handlers;
+use self::keymap::Keymap;
 use self::scheduled::Scheduled;
+use self::tools::LuaTool;
 
 pub struct Api {
     state: Rc<RefCell<UiState>>,
     scheduled: Scheduled,
     handlers: RefCell<Handlers>,
     commands: RefCell<HashMap<String, Function>>,
+    tools: RefCell<HashMap<String, LuaTool>>,
+    keymap: RefCell<Keymap>,
 }
 
 impl Api {
@@ -35,6 +41,8 @@ impl Api {
             scheduled: Scheduled::default(),
             handlers: RefCell::default(),
             commands: RefCell::default(),
+            tools: RefCell::default(),
+            keymap: RefCell::default(),
         })
     }
 
@@ -50,6 +58,14 @@ impl Api {
         &self.commands
     }
 
+    pub fn lua_tools(&self) -> &RefCell<HashMap<String, LuaTool>> {
+        &self.tools
+    }
+
+    pub fn keymap(&self) -> &RefCell<Keymap> {
+        &self.keymap
+    }
+
     pub(crate) fn handlers(&self) -> &RefCell<Handlers> {
         &self.handlers
     }
@@ -60,6 +76,17 @@ impl Api {
                 eprintln!("uji: handler error for {event}: {err}");
             }
         }
+    }
+
+    pub fn dispatch_tool(&self, event: &str, event_table: &Table) -> Option<Value> {
+        for handler in self.handlers.borrow().get(event) {
+            match handler.call::<Value>(event_table.clone()) {
+                Ok(value) if !value.is_nil() => return Some(value),
+                Ok(_) => {}
+                Err(err) => eprintln!("uji: {event} handler error: {err}"),
+            }
+        }
+        None
     }
 }
 
@@ -94,6 +121,13 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     uji.set("emit", event::emit(lua, api)?)?;
     uji.set("notify", event::notify(lua)?)?;
     uji.set("command", command::command(lua, api)?)?;
+
+    let tool = lua.create_table()?;
+    tool.set("register", tools::register(lua, api)?)?;
+    tool.set("unregister", tools::unregister(lua, api)?)?;
+    uji.set("tool", tool)?;
+
+    uji.set("keymap", keymap::register(lua, api)?)?;
 
     Ok(uji)
 }
