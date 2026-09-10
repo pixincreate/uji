@@ -56,9 +56,8 @@ impl Render for Messages<'_> {
                 Message::Assistant {
                     text, tool_calls, ..
                 } => {
-                    let style = Style::default().fg(TEXT);
                     if !text.is_empty() {
-                        push_wrapped(&mut lines, text, width.saturating_sub(1), style, " ", false);
+                        push_markdown(&mut lines, text, width);
                     }
                     for call in tool_calls {
                         if !text.is_empty() {
