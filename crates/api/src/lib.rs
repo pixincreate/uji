@@ -1,3 +1,4 @@
+pub mod agent;
 pub mod command;
 mod convert;
 pub mod event;
@@ -7,6 +8,7 @@ pub mod job;
 pub mod keymap;
 pub mod llm;
 pub mod model;
+pub mod registry;
 pub mod schedule;
 pub mod scheduled;
 pub mod session;
@@ -28,6 +30,7 @@ use self::handlers::Handlers;
 use self::input::{Capture, Composer};
 use self::job::Jobs;
 use self::keymap::Keymap;
+use self::registry::Registry;
 use self::scheduled::Scheduled;
 use self::session::SessionState;
 use self::tools::LuaTool;
@@ -45,6 +48,8 @@ pub struct Api {
     composer: Composer,
     capture: Capture,
     session_state: SessionState,
+    segments: Registry,
+    agent_context: Registry,
 }
 
 impl Api {
@@ -62,6 +67,8 @@ impl Api {
             composer: Composer::default(),
             capture: Capture::default(),
             session_state: SessionState::default(),
+            segments: Registry::default(),
+            agent_context: Registry::default(),
         })
     }
 
@@ -99,6 +106,14 @@ impl Api {
 
     pub fn composer(&self) -> &Composer {
         &self.composer
+    }
+
+    pub fn segments(&self) -> &Registry {
+        &self.segments
+    }
+
+    pub fn agent_context(&self) -> &Registry {
+        &self.agent_context
     }
 
     pub fn session(&self) -> &SessionState {
@@ -161,6 +176,9 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     status.set("state", status::state(lua, api)?)?;
     status.set("elapsed", status::elapsed(lua, api)?)?;
     status.set("loader_frame", status::loader_frame(lua, api)?)?;
+    status.set("add", status::add(lua, api)?)?;
+    status.set("remove", status::remove(lua, api)?)?;
+    status.set("segments", status::segments(lua, api)?)?;
     uji.set("status", status)?;
 
     uji.set("schedule", schedule::schedule(lua, api)?)?;
@@ -174,6 +192,7 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     tool.set("unregister", tools::unregister(lua, api)?)?;
     uji.set("tool", tool)?;
 
+    uji.set("agent", agent::register(lua, api)?)?;
     uji.set("keymap", keymap::register(lua, api)?)?;
     uji.set("job", job::register(lua, api)?)?;
     uji.set("input", input::register(lua, api)?)?;

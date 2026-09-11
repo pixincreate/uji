@@ -28,8 +28,10 @@
 -- BREAKING: lua/plugins/*.lua no longer auto-sources. Move those files to
 -- plugin/ (lua/ is for require() only).
 
+-- Windows are laid out in priority order (default 50, lower first). For a
+-- bottom split, lower priority sits closer to the bottom edge, so a plugin
+-- can place itself without caring where its require() sits in this file.
 uji.ui.open_win({ view = "messages", split = "top", size = "fill", wrap = true })
-local status = uji.ui.open_win({ split = "bottom", size = 1 })
 uji.ui.open_win({ view = "input", split = "bottom", size = 3, border = "horizontal" })
 local activity = uji.ui.open_win({ split = "bottom", size = 0, padding = 1 })
 
@@ -44,6 +46,8 @@ uji.ui.configure({
     },
 })
 
+-- Handlers run lowest-priority first and the first non-nil answer wins.
+-- Pass { priority = n } to rule on a tool call before this one (default 50).
 uji.on("tool_call", function(event)
     if event.name == "run_command" then
         local cmd = event.arguments.command or ""
@@ -57,54 +61,6 @@ uji.on("tool_call", function(event)
 end)
 
 local waiting_text = "Working"
-
-local function shorten(path)
-    local home = os.getenv("HOME")
-    if home and home ~= "" and path:sub(1, #home) == home then
-        return "~" .. path:sub(#home + 1)
-    end
-    return path
-end
-
-local DIM = "#4a4a4a"
-local MUTED = "#808080"
-
-local function render_status()
-    local spans = {}
-    local function part(text, color)
-        if #spans > 0 then
-            spans[#spans + 1] = { text = "  ·  ", color = DIM }
-        end
-        spans[#spans + 1] = { text = text, color = color }
-    end
-
-    local dir = shorten(uji.session.info().directory or "")
-    if dir ~= "" then
-        part(dir, "cyan")
-    end
-
-    local provider = uji.status.provider()
-    if provider then
-        part(provider .. "/" .. uji.status.model(), MUTED)
-    end
-
-    local turns = 0
-    for _, message in ipairs(uji.session.messages()) do
-        if message.type == "user" then
-            turns = turns + 1
-        end
-    end
-    if turns > 0 then
-        part(turns .. (turns == 1 and " turn" or " turns"), MUTED)
-    end
-
-    if #spans == 0 then
-        uji.ui.clear(status)
-    else
-        table.insert(spans, 1, { text = " ", color = DIM })
-        uji.ui.set_lines(status, { spans })
-    end
-end
 
 local function render_activity()
     if uji.status.state() == "working" then
@@ -121,13 +77,8 @@ local function render_activity()
     end
 end
 
-uji.on("status_changed", function()
-    render_status()
-    render_activity()
-end)
+uji.on("status_changed", render_activity)
 uji.on("tick", render_activity)
-uji.on("MessageAppended", render_status)
-render_status()
 
 -- Keybindings. Every key is remappable per mode: normal, suggest, select,
 -- prompt, confirm. A binding is either a builtin action name, a slash command

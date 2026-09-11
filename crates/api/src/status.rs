@@ -1,9 +1,55 @@
 use std::rc::Rc;
 
-use mlua::{Function, Lua};
+use mlua::{Function, Lua, Table, Value};
 
 use crate::Api;
 use crate::model::RunState;
+use crate::registry::Entry;
+
+pub fn add(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    let api = Rc::clone(api);
+    lua.create_function(
+        move |_, (name, render, opts): (String, Function, Option<Table>)| {
+            let priority = opts
+                .map(|opts| opts.get::<Option<i64>>("priority"))
+                .transpose()?
+                .flatten()
+                .unwrap_or(50);
+            api.segments().add(Entry {
+                name,
+                priority,
+                call: render,
+            });
+            Ok(())
+        },
+    )
+}
+
+pub fn remove(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    let api = Rc::clone(api);
+    lua.create_function(move |_, name: String| {
+        api.segments().remove(&name);
+        Ok(())
+    })
+}
+
+/// Calls every registered segment and returns the ones that produced something.
+pub fn segments(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    let api = Rc::clone(api);
+    lua.create_function(move |lua, ()| {
+        let out = lua.create_table()?;
+        for (name, render) in api.segments().calls() {
+            match render.call::<Value>(()) {
+                Ok(Value::Nil) => {}
+                Ok(value) => out.push(value)?,
+                Err(err) => {
+                    api.notify(format!("status segment {name}: {err}"));
+                }
+            }
+        }
+        Ok(out)
+    })
+}
 
 pub fn provider(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     let state = api.state();

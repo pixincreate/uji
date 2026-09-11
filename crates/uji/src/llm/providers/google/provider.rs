@@ -84,6 +84,7 @@ impl Llm for Gemini {
             text,
             tool_calls,
             reasoning_content: None,
+            usage: None,
         })
     }
 
@@ -122,6 +123,7 @@ impl Llm for Gemini {
             text: full,
             tool_calls,
             reasoning_content: None,
+            usage: None,
         })
     }
 }

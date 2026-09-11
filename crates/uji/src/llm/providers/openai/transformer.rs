@@ -8,8 +8,15 @@ pub struct OpenAiRequest {
     pub model: String,
     pub messages: Vec<OpenAiMessage>,
     pub stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream_options: Option<StreamOptions>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tools: Vec<OpenAiTool>,
+}
+
+#[derive(Serialize)]
+pub struct StreamOptions {
+    pub include_usage: bool,
 }
 
 #[derive(Serialize)]
@@ -120,6 +127,7 @@ impl From<&LlmRequest> for OpenAiRequest {
             model: request.model.clone(),
             messages,
             stream: false,
+            stream_options: None,
             tools,
         }
     }
@@ -128,6 +136,25 @@ impl From<&LlmRequest> for OpenAiRequest {
 #[derive(Deserialize)]
 pub struct OpenAiResponse {
     pub choices: Vec<OpenAiChoice>,
+    #[serde(default)]
+    pub usage: Option<OpenAiUsage>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub struct OpenAiUsage {
+    #[serde(default)]
+    pub prompt_tokens: u64,
+    #[serde(default)]
+    pub completion_tokens: u64,
+}
+
+impl From<OpenAiUsage> for crate::llm::Usage {
+    fn from(usage: OpenAiUsage) -> Self {
+        Self {
+            input: usage.prompt_tokens,
+            output: usage.completion_tokens,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -184,7 +211,10 @@ impl OpenAiResponse {
 
 #[derive(Deserialize)]
 pub struct OpenAiChunk {
+    #[serde(default)]
     pub choices: Vec<OpenAiDelta>,
+    #[serde(default)]
+    pub usage: Option<OpenAiUsage>,
 }
 
 #[derive(Deserialize)]

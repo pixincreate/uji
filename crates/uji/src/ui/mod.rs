@@ -10,7 +10,7 @@ use crate::app::App;
 
 pub(crate) mod buffer;
 pub(crate) mod input;
-pub(crate) mod layout;
+pub mod layout;
 pub(crate) mod markdown;
 pub(crate) mod messages;
 pub(crate) mod modal;

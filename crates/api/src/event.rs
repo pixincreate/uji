@@ -2,14 +2,23 @@ use std::rc::Rc;
 
 use mlua::{Function, Lua, Table};
 
+use crate::handlers::DEFAULT_PRIORITY;
+
 use super::Api;
 
 pub fn on(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     let api = api.clone();
-    lua.create_function(move |_, (event, handler): (String, Function)| {
-        api.handlers().borrow_mut().add(event, handler);
-        Ok(())
-    })
+    lua.create_function(
+        move |_, (event, handler, opts): (String, Function, Option<Table>)| {
+            let priority = opts
+                .map(|opts| opts.get::<Option<i64>>("priority"))
+                .transpose()?
+                .flatten()
+                .unwrap_or(DEFAULT_PRIORITY);
+            api.handlers().borrow_mut().add(event, handler, priority);
+            Ok(())
+        },
+    )
 }
 
 pub fn emit(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {

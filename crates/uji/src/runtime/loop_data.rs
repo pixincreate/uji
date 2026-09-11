@@ -205,6 +205,7 @@ impl LoopData {
                 &self.app.session().directory,
             )
         };
+        let system = self.with_agent_context(system);
         let lua_tools = self.gather_lua_tools();
         let cwd = self.app.session().directory.clone();
         let sender = self.llm_tx.clone();
@@ -281,6 +282,13 @@ impl LoopData {
                 self.stop_working();
                 self.maybe_submit_queued();
             }
+            StreamEvent::Usage(usage) => {
+                self.inner
+                    .api
+                    .session()
+                    .add_usage(usage.input, usage.output);
+                self.inner.emit("status_changed", &[]);
+            }
             StreamEvent::Cancelled => {
                 self.app.take_pending();
                 self.fail_assistant("interrupted");
@@ -294,6 +302,20 @@ impl LoopData {
                 self.maybe_submit_queued();
             }
         }
+    }
+
+    fn with_agent_context(&self, mut system: String) -> String {
+        for (name, call) in self.inner.api.agent_context().calls() {
+            match call.call::<Option<String>>(()) {
+                Ok(Some(extra)) if !extra.trim().is_empty() => {
+                    system.push_str("\n\n");
+                    system.push_str(extra.trim());
+                }
+                Ok(_) => {}
+                Err(err) => self.inner.report(format!("agent context {name}: {err}")),
+            }
+        }
+        system
     }
 
     pub(crate) fn apply_composer(&mut self) {

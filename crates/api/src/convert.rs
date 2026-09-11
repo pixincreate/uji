@@ -39,6 +39,9 @@ impl FromLuaValue for WinOpts {
                 .parse::<Border>()
                 .map_err(|err| mlua::Error::runtime(err.to_string()))?;
         }
+        opts.priority = table
+            .get::<Option<i64>>("priority")?
+            .unwrap_or(crate::model::WIN_DEFAULT_PRIORITY);
         opts.title = table.get::<Option<String>>("title")?;
         opts.wrap = table.get::<Option<bool>>("wrap")?.unwrap_or(false);
         opts.padding = table.get::<Option<u16>>("padding")?.unwrap_or(0);

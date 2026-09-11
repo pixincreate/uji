@@ -159,8 +159,11 @@ pub enum Split {
     Right,
 }
 
+pub const WIN_DEFAULT_PRIORITY: i64 = 50;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct WinOpts {
+    pub priority: i64,
     pub split: Split,
     pub size: Size,
     pub border: Border,
@@ -173,6 +176,7 @@ pub struct WinOpts {
 impl Default for WinOpts {
     fn default() -> Self {
         Self {
+            priority: WIN_DEFAULT_PRIORITY,
             split: Split::Top,
             size: Size::Fill,
             border: Border::None,

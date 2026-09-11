@@ -74,6 +74,7 @@ impl Llm for Ollama {
             text: text.to_string(),
             tool_calls: Vec::new(),
             reasoning_content: None,
+            usage: None,
         })
     }
 
@@ -107,6 +108,7 @@ impl Llm for Ollama {
             text: full,
             tool_calls: Vec::new(),
             reasoning_content: None,
+            usage: None,
         })
     }
 }

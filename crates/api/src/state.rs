@@ -24,12 +24,20 @@ impl UiState {
     pub fn open_window(&mut self, builtin: Option<Builtin>, opts: WinOpts) -> u32 {
         let id = self.next_window_id;
         self.next_window_id += 1;
-        self.windows.push(WindowSpec {
-            id,
-            builtin,
-            buffer: Vec::new(),
-            opts,
-        });
+        let at = self
+            .windows
+            .iter()
+            .position(|existing| existing.opts.priority > opts.priority)
+            .unwrap_or(self.windows.len());
+        self.windows.insert(
+            at,
+            WindowSpec {
+                id,
+                builtin,
+                buffer: Vec::new(),
+                opts,
+            },
+        );
         id
     }
 

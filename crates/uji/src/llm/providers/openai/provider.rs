@@ -88,6 +88,7 @@ impl Llm for OpenAi {
             text,
             tool_calls,
             reasoning_content,
+            usage: parsed.usage.map(Into::into),
         })
     }
 
@@ -99,6 +100,9 @@ impl Llm for OpenAi {
     ) -> Result<LlmResponse, LlmError> {
         let mut provider_request = OpenAiRequest::from(request);
         provider_request.stream = true;
+        provider_request.stream_options = Some(super::transformer::StreamOptions {
+            include_usage: true,
+        });
         let response = self.post(client, &provider_request).await?;
         if !response.status().is_success() {
             return Err(status_error(response).await);
@@ -107,6 +111,7 @@ impl Llm for OpenAi {
         let mut full = String::new();
         let mut reasoning = String::new();
         let mut finish_reason = None;
+        let mut usage = None;
         let mut acc = OpenAiToolAcc::default();
         response_lines(response, |line| {
             let Some(data) = line.strip_prefix("data: ") else {
@@ -126,6 +131,9 @@ impl Llm for OpenAi {
                 if let Some(reason) = chunk.finish_reason() {
                     finish_reason = Some(reason.to_string());
                 }
+                if let Some(reported) = chunk.usage {
+                    usage = Some(reported.into());
+                }
                 acc.apply(&chunk);
             }
         })
@@ -141,6 +149,7 @@ impl Llm for OpenAi {
             text: full,
             tool_calls,
             reasoning_content: (!reasoning.is_empty()).then_some(reasoning),
+            usage,
         })
     }
 }

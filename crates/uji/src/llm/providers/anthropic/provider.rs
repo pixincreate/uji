@@ -76,6 +76,7 @@ impl Llm for Anthropic {
             text,
             tool_calls,
             reasoning_content: None,
+            usage: None,
         })
     }
 
@@ -112,6 +113,7 @@ impl Llm for Anthropic {
             text: full,
             tool_calls,
             reasoning_content: None,
+            usage: None,
         })
     }
 }

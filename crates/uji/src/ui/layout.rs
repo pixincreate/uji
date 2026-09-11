@@ -16,7 +16,7 @@ fn is_vertical(split: Split) -> bool {
     matches!(split, Split::Top | Split::Bottom)
 }
 
-pub(crate) fn layout(area: Rect, windows: &[WindowSpec]) -> Vec<Rect> {
+pub fn layout(area: Rect, windows: &[WindowSpec]) -> Vec<Rect> {
     let mut rects = Vec::with_capacity(windows.len());
     let mut remaining_area = area;
 

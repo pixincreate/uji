@@ -19,8 +19,16 @@ pub struct MessageView {
     pub name: Option<String>,
 }
 
+#[derive(Default, Clone, Copy)]
+pub struct Usage {
+    pub input: u64,
+    pub output: u64,
+    pub turns: u64,
+}
+
 #[derive(Default)]
 pub struct SessionState {
+    usage: RefCell<Usage>,
     info: RefCell<SessionInfo>,
     messages: RefCell<Vec<MessageView>>,
     submits: RefCell<Vec<String>>,
@@ -49,6 +57,17 @@ impl SessionState {
 
     pub fn messages(&self) -> Ref<'_, Vec<MessageView>> {
         self.messages.borrow()
+    }
+
+    pub fn add_usage(&self, input: u64, output: u64) {
+        let mut usage = self.usage.borrow_mut();
+        usage.input = usage.input.saturating_add(input);
+        usage.output = usage.output.saturating_add(output);
+        usage.turns = usage.turns.saturating_add(1);
+    }
+
+    pub fn usage(&self) -> Usage {
+        *self.usage.borrow()
     }
 
     pub fn take_submits(&self) -> Vec<String> {
@@ -86,6 +105,20 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
                 }
                 out.push(row)?;
             }
+            Ok(out)
+        })?,
+    )?;
+
+    let usage_api = Rc::clone(api);
+    session.set(
+        "usage",
+        lua.create_function(move |lua, ()| {
+            let usage = usage_api.session().usage();
+            let out = lua.create_table()?;
+            out.set("input", usage.input)?;
+            out.set("output", usage.output)?;
+            out.set("total", usage.input.saturating_add(usage.output))?;
+            out.set("requests", usage.turns)?;
             Ok(out)
         })?,
     )?;

@@ -1,16 +1,28 @@
 use mlua::Function;
 
+pub const DEFAULT_PRIORITY: i64 = 50;
+
+struct Handler {
+    priority: i64,
+    call: Function,
+}
+
 #[derive(Default)]
 pub struct Handlers {
-    by_event: Vec<(String, Vec<Function>)>,
+    by_event: Vec<(String, Vec<Handler>)>,
 }
 
 impl Handlers {
-    pub fn add(&mut self, event: String, handler: Function) {
+    pub fn add(&mut self, event: String, handler: Function, priority: i64) {
+        let entry = Handler {
+            priority,
+            call: handler,
+        };
         if let Some((_, list)) = self.by_event.iter_mut().find(|(name, _)| *name == event) {
-            list.push(handler);
+            list.push(entry);
+            list.sort_by_key(|handler| handler.priority);
         } else {
-            self.by_event.push((event, vec![handler]));
+            self.by_event.push((event, vec![entry]));
         }
     }
 
@@ -18,7 +30,7 @@ impl Handlers {
         self.by_event
             .iter()
             .find(|(name, _)| name == event)
-            .map(|(_, list)| list.clone())
+            .map(|(_, list)| list.iter().map(|handler| handler.call.clone()).collect())
             .unwrap_or_default()
     }
 }

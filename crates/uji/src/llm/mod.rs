@@ -54,11 +54,29 @@ pub struct ToolSpec {
     pub parameters: Value,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Usage {
+    pub input: u64,
+    pub output: u64,
+}
+
+impl Usage {
+    pub fn total(&self) -> u64 {
+        self.input.saturating_add(self.output)
+    }
+
+    pub fn add(&mut self, other: Usage) {
+        self.input = self.input.saturating_add(other.input);
+        self.output = self.output.saturating_add(other.output);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct LlmResponse {
     pub text: String,
     pub tool_calls: Vec<ToolCall>,
     pub reasoning_content: Option<String>,
+    pub usage: Option<Usage>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -250,6 +268,7 @@ pub enum StreamEvent {
         text: String,
         reasoning_content: Option<String>,
     },
+    Usage(Usage),
     Cancelled,
     Failed(String),
 }
@@ -355,6 +374,9 @@ pub async fn run_agent(
                 return;
             }
         };
+        if let Some(usage) = response.usage {
+            on_event(StreamEvent::Usage(usage));
+        }
         let text = response.text;
         let reasoning_content = response.reasoning_content;
         let mut tool_calls = response.tool_calls;
