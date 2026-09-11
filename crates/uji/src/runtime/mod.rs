@@ -3,6 +3,7 @@ mod error;
 pub mod events;
 mod inner;
 mod input;
+mod job;
 mod loader;
 mod loop_data;
 
@@ -88,6 +89,7 @@ impl Runtime {
         input::spawn(sender, reader_running.clone());
 
         let (llm_sender, llm_channel) = calloop::channel::channel::<StreamEvent>();
+        let (job_sender, job_channel) = calloop::channel::channel::<job::JobEvent>();
 
         let runtime = tokio::runtime::Runtime::new()?;
         let mut data = LoopData {
@@ -104,9 +106,12 @@ impl Runtime {
             queued: VecDeque::new(),
             cancel: None,
             config_dir,
+            job_tx: job_sender,
+            jobs: job::Running::default(),
             runtime,
         };
 
+        data.mirror_session();
         data.inner.resolve_llm(&mut *data.storage);
         data.inner.emit("status_changed", &[]);
         data.refresh_suggestions();
@@ -128,6 +133,15 @@ impl Runtime {
             })
             .map_err(|err| io::Error::other(format!("register llm source: {err}")))?;
 
+        event_loop
+            .handle()
+            .insert_source(job_channel, |event, _meta, data: &mut LoopData| {
+                if let calloop::channel::Event::Msg(event) = event {
+                    data.on_job_event(event);
+                }
+            })
+            .map_err(|err| io::Error::other(format!("register job source: {err}")))?;
+
         let timer = calloop::timer::Timer::from_duration(data.timer_interval());
         event_loop
             .handle()
@@ -145,6 +159,8 @@ impl Runtime {
                 .dispatch(None, &mut data)
                 .map_err(io::Error::other)?;
 
+            data.sync_lua_state();
+            data.drain_jobs();
             data.drain_diagnostics();
 
             for callback in data.inner.api.scheduled().take() {

@@ -31,11 +31,13 @@ impl Render for Modal {
             Mode::Select {
                 title,
                 items,
+                query,
                 cursor,
             } => {
                 select::Select {
                     title,
                     items,
+                    query,
                     cursor: *cursor,
                 }
                 .render(ctx, surface);

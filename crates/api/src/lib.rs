@@ -2,11 +2,14 @@ pub mod command;
 mod convert;
 pub mod event;
 pub mod handlers;
+pub mod input;
+pub mod job;
 pub mod keymap;
 pub mod llm;
 pub mod model;
 pub mod schedule;
 pub mod scheduled;
+pub mod session;
 pub mod state;
 pub mod status;
 pub mod tools;
@@ -22,8 +25,11 @@ use mlua::{Function, Lua, Table, Value};
 use crate::state::UiState;
 
 use self::handlers::Handlers;
+use self::input::{Capture, Composer};
+use self::job::Jobs;
 use self::keymap::Keymap;
 use self::scheduled::Scheduled;
+use self::session::SessionState;
 use self::tools::LuaTool;
 
 pub struct Api {
@@ -35,6 +41,10 @@ pub struct Api {
     keymap: RefCell<Keymap>,
     packs: RefCell<Vec<PathBuf>>,
     notices: RefCell<Vec<String>>,
+    jobs: RefCell<Jobs>,
+    composer: Composer,
+    capture: Capture,
+    session_state: SessionState,
 }
 
 impl Api {
@@ -48,6 +58,10 @@ impl Api {
             keymap: RefCell::default(),
             packs: RefCell::default(),
             notices: RefCell::default(),
+            jobs: RefCell::default(),
+            composer: Composer::default(),
+            capture: Capture::default(),
+            session_state: SessionState::default(),
         })
     }
 
@@ -77,6 +91,22 @@ impl Api {
 
     pub fn notify(&self, message: String) {
         self.notices.borrow_mut().push(message);
+    }
+
+    pub fn capture(&self) -> &Capture {
+        &self.capture
+    }
+
+    pub fn composer(&self) -> &Composer {
+        &self.composer
+    }
+
+    pub fn session(&self) -> &SessionState {
+        &self.session_state
+    }
+
+    pub fn jobs(&self) -> &RefCell<Jobs> {
+        &self.jobs
     }
 
     pub fn take_notices(&self) -> Vec<String> {
@@ -145,6 +175,9 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     uji.set("tool", tool)?;
 
     uji.set("keymap", keymap::register(lua, api)?)?;
+    uji.set("job", job::register(lua, api)?)?;
+    uji.set("input", input::register(lua, api)?)?;
+    uji.set("session", session::register(lua, api)?)?;
 
     Ok(uji)
 }

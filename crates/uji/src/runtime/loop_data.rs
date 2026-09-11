@@ -22,6 +22,7 @@ use mlua::{LuaSerdeExt, Value as LuaValue};
 use super::Inner;
 use super::builtin::Builtin;
 use super::events;
+use super::job::{JobEvent, Running};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Control {
@@ -57,6 +58,8 @@ pub(crate) struct LoopData {
     pub(crate) queued: VecDeque<String>,
     pub(crate) cancel: Option<CancelToken>,
     pub(crate) config_dir: Option<PathBuf>,
+    pub(crate) job_tx: calloop::channel::Sender<JobEvent>,
+    pub(crate) jobs: Running,
 }
 
 impl LoopData {
@@ -109,6 +112,10 @@ impl LoopData {
     }
 
     fn dispatch_key(&mut self, key: KeyEvent) -> Option<KeyAction> {
+        if self.inner.api.capture().is_active() {
+            self.dispatch_capture(key);
+            return None;
+        }
         let mode = self.app.keymap_mode();
         let binding = chord_of(key)
             .and_then(|chord| self.inner.api.keymap().borrow().get(mode, chord).cloned());
@@ -130,6 +137,30 @@ impl LoopData {
         }
     }
 
+    fn dispatch_capture(&mut self, key: KeyEvent) {
+        let Some(handler) = self.inner.api.capture().handler() else {
+            return;
+        };
+        let Some(chord) = chord_of(key) else {
+            return;
+        };
+        let Ok(event) = self.inner.lua.create_table() else {
+            return;
+        };
+        let _ = event.set("key", uji_api::keymap::describe(chord));
+        if let Key::Char(c) = chord.key {
+            let _ = event.set("char", c.to_string());
+        }
+        let _ = event.set("ctrl", chord.ctrl);
+        let _ = event.set("alt", chord.alt);
+        let _ = event.set("shift", chord.shift);
+        if let Err(err) = handler.call::<()>((event,)) {
+            self.inner.report(format!("capture handler: {err}"));
+            self.inner.api.capture().clear();
+        }
+        self.dirty = true;
+    }
+
     pub(crate) fn submit(&mut self, text: &str) {
         if self.inner.state().borrow().run_state() == RunState::Working {
             self.queued.push_back(text.to_string());
@@ -146,6 +177,7 @@ impl LoopData {
         match self.storage.append_message(&self.app.session().id, user) {
             Ok(stored) => {
                 self.app.push_message(stored);
+                self.mirror_session();
                 self.inner.emit(
                     events::MESSAGE_APPENDED,
                     &[("type", "user".into()), ("text", text.to_string())],
@@ -265,6 +297,101 @@ impl LoopData {
         }
     }
 
+    pub(crate) fn sync_lua_state(&mut self) {
+        let composer = self.inner.api.composer();
+        if let Some(text) = composer.take_dirty() {
+            self.app.set_input(text);
+            self.dirty = true;
+        } else {
+            composer.sync(self.app.input());
+        }
+        for text in self.inner.api.session().take_submits() {
+            self.submit(&text);
+        }
+    }
+
+    pub(crate) fn mirror_session(&self) {
+        let session = self.inner.api.session();
+        {
+            let mut info = session.info.borrow_mut();
+            info.id = self.app.session().id.to_string();
+            info.title.clone_from(&self.app.session().title);
+            info.directory.clone_from(&self.app.session().directory);
+        }
+        let mut messages = session.messages.borrow_mut();
+        messages.clear();
+        for stored in self.app.messages() {
+            let (kind, name) = match &stored.message {
+                Message::Tool { name, .. } => ("tool", Some(name.clone())),
+                other => (other.type_name(), None),
+            };
+            messages.push(uji_api::session::MessageView {
+                kind: kind.to_string(),
+                text: stored.message.text().to_string(),
+                name,
+            });
+        }
+    }
+
+    pub(crate) fn drain_jobs(&mut self) {
+        let (requests, stops) = {
+            let jobs = self.inner.api.jobs();
+            let mut jobs = jobs.borrow_mut();
+            (jobs.take_requests(), jobs.take_stops())
+        };
+        for id in stops {
+            self.jobs.stop(id);
+        }
+        for request in requests {
+            let cancel = CancelToken::new();
+            self.jobs.insert(request.id, cancel.clone());
+            let sender = self.job_tx.clone();
+            self.runtime.spawn(super::job::run(
+                request.id,
+                request.command,
+                request.cwd,
+                cancel,
+                move |event| {
+                    let _ = sender.send(event);
+                },
+            ));
+        }
+    }
+
+    pub(crate) fn on_job_event(&mut self, event: JobEvent) {
+        let (id, handler, arg) = match event {
+            JobEvent::Stdout { id, line } => (id, "stdout", self.lua_text(&line)),
+            JobEvent::Stderr { id, line } => (id, "stderr", self.lua_text(&line)),
+            JobEvent::Exit { id, code } => (id, "exit", LuaValue::Integer(i64::from(code))),
+        };
+        let callback = {
+            let jobs = self.inner.api.jobs();
+            let jobs = jobs.borrow();
+            jobs.handlers(id).and_then(|h| match handler {
+                "stdout" => h.on_stdout.clone(),
+                "stderr" => h.on_stderr.clone(),
+                _ => h.on_exit.clone(),
+            })
+        };
+        if let Some(callback) = callback
+            && let Err(err) = callback.call::<()>((arg,))
+        {
+            self.inner.report(format!("job {id} {handler}: {err}"));
+        }
+        if handler == "exit" {
+            self.inner.api.jobs().borrow_mut().finish(id);
+            self.jobs.finish(id);
+        }
+        self.dirty = true;
+    }
+
+    fn lua_text(&self, text: &str) -> LuaValue {
+        self.inner
+            .lua
+            .create_string(text)
+            .map_or(LuaValue::Nil, LuaValue::String)
+    }
+
     pub(crate) fn drain_diagnostics(&mut self) {
         let notices = self.inner.take_diagnostics();
         if !notices.is_empty() {
@@ -317,7 +444,10 @@ impl LoopData {
             reasoning_content,
         };
         match self.storage.append_message(&self.app.session().id, message) {
-            Ok(stored) => self.app.push_message(stored),
+            Ok(stored) => {
+                self.app.push_message(stored);
+                self.mirror_session();
+            }
             Err(err) => eprintln!("uji: failed to persist assistant step: {err}"),
         }
         self.dirty = true;
@@ -334,7 +464,10 @@ impl LoopData {
             content,
         };
         match self.storage.append_message(&self.app.session().id, message) {
-            Ok(stored) => self.app.push_message(stored),
+            Ok(stored) => {
+                self.app.push_message(stored);
+                self.mirror_session();
+            }
             Err(err) => eprintln!("uji: failed to persist tool result: {err}"),
         }
         self.dirty = true;
@@ -487,6 +620,7 @@ impl LoopData {
         match self.storage.append_message(&self.app.session().id, message) {
             Ok(stored) => {
                 self.app.push_message(stored);
+                self.mirror_session();
                 self.inner.emit(
                     events::MESSAGE_APPENDED,
                     &[("type", "error".into()), ("text", error.to_string())],
@@ -511,6 +645,7 @@ impl LoopData {
         {
             Ok(stored) => {
                 self.app.push_message(stored);
+                self.mirror_session();
                 self.app.take_pending();
                 self.inner.emit(
                     events::MESSAGE_APPENDED,
@@ -549,10 +684,11 @@ impl LoopData {
             None => (trimmed, ""),
         };
         let args = Args::parse(rest);
+        let lua_command = self.inner.api.commands().borrow().get(name).cloned();
         if let Some(mut action) = Builtin::from_name(name) {
             action.start(self, &args);
             self.active = Some(action);
-        } else if let Some(handler) = self.inner.api.commands().borrow().get(name).cloned() {
+        } else if let Some(handler) = lua_command {
             if let Err(err) = handler.call::<()>((args.raw.clone(),)) {
                 self.inner.report(format!("{name}: {err}"));
             }

@@ -13,13 +13,14 @@ const MAX_ROWS: usize = 12;
 pub(crate) struct Select<'a> {
     pub(crate) title: &'a str,
     pub(crate) items: &'a [String],
+    pub(crate) query: &'a str,
     pub(crate) cursor: usize,
 }
 
 impl Render for Select<'_> {
     fn render(&self, ctx: &Context<'_>, surface: &mut Surface<'_>) {
         let area = surface.area();
-        if self.items.is_empty() || area.height < 3 {
+        if self.items.is_empty() || area.height < 4 {
             return;
         }
         let current = ctx
@@ -28,12 +29,17 @@ impl Render for Select<'_> {
             .or_else(|| ctx.state.current_provider())
             .unwrap_or_default();
 
-        let visible = self
+        let needle = self.query.to_lowercase();
+        let matches: Vec<&String> = self
             .items
+            .iter()
+            .filter(|item| item.to_lowercase().contains(&needle))
+            .collect();
+        let visible = matches
             .len()
             .min(MAX_ROWS)
-            .min(usize::from(area.height).saturating_sub(3));
-        let start = visible_start(self.cursor, self.items.len(), visible);
+            .min(usize::from(area.height).saturating_sub(4));
+        let start = visible_start(self.cursor, matches.len(), visible);
         let width = usize::from(area.width);
 
         let mut lines: Vec<Line<'static>> = Vec::new();
@@ -44,7 +50,12 @@ impl Render for Select<'_> {
         )));
         lines.push(Line::from(""));
 
-        for (offset, item) in self.items[start..start + visible].iter().enumerate() {
+        lines.push(Line::from(vec![
+            Span::styled("  > ", accent_style()),
+            Span::styled(self.query.to_string(), Style::default().fg(TEXT)),
+            Span::styled("\u{2588}", Style::default().fg(MUTED)),
+        ]));
+        for (offset, item) in matches[start..start + visible].iter().enumerate() {
             let index = start + offset;
             let active = index == self.cursor;
             let marker = if active { "\u{203a} " } else { "  " };
@@ -53,22 +64,22 @@ impl Render for Select<'_> {
             } else {
                 Style::default().fg(TEXT)
             };
-            let label = format!("{marker}{}. {item}", index + 1);
+            let label = format!("{marker}{item}");
             let label: String = label.chars().take(width).collect();
             let mut spans = vec![Span::styled(label, style)];
-            if item == current {
+            if item.as_str() == current {
                 spans.push(Span::styled(" (current)", Style::default().fg(MUTED)));
             }
             lines.push(Line::from(spans));
         }
 
-        if self.items.len() > visible {
+        if matches.len() > visible {
             lines.push(Line::from(Span::styled(
                 format!(
                     "  {}\u{2013}{} of {}",
                     start + 1,
                     start + visible,
-                    self.items.len()
+                    matches.len()
                 ),
                 Style::default().fg(MUTED).add_modifier(Modifier::DIM),
             )));

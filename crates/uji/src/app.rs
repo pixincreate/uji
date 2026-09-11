@@ -99,6 +99,7 @@ pub enum Mode {
     Select {
         title: String,
         items: Vec<String>,
+        query: String,
         cursor: usize,
     },
     Prompt {
@@ -174,6 +175,12 @@ impl App {
 
     pub fn input(&self) -> &str {
         &self.input
+    }
+
+    pub fn set_input(&mut self, text: String) {
+        self.cursor = text.len();
+        self.input = text;
+        self.after_input_change();
     }
 
     pub fn cursor_offset(&self) -> usize {
@@ -260,6 +267,7 @@ impl App {
         self.mode = Mode::Select {
             title,
             items,
+            query: String::new(),
             cursor: 0,
         };
     }
@@ -412,8 +420,9 @@ impl App {
 
     fn modal_accept(&mut self) -> KeyAction {
         match &self.mode {
-            Mode::Select { items, cursor, .. } => {
-                let item = items.get(*cursor).cloned();
+            Mode::Select { cursor, .. } => {
+                let cursor = *cursor;
+                let item = self.select_matches().get(cursor).cloned();
                 self.mode = Mode::Normal;
                 item.map_or(KeyAction::None, KeyAction::Selected)
             }
@@ -539,6 +548,30 @@ impl App {
         }
     }
 
+    fn select_matches(&self) -> Vec<String> {
+        let Mode::Select { items, query, .. } = &self.mode else {
+            return Vec::new();
+        };
+        let needle = query.to_lowercase();
+        items
+            .iter()
+            .filter(|item| item.to_lowercase().contains(&needle))
+            .cloned()
+            .collect()
+    }
+
+    fn select_move(&mut self, delta: isize) {
+        let len = self.select_matches().len();
+        if let Mode::Select { cursor, .. } = &mut self.mode {
+            let last = len.saturating_sub(1);
+            *cursor = if delta < 0 {
+                cursor.saturating_sub(delta.unsigned_abs())
+            } else {
+                cursor.saturating_add(delta.unsigned_abs()).min(last)
+            };
+        }
+    }
+
     fn handle_select_key(&mut self, key: KeyEvent) -> KeyAction {
         match key.code {
             KeyCode::Esc => {
@@ -546,62 +579,41 @@ impl App {
                 KeyAction::Cancel
             }
             KeyCode::Up => {
-                if let Mode::Select { cursor, .. } = &mut self.mode {
-                    *cursor = cursor.saturating_sub(1);
-                }
+                self.select_move(-1);
                 KeyAction::None
             }
             KeyCode::Down => {
-                if let Mode::Select { items, cursor, .. } = &mut self.mode {
-                    *cursor = cursor.saturating_add(1).min(items.len().saturating_sub(1));
-                }
+                self.select_move(1);
                 KeyAction::None
             }
             KeyCode::PageUp => {
-                if let Mode::Select { cursor, .. } = &mut self.mode {
-                    *cursor = cursor.saturating_sub(10);
-                }
+                self.select_move(-10);
                 KeyAction::None
             }
             KeyCode::PageDown => {
-                if let Mode::Select { items, cursor, .. } = &mut self.mode {
-                    *cursor = cursor.saturating_add(10).min(items.len().saturating_sub(1));
-                }
+                self.select_move(10);
                 KeyAction::None
             }
-            KeyCode::Home => {
-                if let Mode::Select { cursor, .. } = &mut self.mode {
+            KeyCode::Char(c) => {
+                if let Mode::Select { query, cursor, .. } = &mut self.mode {
+                    query.push(c);
                     *cursor = 0;
                 }
                 KeyAction::None
             }
-            KeyCode::End => {
-                if let Mode::Select { items, cursor, .. } = &mut self.mode {
-                    *cursor = items.len().saturating_sub(1);
+            KeyCode::Backspace => {
+                if let Mode::Select { query, cursor, .. } = &mut self.mode {
+                    query.pop();
+                    *cursor = 0;
                 }
                 KeyAction::None
             }
-            KeyCode::Char(c) if c.is_ascii_digit() && c != '0' => {
-                let Some(index) = c.to_digit(10).and_then(|d| usize::try_from(d - 1).ok()) else {
-                    return KeyAction::None;
-                };
-                let item = match &self.mode {
-                    Mode::Select { items, .. } => items.get(index).cloned(),
-                    _ => None,
-                };
-                match item {
-                    Some(item) => {
-                        self.mode = Mode::Normal;
-                        KeyAction::Selected(item)
-                    }
-                    None => KeyAction::None,
-                }
-            }
             KeyCode::Enter => {
-                let item = match &self.mode {
-                    Mode::Select { items, cursor, .. } => items.get(*cursor).cloned(),
-                    _ => None,
+                let cursor = match &self.mode {
+                    Mode::Select { cursor, .. } => *cursor,
+                    _ => 0,
                 };
+                let item = self.select_matches().get(cursor).cloned();
                 self.mode = Mode::Normal;
                 item.map_or(KeyAction::None, KeyAction::Selected)
             }

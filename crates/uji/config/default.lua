@@ -58,13 +58,51 @@ end)
 
 local waiting_text = "Working"
 
+local function shorten(path)
+    local home = os.getenv("HOME")
+    if home and home ~= "" and path:sub(1, #home) == home then
+        return "~" .. path:sub(#home + 1)
+    end
+    return path
+end
+
+local DIM = "#4a4a4a"
+local MUTED = "#808080"
+
 local function render_status()
+    local spans = {}
+    local function part(text, color)
+        if #spans > 0 then
+            spans[#spans + 1] = { text = "  ·  ", color = DIM }
+        end
+        spans[#spans + 1] = { text = text, color = color }
+    end
+
+    local dir = shorten(uji.session.info().directory or "")
+    if dir ~= "" then
+        part(dir, "cyan")
+    end
+
     local provider = uji.status.provider()
-    local model = uji.status.model()
     if provider then
-        uji.ui.set_lines(status, { { text = provider .. "/" .. model, color = "#808080" } })
-    else
+        part(provider .. "/" .. uji.status.model(), MUTED)
+    end
+
+    local turns = 0
+    for _, message in ipairs(uji.session.messages()) do
+        if message.type == "user" then
+            turns = turns + 1
+        end
+    end
+    if turns > 0 then
+        part(turns .. (turns == 1 and " turn" or " turns"), MUTED)
+    end
+
+    if #spans == 0 then
         uji.ui.clear(status)
+    else
+        table.insert(spans, 1, { text = " ", color = DIM })
+        uji.ui.set_lines(status, { spans })
     end
 end
 
@@ -88,6 +126,7 @@ uji.on("status_changed", function()
     render_activity()
 end)
 uji.on("tick", render_activity)
+uji.on("MessageAppended", render_status)
 render_status()
 
 -- Keybindings. Every key is remappable per mode: normal, suggest, select,
