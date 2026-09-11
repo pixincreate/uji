@@ -1,10 +1,14 @@
 use super::{Action, Args, Context};
 use uji_core::llm;
 
+const SUBSCRIPTION: &str = "Subscription (sign in with browser)";
+const API_KEY: &str = "API key";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum Step {
     #[default]
     Provider,
+    Method,
     BaseUrl,
     Model,
     ApiKey,
@@ -14,6 +18,7 @@ enum Step {
 struct Draft {
     provider_id: String,
     is_custom: bool,
+    has_oauth: bool,
     auth_env: Vec<String>,
     base_url: String,
     model: String,
@@ -42,25 +47,10 @@ impl Action for Login {
     }
 
     fn on_select<C: Context>(&mut self, ctx: &mut C, item: String) {
-        if self.step != Step::Provider {
-            return;
-        }
-        let Some(provider) = llm::provider_by_name(&item) else {
-            ctx.finish();
-            return;
-        };
-        provider.id.clone_into(&mut self.draft.provider_id);
-        self.draft.is_custom = provider.id == "custom";
-        self.draft.auth_env.clone_from(&provider.auth_env);
-        if self.draft.is_custom {
-            self.step = Step::BaseUrl;
-            ctx.open_prompt("base_url".into(), String::new(), false);
-        } else if !self.draft.auth_env.is_empty() {
-            self.step = Step::ApiKey;
-            let title = format!("{} (enter to skip)", self.draft.auth_env.join(" or "));
-            ctx.open_prompt(title, String::new(), true);
-        } else {
-            self.finish_configure(ctx);
+        match self.step {
+            Step::Provider => self.on_provider(ctx, &item),
+            Step::Method => self.on_method(ctx, &item),
+            _ => {}
         }
     }
 
@@ -73,8 +63,7 @@ impl Action for Login {
             }
             Step::Model => {
                 self.draft.model = value;
-                self.step = Step::ApiKey;
-                ctx.open_prompt("api_key (enter to skip)".into(), String::new(), true);
+                self.ask_api_key(ctx);
             }
             Step::ApiKey => {
                 if !value.is_empty() {
@@ -82,7 +71,7 @@ impl Action for Login {
                 }
                 self.finish_configure(ctx);
             }
-            Step::Provider => {}
+            Step::Provider | Step::Method => {}
         }
     }
 
@@ -92,6 +81,55 @@ impl Action for Login {
 }
 
 impl Login {
+    fn on_provider<C: Context>(&mut self, ctx: &mut C, item: &str) {
+        let Some(provider) = llm::provider_by_name(item) else {
+            ctx.finish();
+            return;
+        };
+        provider.id.clone_into(&mut self.draft.provider_id);
+        self.draft.is_custom = provider.id == "custom";
+        self.draft.has_oauth = provider.oauth.is_some();
+        self.draft.auth_env.clone_from(&provider.auth_env);
+
+        if self.draft.has_oauth {
+            self.step = Step::Method;
+            ctx.open_select(
+                format!("{} sign-in", provider.name),
+                vec![SUBSCRIPTION.to_string(), API_KEY.to_string()],
+            );
+        } else if self.draft.is_custom {
+            self.ask_base_url(ctx);
+        } else if self.draft.auth_env.is_empty() {
+            self.finish_configure(ctx);
+        } else {
+            self.ask_api_key(ctx);
+        }
+    }
+
+    fn on_method<C: Context>(&mut self, ctx: &mut C, item: &str) {
+        if item == SUBSCRIPTION {
+            self.finish_configure(ctx);
+            ctx.start_oauth(&self.draft.provider_id.clone());
+        } else {
+            self.ask_api_key(ctx);
+        }
+    }
+
+    fn ask_base_url<C: Context>(&mut self, ctx: &mut C) {
+        self.step = Step::BaseUrl;
+        ctx.open_prompt("base_url".into(), String::new(), false);
+    }
+
+    fn ask_api_key<C: Context>(&mut self, ctx: &mut C) {
+        self.step = Step::ApiKey;
+        let title = if self.draft.auth_env.is_empty() {
+            "api_key (enter to skip)".to_string()
+        } else {
+            format!("{} (enter to skip)", self.draft.auth_env.join(" or "))
+        };
+        ctx.open_prompt(title, String::new(), true);
+    }
+
     fn finish_configure<C: Context>(&self, ctx: &mut C) {
         ctx.set_setting("llm.provider", &self.draft.provider_id);
         if self.draft.is_custom {

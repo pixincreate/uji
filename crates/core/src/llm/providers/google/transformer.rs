@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::llm::LlmRequest;
+use crate::llm::providers::acc::ToolAcc;
 use crate::session::model::{Message, ToolCall};
 
 #[derive(Serialize)]
@@ -185,37 +186,25 @@ impl GeminiResponse {
 
 #[derive(Default)]
 pub struct GeminiToolAcc {
-    calls: Vec<(usize, String, String)>,
+    acc: ToolAcc,
 }
 
 impl GeminiToolAcc {
     pub fn apply(&mut self, response: &GeminiResponse) {
-        if let Some(candidate) = response.candidates.first() {
-            for (index, part) in candidate.content.parts.iter().enumerate() {
-                if let GeminiPart::FunctionCall { function_call } = part {
-                    let args = function_call.args.to_string();
-                    if let Some((_, _, existing)) =
-                        self.calls.iter_mut().find(|(i, _, _)| *i == index)
-                    {
-                        *existing = args;
-                    } else {
-                        self.calls.push((index, function_call.name.clone(), args));
-                    }
-                }
+        let Some(candidate) = response.candidates.first() else {
+            return;
+        };
+        for (index, part) in candidate.content.parts.iter().enumerate() {
+            if let GeminiPart::FunctionCall { function_call } = part {
+                let entry = self.acc.entry(index);
+                entry.id.clone_from(&function_call.name);
+                entry.name.clone_from(&function_call.name);
+                entry.arguments = function_call.args.to_string();
             }
         }
     }
 
     pub fn finish(self) -> Vec<ToolCall> {
-        let mut calls = self.calls;
-        calls.sort_by_key(|(index, _, _)| *index);
-        calls
-            .into_iter()
-            .map(|(_, name, arguments)| ToolCall {
-                id: name.clone(),
-                name,
-                arguments,
-            })
-            .collect()
+        self.acc.finish()
     }
 }

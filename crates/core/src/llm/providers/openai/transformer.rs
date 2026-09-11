@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::llm::LlmRequest;
+use crate::llm::providers::acc::ToolAcc;
 use crate::session::model::{Message, ToolCall};
 
 #[derive(Serialize)]
@@ -273,7 +274,7 @@ impl OpenAiChunk {
 
 #[derive(Default)]
 pub struct OpenAiToolAcc {
-    calls: Vec<(usize, String, String, String)>,
+    acc: ToolAcc,
 }
 
 impl OpenAiToolAcc {
@@ -282,47 +283,23 @@ impl OpenAiToolAcc {
             return;
         };
         for call in &choice.delta.tool_calls {
-            if let Some((_, id, name, args)) =
-                self.calls.iter_mut().find(|(i, _, _, _)| *i == call.index)
-            {
-                if let Some(value) = &call.id {
-                    id.clone_from(value);
-                }
-                if let Some(function) = &call.function {
-                    if let Some(value) = &function.name {
-                        name.clone_from(value);
-                    }
-                    if let Some(value) = &function.arguments {
-                        args.push_str(value);
-                    }
-                }
-            } else {
-                let id = call.id.clone().unwrap_or_default();
-                let name = call
-                    .function
-                    .as_ref()
-                    .and_then(|f| f.name.clone())
-                    .unwrap_or_default();
-                let arguments = call
-                    .function
-                    .as_ref()
-                    .and_then(|f| f.arguments.clone())
-                    .unwrap_or_default();
-                self.calls.push((call.index, id, name, arguments));
+            let entry = self.acc.entry(call.index);
+            if let Some(id) = &call.id {
+                entry.id.clone_from(id);
+            }
+            let Some(function) = &call.function else {
+                continue;
+            };
+            if let Some(name) = &function.name {
+                entry.name.clone_from(name);
+            }
+            if let Some(arguments) = &function.arguments {
+                entry.arguments.push_str(arguments);
             }
         }
     }
 
     pub fn finish(self) -> Vec<ToolCall> {
-        let mut calls = self.calls;
-        calls.sort_by_key(|(index, _, _, _)| *index);
-        calls
-            .into_iter()
-            .map(|(_, id, name, arguments)| ToolCall {
-                id,
-                name,
-                arguments,
-            })
-            .collect()
+        self.acc.finish()
     }
 }

@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use crate::model::{
     Builtin, Color, ConfirmConfig, ConfirmOpts, GlobalOpts, Line, RunState, Size, UiConfig,
-    UiModel, WinOpts, WindowSpec,
+    WinOpts, WindowSpec,
 };
 
 #[derive(Debug, Default)]
@@ -217,13 +217,6 @@ impl UiState {
 
     pub fn take_notices(&mut self) -> Vec<String> {
         std::mem::take(&mut self.notices)
-    }
-
-    pub fn snapshot(&self) -> UiModel {
-        UiModel {
-            windows: self.windows.clone(),
-            opts: self.opts.clone(),
-        }
     }
 }
 

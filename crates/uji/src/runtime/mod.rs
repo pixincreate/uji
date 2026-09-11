@@ -1,3 +1,4 @@
+mod auth;
 mod builtin;
 mod error;
 pub mod events;
@@ -104,6 +105,7 @@ impl Runtime {
         let (sender, channel) = calloop::channel::channel::<TermEvent>();
         let (llm_sender, llm_channel) = calloop::channel::channel::<StreamEvent>();
         let (job_sender, job_channel) = calloop::channel::channel::<job::JobEvent>();
+        let (auth_sender, auth_channel) = calloop::channel::channel::<auth::AuthEvent>();
         let reader_paused = Arc::new(AtomicBool::new(false));
 
         let mut frontend: Box<dyn Frontend> = Box::new(frontend);
@@ -124,16 +126,23 @@ impl Runtime {
             cancel: None,
             config_dir,
             job_tx: job_sender,
+            auth_tx: auth_sender,
             jobs: job::Running::default(),
             reader_paused,
             runtime: tokio::runtime::Runtime::new()?,
         };
 
         data.inner.resolve_llm(&mut *data.storage);
-        data.inner.emit("status_changed", &[]);
+        data.inner.emit(events::STATUS_CHANGED, &[]);
         data.refresh_suggestions();
 
-        install_sources(&event_loop.handle(), channel, llm_channel, job_channel)?;
+        install_sources(
+            &event_loop.handle(),
+            channel,
+            llm_channel,
+            job_channel,
+            auth_channel,
+        )?;
         let timer = calloop::timer::Timer::from_duration(data.timer_interval());
         event_loop
             .handle()
@@ -163,6 +172,7 @@ fn install_sources(
     term: calloop::channel::Channel<TermEvent>,
     llm: calloop::channel::Channel<StreamEvent>,
     jobs: calloop::channel::Channel<job::JobEvent>,
+    auth: calloop::channel::Channel<auth::AuthEvent>,
 ) -> io::Result<()> {
     handle
         .insert_source(term, |event, _meta, data: &mut LoopData| match event {
@@ -184,5 +194,12 @@ fn install_sources(
             }
         })
         .map_err(|err| io::Error::other(format!("register job source: {err}")))?;
+    handle
+        .insert_source(auth, |event, _meta, data: &mut LoopData| {
+            if let calloop::channel::Event::Msg(event) = event {
+                data.on_auth_event(event);
+            }
+        })
+        .map_err(|err| io::Error::other(format!("register auth source: {err}")))?;
     Ok(())
 }

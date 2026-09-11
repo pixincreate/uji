@@ -305,54 +305,6 @@ pub enum RunState {
     Error,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct UiModel {
-    pub windows: Vec<WindowSpec>,
-    pub opts: GlobalOpts,
-}
-
-impl Default for UiModel {
-    fn default() -> Self {
-        Self {
-            windows: vec![
-                WindowSpec {
-                    id: 0,
-                    builtin: Some(Builtin::Messages),
-                    buffer: Vec::new(),
-                    opts: WinOpts {
-                        split: Split::Top,
-                        size: Size::Fill,
-                        wrap: true,
-                        ..WinOpts::default()
-                    },
-                },
-                WindowSpec {
-                    id: 1,
-                    builtin: None,
-                    buffer: Vec::new(),
-                    opts: WinOpts {
-                        split: Split::Bottom,
-                        size: Size::Fixed(1),
-                        ..WinOpts::default()
-                    },
-                },
-                WindowSpec {
-                    id: 2,
-                    builtin: Some(Builtin::Input),
-                    buffer: Vec::new(),
-                    opts: WinOpts {
-                        split: Split::Bottom,
-                        size: Size::Fixed(3),
-                        border: Border::Horizontal,
-                        ..WinOpts::default()
-                    },
-                },
-            ],
-            opts: GlobalOpts::default(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseError(pub String);
 

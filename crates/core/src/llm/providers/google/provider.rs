@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 
-use crate::llm::{Llm, LlmConfig, LlmError, LlmRequest, LlmResponse, response_lines, status_error};
+use crate::llm::{
+    Llm, LlmConfig, LlmError, LlmRequest, LlmResponse, response_lines, send, status_error,
+};
 
 use super::transformer::{GeminiRequest, GeminiResponse, GeminiToolAcc};
 
@@ -38,20 +40,12 @@ impl Gemini {
         if let Some(key) = &self.api_key {
             builder = builder.header("x-goog-api-key", key);
         }
-        builder
-            .json(request)
-            .send()
-            .await
-            .map_err(|err| LlmError::Http(err.to_string()))
+        send(builder, request).await
     }
 }
 
 #[async_trait]
 impl Llm for Gemini {
-    fn id(&self) -> &'static str {
-        "google"
-    }
-
     async fn send_request(
         &self,
         client: &reqwest::Client,

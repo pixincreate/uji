@@ -20,6 +20,7 @@ use uji_core::tools::policy::Action;
 use uji_tui::app::{Action as KeyBinding, App, KeyAction, SuggestItem};
 
 use super::Inner;
+use super::auth::AuthEvent;
 use super::builtin::Builtin;
 use super::events;
 use super::frontend::Frontend;
@@ -60,6 +61,7 @@ pub(crate) struct LoopData {
     pub(crate) cancel: Option<CancelToken>,
     pub(crate) config_dir: Option<PathBuf>,
     pub(crate) job_tx: calloop::channel::Sender<JobEvent>,
+    pub(crate) auth_tx: calloop::channel::Sender<AuthEvent>,
     pub(crate) jobs: Running,
     pub(crate) reader_paused: Arc<std::sync::atomic::AtomicBool>,
 }
@@ -180,22 +182,9 @@ impl LoopData {
         self.inner
             .emit(events::MESSAGE_SUBMITTED, &[("text", text.to_string())]);
 
-        let user = Message::User {
+        self.append(Message::User {
             text: text.to_string(),
-        };
-        match self.storage.append_message(&self.app.session().id, user) {
-            Ok(stored) => {
-                self.push_message(stored);
-                self.inner.emit(
-                    events::MESSAGE_APPENDED,
-                    &[("type", "user".into()), ("text", text.to_string())],
-                );
-            }
-            Err(err) => {
-                self.inner
-                    .report(format!("failed to persist message: {err}"));
-            }
-        }
+        });
 
         let provider = self.inner.llm.borrow().clone();
         let model = self.inner.llm_model.borrow().clone();
@@ -224,7 +213,7 @@ impl LoopData {
             state.set_run_state(RunState::Working);
             state.set_turn_started(Some(Instant::now()));
         }
-        self.inner.emit("status_changed", &[]);
+        self.inner.emit(events::STATUS_CHANGED, &[]);
         self.runtime.spawn(async move {
             let tools = uji_core::tools::builtin_registry();
             let config = AgentConfig {
@@ -291,7 +280,7 @@ impl LoopData {
             }
             StreamEvent::Usage(usage) => {
                 self.inner.api.session().add_usage(usage);
-                self.inner.emit("status_changed", &[]);
+                self.inner.emit(events::STATUS_CHANGED, &[]);
             }
             StreamEvent::Cancelled => {
                 self.app.take_pending();
@@ -374,8 +363,23 @@ impl LoopData {
         }
     }
 
-    fn push_message(&mut self, stored: uji_core::session::model::StoredMessage) {
-        self.app.conversation().borrow_mut().push(stored);
+    fn append(&mut self, message: Message) {
+        let kind = message.type_name();
+        let text = message.text().to_string();
+        let id = self.app.session().id;
+        match self.storage.append_message(&id, message) {
+            Ok(stored) => {
+                self.app.conversation().borrow_mut().push(stored);
+                self.inner.emit(
+                    events::MESSAGE_APPENDED,
+                    &[("type", kind.to_string()), ("text", text)],
+                );
+            }
+            Err(err) => self
+                .inner
+                .report(format!("failed to persist {kind} message: {err}")),
+        }
+        self.dirty = true;
     }
 
     pub(crate) fn drain_exec(&mut self) {
@@ -404,6 +408,25 @@ impl LoopData {
             }
             self.dirty = true;
         }
+    }
+
+    pub(crate) fn on_auth_event(&mut self, event: AuthEvent) {
+        match event {
+            AuthEvent::Opened { url } => {
+                self.inner
+                    .report(format!("opened your browser to sign in - {url}"));
+            }
+            AuthEvent::Done { provider_id } => {
+                self.inner.report(format!("signed in to {provider_id}"));
+                self.inner.resolve_llm(&mut *self.storage);
+                self.inner.emit(events::STATUS_CHANGED, &[]);
+            }
+            AuthEvent::Failed { message } => {
+                self.inner.report(format!("sign-in failed: {message}"));
+            }
+        }
+        self.drain_diagnostics();
+        self.dirty = true;
     }
 
     pub(crate) fn drain_jobs(&mut self) {
@@ -484,7 +507,7 @@ impl LoopData {
         self.inner.resolve_llm(&mut *self.storage);
         self.refresh_suggestions();
         self.drain_diagnostics();
-        self.inner.emit("status_changed", &[]);
+        self.inner.emit(events::STATUS_CHANGED, &[]);
         self.dirty = true;
     }
 
@@ -513,20 +536,11 @@ impl LoopData {
                 .join(",");
             self.inner.emit(events::TOOL_STARTED, &[("tools", names)]);
         }
-        let message = Message::Assistant {
+        self.append(Message::Assistant {
             text,
             tool_calls,
             reasoning_content,
-        };
-        match self.storage.append_message(&self.app.session().id, message) {
-            Ok(stored) => {
-                self.push_message(stored);
-            }
-            Err(err) => self
-                .inner
-                .report(format!("failed to persist assistant step: {err}")),
-        }
-        self.dirty = true;
+        });
     }
 
     fn persist_tool_result(&mut self, tool_call_id: String, name: String, content: String) {
@@ -534,20 +548,11 @@ impl LoopData {
             events::TOOL_FINISHED,
             &[("name", name.clone()), ("content", content.clone())],
         );
-        let message = Message::Tool {
+        self.append(Message::Tool {
             tool_call_id,
             name,
             content,
-        };
-        match self.storage.append_message(&self.app.session().id, message) {
-            Ok(stored) => {
-                self.push_message(stored);
-            }
-            Err(err) => self
-                .inner
-                .report(format!("failed to persist tool result: {err}")),
-        }
-        self.dirty = true;
+        });
     }
 
     fn resolve_tool_confirmation(&mut self, allow: bool) {
@@ -626,10 +631,10 @@ impl LoopData {
                 let _ = reply.send(ToolDecision::Deny { reason });
             }
             ToolApproval::Ask { title } => {
-                let (question, body) = format_tool_call(&tool.name, &final_args);
-                let title = title.unwrap_or(question);
+                let prompt = uji_core::tools::prompt::describe(&tool.name, &final_args);
                 self.pending_tool = Some((final_args, reply));
-                self.app.open_confirm(title, body);
+                self.app
+                    .open_confirm(title.unwrap_or(prompt.question), prompt.detail);
                 self.dirty = true;
             }
         }
@@ -681,7 +686,7 @@ impl LoopData {
             state.set_run_state(RunState::Idle);
             state.set_turn_started(None);
         }
-        self.inner.emit("status_changed", &[]);
+        self.inner.emit(events::STATUS_CHANGED, &[]);
     }
 
     fn maybe_submit_queued(&mut self) {
@@ -691,48 +696,18 @@ impl LoopData {
     }
 
     fn fail_assistant(&mut self, error: &str) {
-        let message = Message::Error {
+        self.append(Message::Error {
             text: error.to_string(),
-        };
-        match self.storage.append_message(&self.app.session().id, message) {
-            Ok(stored) => {
-                self.push_message(stored);
-                self.inner.emit(
-                    events::MESSAGE_APPENDED,
-                    &[("type", "error".into()), ("text", error.to_string())],
-                );
-            }
-            Err(err) => {
-                self.inner.report(format!("failed to persist error: {err}"));
-            }
-        }
-        self.dirty = true;
+        });
     }
 
     fn finish_assistant(&mut self, text: &str, reasoning_content: Option<String>) {
-        let assistant = Message::Assistant {
+        self.app.take_pending();
+        self.append(Message::Assistant {
             text: text.to_string(),
             tool_calls: Vec::new(),
             reasoning_content,
-        };
-        match self
-            .storage
-            .append_message(&self.app.session().id, assistant)
-        {
-            Ok(stored) => {
-                self.push_message(stored);
-                self.app.take_pending();
-                self.inner.emit(
-                    events::MESSAGE_APPENDED,
-                    &[("type", "assistant".into()), ("text", text.to_string())],
-                );
-            }
-            Err(err) => {
-                self.inner
-                    .report(format!("failed to persist response: {err}"));
-            }
-        }
-        self.dirty = true;
+        });
     }
 
     pub(crate) fn refresh_suggestions(&mut self) {
@@ -743,7 +718,7 @@ impl LoopData {
     pub(crate) fn on_timer(&mut self) {
         let working = self.inner.state().borrow().run_state() == RunState::Working;
         if working {
-            self.inner.emit("tick", &[]);
+            self.inner.emit(events::TICK, &[]);
             self.dirty = true;
         }
     }
@@ -817,12 +792,26 @@ impl Context for LoopData {
 
     fn resolve_llm(&mut self) {
         self.inner.resolve_llm(&mut *self.storage);
-        self.inner.emit("status_changed", &[]);
+        self.inner.emit(events::STATUS_CHANGED, &[]);
         self.dirty = true;
     }
 
     fn reload(&mut self) {
         self.control = Control::Reload;
+    }
+
+    fn start_oauth(&mut self, provider_id: &str) {
+        let Some(provider) = uji_core::llm::provider(provider_id) else {
+            self.inner
+                .report(format!("unknown provider: {provider_id}"));
+            return;
+        };
+        super::auth::start(
+            &self.runtime,
+            Arc::clone(&self.inner.client),
+            provider,
+            self.auth_tx.clone(),
+        );
     }
 
     fn sync_packs(&mut self) {
@@ -897,59 +886,6 @@ fn suggest_pool(data: &LoopData) -> Vec<SuggestItem> {
         .collect();
     items.append(&mut lua);
     items
-}
-
-fn format_tool_call(name: &str, arguments: &str) -> (String, String) {
-    let args = serde_json::from_str::<serde_json::Value>(arguments).unwrap_or_default();
-    let map = match &args {
-        serde_json::Value::Object(map) => map.clone(),
-        _ => serde_json::Map::new(),
-    };
-    let field = |key: &str| {
-        map.get(key)
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or_default()
-            .to_string()
-    };
-
-    match name {
-        "run_command" => (
-            "Would you like to run the following command?".into(),
-            format!("$ {}", field("command")),
-        ),
-        "edit_file" => (
-            "Would you like to make the following edit?".into(),
-            format!("Destination: {}", field("path")),
-        ),
-        "write_file" => (
-            "Would you like to write the following file?".into(),
-            format!("Destination: {}", field("path")),
-        ),
-        "read_file" | "list_dir" => (
-            format!("Would you like to allow uji to `{name}`?"),
-            format!("Path: {}", field("path")),
-        ),
-        "grep" => (
-            "Would you like to allow uji to search the workspace?".into(),
-            format!("Pattern: {}", field("pattern")),
-        ),
-        _ => {
-            let detail = if map.is_empty() {
-                arguments.to_string()
-            } else {
-                map.iter()
-                    .map(|(key, value)| {
-                        let value = value
-                            .as_str()
-                            .map_or_else(|| value.to_string(), str::to_string);
-                        format!("{key}: {value}")
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            };
-            (format!("Would you like to run `{name}`?"), detail)
-        }
-    }
 }
 
 fn parse_tool_decision(value: Option<LuaValue>) -> Option<ToolApproval> {

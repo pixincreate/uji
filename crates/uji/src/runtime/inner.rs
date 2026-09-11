@@ -147,13 +147,14 @@ impl Inner {
     }
 
     pub(crate) fn resolve_llm(&self, storage: &mut dyn SessionStorage) {
-        let (resolved, model, provider_id) = uji_core::llm::resolve_from_storage(storage);
-        let name = uji_core::llm::provider(&provider_id)
-            .map_or_else(|| provider_id.clone(), |p| p.name.clone());
-        *self.llm.borrow_mut() = resolved;
-        (*self.llm_model.borrow_mut()).clone_from(&model);
-        self.state().borrow_mut().set_current_provider(name);
-        self.state().borrow_mut().set_current_model(model);
+        let selection = uji_core::llm::resolve_from_storage(storage);
+        *self.llm.borrow_mut() = selection.llm;
+        self.llm_model.borrow_mut().clone_from(&selection.model);
+
+        let state = self.state();
+        let mut state = state.borrow_mut();
+        state.set_current_provider(selection.provider);
+        state.set_current_model(selection.model);
     }
 }
 

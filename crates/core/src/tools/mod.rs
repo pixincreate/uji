@@ -1,5 +1,6 @@
 pub mod builtin;
 pub mod policy;
+pub mod prompt;
 
 use std::collections::BTreeMap;
 use std::path::Path;

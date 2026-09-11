@@ -32,6 +32,7 @@ pub trait Context {
     fn resolve_llm(&mut self);
     fn reload(&mut self);
     fn sync_packs(&mut self);
+    fn start_oauth(&mut self, provider_id: &str);
     fn notify(&mut self, message: &str);
     fn finish(&mut self);
     fn command_names(&self) -> Vec<String>;

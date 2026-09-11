@@ -15,5 +15,4 @@ pub use uji_core::storage;
 pub use uji_core::{
     Message, Session, SessionStorage, SqliteStorage, StoredMessage, default_db_path,
 };
-pub use uji_view::model::UiModel;
 pub use uji_view::state::UiState;

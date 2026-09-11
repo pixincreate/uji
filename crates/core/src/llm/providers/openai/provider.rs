@@ -1,27 +1,24 @@
 use async_trait::async_trait;
 
 use crate::llm::{
-    Auth, Llm, LlmConfig, LlmError, LlmRequest, LlmResponse, response_lines, status_error,
+    Llm, LlmConfig, LlmError, LlmRequest, LlmResponse, response_lines, send, status_error,
 };
 
 use super::transformer::{OpenAiChunk, OpenAiRequest, OpenAiResponse, OpenAiToolAcc};
 
 pub struct OpenAi {
     pub base_url: String,
-    pub auth: Auth,
+    pub api_key: Option<String>,
 }
 
 impl OpenAi {
     pub fn new(config: &LlmConfig) -> Self {
-        let auth = config
-            .resolve_key()
-            .map_or(Auth::None, |token| Auth::Bearer { token });
         Self {
             base_url: config
                 .base_url
                 .clone()
                 .unwrap_or_else(|| "https://api.openai.com/v1".into()),
-            auth,
+            api_key: config.resolve_key(),
         }
     }
 
@@ -31,12 +28,11 @@ impl OpenAi {
         request: &OpenAiRequest,
     ) -> Result<reqwest::Response, LlmError> {
         let url = format!("{}/chat/completions", self.base_url);
-        self.auth
-            .apply(client.post(&url))
-            .json(request)
-            .send()
-            .await
-            .map_err(|err| LlmError::Http(err.to_string()))
+        let mut builder = client.post(&url);
+        if let Some(key) = &self.api_key {
+            builder = builder.bearer_auth(key);
+        }
+        send(builder, request).await
     }
 }
 
@@ -51,10 +47,6 @@ fn truncated(finish_reason: Option<&str>) -> Result<(), LlmError> {
 
 #[async_trait]
 impl Llm for OpenAi {
-    fn id(&self) -> &'static str {
-        "openai"
-    }
-
     async fn send_request(
         &self,
         client: &reqwest::Client,

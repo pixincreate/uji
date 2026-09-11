@@ -23,21 +23,15 @@ pub use providers::anthropic::Anthropic;
 pub use providers::google::Gemini;
 pub use providers::not_configured::NotConfigured;
 pub use providers::openai::OpenAi;
-
-pub enum Auth {
-    None,
-    Bearer { token: String },
-    ApiKey { header: String, key: String },
-}
-
-impl Auth {
-    pub(crate) fn apply(&self, builder: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-        match self {
-            Auth::None => builder,
-            Auth::Bearer { token } => builder.bearer_auth(token),
-            Auth::ApiKey { header, key } => builder.header(header.as_str(), key.as_str()),
-        }
-    }
+pub(crate) async fn send<T: Serialize + ?Sized>(
+    builder: reqwest::RequestBuilder,
+    request: &T,
+) -> Result<reqwest::Response, LlmError> {
+    builder
+        .json(request)
+        .send()
+        .await
+        .map_err(|err| LlmError::Http(err.to_string()))
 }
 
 pub struct LlmRequest {
@@ -83,8 +77,8 @@ pub struct LlmResponse {
 pub enum LlmError {
     #[error("http: {0}")]
     Http(String),
-    #[error("auth")]
-    Auth,
+    #[error("authentication rejected ({0}) - check the api key for this provider")]
+    Auth(u16),
     #[error("provider: {0}")]
     Provider(String),
 }
@@ -95,7 +89,7 @@ pub(crate) async fn status_error(response: reqwest::Response) -> LlmError {
     let status = response.status().as_u16();
     let body = response.text().await.unwrap_or_default();
     if status == 401 || status == 403 {
-        LlmError::Auth
+        LlmError::Auth(status)
     } else {
         let body = clip(body.trim(), MAX_ERROR_BODY);
         LlmError::Http(format!("{status}: {body}"))
@@ -138,7 +132,6 @@ impl CancelToken {
 
 #[async_trait]
 pub trait Llm: Send + Sync {
-    fn id(&self) -> &'static str;
     async fn send_request(
         &self,
         client: &reqwest::Client,
@@ -163,9 +156,34 @@ pub struct LlmConfig {
     pub base_url: Option<String>,
     pub api_key: Option<String>,
     pub auth_env: Vec<String>,
+    pub oauth: Option<OAuthSession>,
+}
+
+#[derive(Clone)]
+pub struct OAuthSession {
+    pub provider_id: String,
+    pub config: crate::auth::OAuthConfig,
+    pub tokens: crate::auth::Tokens,
 }
 
 impl LlmConfig {
+    pub fn for_provider(provider_id: String, model: String, base_url: Option<String>) -> Self {
+        let known = provider(&provider_id);
+        let catalog_url = known
+            .map(|entry| entry.base_url.clone())
+            .filter(|url| !url.is_empty());
+        Self {
+            base_url: base_url.filter(|url| !url.is_empty()).or(catalog_url),
+            auth_env: known
+                .map(|entry| entry.auth_env.clone())
+                .unwrap_or_default(),
+            oauth: oauth_session(&provider_id, known),
+            api_key: credential::get(&provider_id),
+            provider: provider_id,
+            model,
+        }
+    }
+
     pub fn resolve_key(&self) -> Option<String> {
         self.api_key.clone().or_else(|| {
             self.auth_env
@@ -194,6 +212,8 @@ pub struct Provider {
     pub base_url: String,
     #[serde(default)]
     pub auth_env: Vec<String>,
+    #[serde(default)]
+    pub oauth: Option<crate::auth::OAuthConfig>,
 }
 
 impl Provider {
@@ -224,27 +244,35 @@ pub fn models(id: &str) -> &'static [&'static str] {
     MODELS.get(id).map_or(&[], Vec::as_slice)
 }
 
+fn oauth_session(provider_id: &str, known: Option<&'static Provider>) -> Option<OAuthSession> {
+    let config = known?.oauth.clone()?;
+    let credential::Credential::OAuth {
+        access,
+        refresh,
+        expires_at,
+    } = credential::load(provider_id)?
+    else {
+        return None;
+    };
+    Some(OAuthSession {
+        provider_id: provider_id.to_string(),
+        config,
+        tokens: crate::auth::Tokens {
+            access,
+            refresh,
+            expires_at,
+        },
+    })
+}
+
 pub fn resolve(config: &LlmConfig) -> Arc<dyn Llm> {
     if config.provider.is_empty() {
         return Arc::new(NotConfigured);
     }
-    let Some(provider) = provider(&config.provider) else {
-        return Arc::new(OpenAi::new(config));
-    };
-    if provider.id == "custom" {
-        return Arc::new(OpenAi::new(config));
-    }
-    let resolved = LlmConfig {
-        provider: config.provider.clone(),
-        model: config.model.clone(),
-        base_url: Some(provider.base_url.clone()),
-        api_key: config.api_key.clone(),
-        auth_env: provider.auth_env.clone(),
-    };
-    match provider.wire {
-        Wire::OpenAiChat => Arc::new(OpenAi::new(&resolved)),
-        Wire::Anthropic => Arc::new(Anthropic::new(&resolved)),
-        Wire::Gemini => Arc::new(Gemini::new(&resolved)),
+    match provider(&config.provider).map(|entry| entry.wire) {
+        Some(Wire::Anthropic) => Arc::new(Anthropic::new(config)),
+        Some(Wire::Gemini) => Arc::new(Gemini::new(config)),
+        Some(Wire::OpenAiChat) | None => Arc::new(OpenAi::new(config)),
     }
 }
 
@@ -568,27 +596,30 @@ pub(crate) async fn response_lines(
     Ok(())
 }
 
-pub fn resolve_from_storage(storage: &mut dyn SessionStorage) -> (Arc<dyn Llm>, String, String) {
-    let provider_id = storage
-        .get_setting("llm.provider")
-        .ok()
-        .flatten()
-        .unwrap_or_default();
-    let model = storage
-        .get_setting("llm.model")
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| {
-            provider(&provider_id).map_or_else(String::new, |p| p.default_model().to_string())
-        });
-    let base_url = storage.get_setting("llm.base_url").ok().flatten();
-    let api_key = credential::get(&provider_id);
-    let config = LlmConfig {
-        provider: provider_id.clone(),
-        model: model.clone(),
-        base_url,
-        api_key,
-        auth_env: Vec::new(),
-    };
-    (resolve(&config), model, provider_id)
+pub struct Selection {
+    pub llm: Arc<dyn Llm>,
+    pub provider: String,
+    pub model: String,
+}
+
+fn setting(storage: &mut dyn SessionStorage, key: &str) -> Option<String> {
+    storage.get_setting(key).ok().flatten()
+}
+
+pub fn resolve_from_storage(storage: &mut dyn SessionStorage) -> Selection {
+    let provider_id = setting(storage, "llm.provider").unwrap_or_default();
+    let known = provider(&provider_id);
+    let model = setting(storage, "llm.model").unwrap_or_else(|| {
+        known.map_or_else(String::new, |entry| entry.default_model().to_string())
+    });
+    let config = LlmConfig::for_provider(
+        provider_id.clone(),
+        model.clone(),
+        setting(storage, "llm.base_url"),
+    );
+    Selection {
+        llm: resolve(&config),
+        provider: known.map_or(provider_id, |entry| entry.name.clone()),
+        model,
+    }
 }

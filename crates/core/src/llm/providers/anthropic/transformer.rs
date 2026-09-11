@@ -1,17 +1,40 @@
 use serde::{Deserialize, Serialize};
 
 use crate::llm::LlmRequest;
+use crate::llm::providers::acc::ToolAcc;
 use crate::session::model::{Message, ToolCall};
+
+#[derive(Serialize)]
+pub struct SystemBlock {
+    #[serde(rename = "type")]
+    pub kind: &'static str,
+    pub text: String,
+}
+
+impl SystemBlock {
+    fn text(text: String) -> Self {
+        Self { kind: "text", text }
+    }
+}
 
 #[derive(Serialize)]
 pub struct AnthropicRequest {
     pub model: String,
     pub max_tokens: u32,
-    pub system: String,
+    pub system: Vec<SystemBlock>,
     pub messages: Vec<AnthropicMessage>,
     pub stream: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tools: Vec<AnthropicTool>,
+}
+
+impl AnthropicRequest {
+    pub fn prepend_system(&mut self, text: &str) {
+        if self.system.first().is_some_and(|block| block.text == text) {
+            return;
+        }
+        self.system.insert(0, SystemBlock::text(text.to_string()));
+    }
 }
 
 #[derive(Serialize)]
@@ -108,7 +131,11 @@ impl From<&LlmRequest> for AnthropicRequest {
         Self {
             model: request.model.clone(),
             max_tokens: 8192,
-            system,
+            system: if system.is_empty() {
+                Vec::new()
+            } else {
+                vec![SystemBlock::text(system)]
+            },
             messages,
             stream: false,
             tools,
@@ -207,33 +234,30 @@ impl AnthropicStreamEvent {
 
 #[derive(Default)]
 pub struct AnthropicToolAcc {
-    calls: Vec<(usize, String, String, String)>,
+    acc: ToolAcc,
 }
 
 impl AnthropicToolAcc {
     pub fn apply(&mut self, event: &AnthropicStreamEvent) {
+        let Some(index) = event.index else {
+            return;
+        };
         match event.kind.as_str() {
             "content_block_start" => {
                 if let Some(block) = &event.content_block
                     && block.kind == "tool_use"
-                    && let Some(index) = event.index
                 {
-                    self.calls.push((
-                        index,
-                        block.id.clone().unwrap_or_default(),
-                        block.name.clone().unwrap_or_default(),
-                        String::new(),
-                    ));
+                    let entry = self.acc.entry(index);
+                    entry.id = block.id.clone().unwrap_or_default();
+                    entry.name = block.name.clone().unwrap_or_default();
                 }
             }
             "content_block_delta" => {
-                if let (Some(index), Some(delta)) = (event.index, &event.delta)
+                if let Some(delta) = &event.delta
                     && delta.kind == "input_json_delta"
-                    && let Some((_, _, _, json)) =
-                        self.calls.iter_mut().find(|(i, _, _, _)| *i == index)
                     && let Some(fragment) = &delta.partial_json
                 {
-                    json.push_str(fragment);
+                    self.acc.entry(index).arguments.push_str(fragment);
                 }
             }
             _ => {}
@@ -241,15 +265,6 @@ impl AnthropicToolAcc {
     }
 
     pub fn finish(self) -> Vec<ToolCall> {
-        let mut calls = self.calls;
-        calls.sort_by_key(|(index, _, _, _)| *index);
-        calls
-            .into_iter()
-            .map(|(_, id, name, arguments)| ToolCall {
-                id,
-                name,
-                arguments,
-            })
-            .collect()
+        self.acc.finish()
     }
 }

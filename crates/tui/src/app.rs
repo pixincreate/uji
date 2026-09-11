@@ -107,6 +107,24 @@ pub fn filter_items<'a>(items: &'a [String], query: &str) -> Vec<&'a String> {
         .collect()
 }
 
+const SELECT_PAGE: isize = 10;
+
+fn default_action(code: KeyCode) -> Option<Action> {
+    Some(match code {
+        KeyCode::Backspace => Action::Backspace,
+        KeyCode::Left => Action::CursorLeft,
+        KeyCode::Right => Action::CursorRight,
+        KeyCode::Up => Action::ScrollUp,
+        KeyCode::Down => Action::ScrollDown,
+        KeyCode::PageUp => Action::PageUp,
+        KeyCode::PageDown => Action::PageDown,
+        KeyCode::Home => Action::ScrollTop,
+        KeyCode::End => Action::ScrollBottom,
+        KeyCode::Enter => Action::Submit,
+        _ => return None,
+    })
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SuggestItem {
     pub name: String,
@@ -336,12 +354,7 @@ impl App {
                 KeyAction::None
             }
             Action::Backspace => {
-                if self.cursor > 0 {
-                    let prev = prev_char_boundary(&self.input, self.cursor);
-                    self.input.remove(prev);
-                    self.cursor = prev;
-                }
-                self.after_input_change();
+                self.backspace();
                 KeyAction::None
             }
             Action::CursorLeft => {
@@ -385,26 +398,11 @@ impl App {
                 KeyAction::None
             }
             Action::ModalUp => {
-                match &mut self.mode {
-                    Mode::Select { cursor, .. } | Mode::Suggest { cursor, .. } => {
-                        *cursor = cursor.saturating_sub(1);
-                    }
-                    Mode::Confirm { allow, .. } => *allow = true,
-                    _ => {}
-                }
+                self.modal_move(-1);
                 KeyAction::None
             }
             Action::ModalDown => {
-                match &mut self.mode {
-                    Mode::Select { items, cursor, .. } => {
-                        *cursor = cursor.saturating_add(1).min(items.len().saturating_sub(1));
-                    }
-                    Mode::Suggest { items, cursor } => {
-                        *cursor = cursor.saturating_add(1).min(items.len().saturating_sub(1));
-                    }
-                    Mode::Confirm { allow, .. } => *allow = false,
-                    _ => {}
-                }
+                self.modal_move(1);
                 KeyAction::None
             }
             Action::ModalAccept => self.modal_accept(),
@@ -505,65 +503,47 @@ impl App {
 
     fn handle_normal_key(&mut self, key: KeyEvent) -> KeyAction {
         match key.code {
-            KeyCode::Esc => {
-                if self.input.is_empty() {
-                    KeyAction::Interrupt
-                } else {
-                    self.input.clear();
-                    self.cursor = 0;
-                    self.after_input_change();
-                    KeyAction::None
-                }
-            }
+            KeyCode::Esc if self.input.is_empty() => KeyAction::Interrupt,
+            KeyCode::Esc => self.apply(Action::ClearInput),
             KeyCode::Char(c) => {
-                self.input.insert(self.cursor, c);
-                self.cursor += c.len_utf8();
-                self.after_input_change();
+                self.insert_char(c);
                 KeyAction::None
             }
-            KeyCode::Backspace => {
-                if self.cursor > 0 {
-                    let prev = prev_char_boundary(&self.input, self.cursor);
-                    self.input.remove(prev);
-                    self.cursor = prev;
-                }
-                self.after_input_change();
-                KeyAction::None
+            code => match default_action(code) {
+                Some(action) => self.apply(action),
+                None => KeyAction::None,
+            },
+        }
+    }
+
+    fn insert_char(&mut self, c: char) {
+        self.input.insert(self.cursor, c);
+        self.cursor += c.len_utf8();
+        self.after_input_change();
+    }
+
+    fn backspace(&mut self) {
+        if self.cursor > 0 {
+            let prev = prev_char_boundary(&self.input, self.cursor);
+            self.input.remove(prev);
+            self.cursor = prev;
+        }
+        self.after_input_change();
+    }
+
+    fn modal_move(&mut self, delta: isize) {
+        match &mut self.mode {
+            Mode::Select { .. } => self.select_move(delta),
+            Mode::Suggest { items, cursor } => {
+                let last = items.len().saturating_sub(1);
+                *cursor = if delta < 0 {
+                    cursor.saturating_sub(delta.unsigned_abs())
+                } else {
+                    cursor.saturating_add(delta.unsigned_abs()).min(last)
+                };
             }
-            KeyCode::Left => {
-                self.cursor = prev_char_boundary(&self.input, self.cursor);
-                KeyAction::None
-            }
-            KeyCode::Right => {
-                self.cursor = next_char_boundary(&self.input, self.cursor);
-                KeyAction::None
-            }
-            KeyCode::Up => {
-                self.scroll_up(1);
-                KeyAction::None
-            }
-            KeyCode::Down => {
-                self.scroll_down(1);
-                KeyAction::None
-            }
-            KeyCode::PageUp => {
-                self.scroll_up(self.viewport().max(1));
-                KeyAction::None
-            }
-            KeyCode::PageDown => {
-                self.scroll_down(self.viewport().max(1));
-                KeyAction::None
-            }
-            KeyCode::Home => {
-                self.jump_top();
-                KeyAction::None
-            }
-            KeyCode::End => {
-                self.jump_bottom();
-                KeyAction::None
-            }
-            KeyCode::Enter => self.take_submit(),
-            _ => KeyAction::None,
+            Mode::Confirm { allow, .. } => *allow = delta < 0,
+            _ => {}
         }
     }
 
@@ -592,20 +572,14 @@ impl App {
                 self.mode = Mode::Normal;
                 KeyAction::Cancel
             }
-            KeyCode::Up => {
-                self.select_move(-1);
-                KeyAction::None
-            }
-            KeyCode::Down => {
-                self.select_move(1);
-                KeyAction::None
-            }
+            KeyCode::Up => self.apply(Action::ModalUp),
+            KeyCode::Down => self.apply(Action::ModalDown),
             KeyCode::PageUp => {
-                self.select_move(-10);
+                self.select_move(-SELECT_PAGE);
                 KeyAction::None
             }
             KeyCode::PageDown => {
-                self.select_move(10);
+                self.select_move(SELECT_PAGE);
                 KeyAction::None
             }
             KeyCode::Char(c) => {
@@ -676,18 +650,8 @@ impl App {
                 self.mode = Mode::Normal;
                 KeyAction::None
             }
-            KeyCode::Up => {
-                if let Mode::Suggest { cursor, .. } = &mut self.mode {
-                    *cursor = cursor.saturating_sub(1);
-                }
-                KeyAction::None
-            }
-            KeyCode::Down => {
-                if let Mode::Suggest { items, cursor, .. } = &mut self.mode {
-                    *cursor = cursor.saturating_add(1).min(items.len().saturating_sub(1));
-                }
-                KeyAction::None
-            }
+            KeyCode::Up => self.apply(Action::ModalUp),
+            KeyCode::Down => self.apply(Action::ModalDown),
             KeyCode::Tab => {
                 if let Some(name) = self.highlighted_suggest() {
                     self.input = format!("/{name} ");
@@ -705,18 +669,11 @@ impl App {
                 self.take_submit()
             }
             KeyCode::Char(c) => {
-                self.input.insert(self.cursor, c);
-                self.cursor += c.len_utf8();
-                self.after_input_change();
+                self.insert_char(c);
                 KeyAction::None
             }
             KeyCode::Backspace => {
-                if self.cursor > 0 {
-                    let prev = prev_char_boundary(&self.input, self.cursor);
-                    self.input.remove(prev);
-                    self.cursor = prev;
-                }
-                self.after_input_change();
+                self.backspace();
                 KeyAction::None
             }
             _ => KeyAction::None,
@@ -732,18 +689,8 @@ impl App {
                 let allow = matches!(self.mode, Mode::Confirm { allow, .. } if allow);
                 KeyAction::Selected(if allow { "allow".into() } else { "deny".into() })
             }
-            KeyCode::Up => {
-                if let Mode::Confirm { allow, .. } = &mut self.mode {
-                    *allow = true;
-                }
-                KeyAction::None
-            }
-            KeyCode::Down => {
-                if let Mode::Confirm { allow, .. } = &mut self.mode {
-                    *allow = false;
-                }
-                KeyAction::None
-            }
+            KeyCode::Up => self.apply(Action::ModalUp),
+            KeyCode::Down => self.apply(Action::ModalDown),
             KeyCode::Left | KeyCode::Right | KeyCode::Tab => {
                 if let Mode::Confirm { allow, .. } = &mut self.mode {
                     *allow = !*allow;

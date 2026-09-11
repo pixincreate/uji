@@ -1,7 +1,48 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
+
+use crate::auth::{Grant, Tokens};
+
 const SERVICE: &str = "uji";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum Credential {
+    #[serde(rename = "api_key")]
+    ApiKey { key: String },
+    #[serde(rename = "oauth")]
+    OAuth {
+        access: String,
+        refresh: String,
+        expires_at: i64,
+    },
+}
+
+impl Credential {
+    pub fn from_grant(grant: &Grant) -> Self {
+        match grant {
+            Grant::ApiKey(key) => Self::ApiKey { key: key.clone() },
+            Grant::Tokens(tokens) => Self::from_tokens(tokens),
+        }
+    }
+
+    pub fn from_tokens(tokens: &Tokens) -> Self {
+        Self::OAuth {
+            access: tokens.access.clone(),
+            refresh: tokens.refresh.clone(),
+            expires_at: tokens.expires_at,
+        }
+    }
+
+    pub fn api_key(&self) -> Option<&str> {
+        match self {
+            Self::ApiKey { key } => Some(key),
+            Self::OAuth { .. } => None,
+        }
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum CredentialError {
@@ -12,16 +53,41 @@ pub enum CredentialError {
 }
 
 pub fn get(provider: &str) -> Option<String> {
-    keyring_get(provider).or_else(|| read_file().and_then(|map| map.get(provider).cloned()))
+    load(provider)
+        .as_ref()
+        .and_then(Credential::api_key)
+        .map(ToString::to_string)
+}
+
+pub fn load(provider: &str) -> Option<Credential> {
+    let raw =
+        keyring_get(provider).or_else(|| read_file().and_then(|map| map.get(provider).cloned()))?;
+    Some(parse(&raw))
 }
 
 pub fn set(provider: &str, key: &str) -> Result<(), CredentialError> {
-    if keyring_set(provider, key).is_ok() {
+    store(
+        provider,
+        &Credential::ApiKey {
+            key: key.to_string(),
+        },
+    )
+}
+
+pub fn store(provider: &str, credential: &Credential) -> Result<(), CredentialError> {
+    let raw = serde_json::to_string(credential)?;
+    if keyring_set(provider, &raw).is_ok() {
         return Ok(());
     }
     let mut map = read_file().unwrap_or_default();
-    map.insert(provider.to_string(), key.to_string());
+    map.insert(provider.to_string(), raw);
     write_file(&map)
+}
+
+fn parse(raw: &str) -> Credential {
+    serde_json::from_str(raw).unwrap_or_else(|_| Credential::ApiKey {
+        key: raw.to_string(),
+    })
 }
 
 fn keyring_get(provider: &str) -> Option<String> {
