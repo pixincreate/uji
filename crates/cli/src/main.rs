@@ -50,7 +50,7 @@ fn open_storage() -> Result<Box<dyn SessionStorage>, Box<dyn Error>> {
 
 fn handle_new() -> Result<(), Box<dyn Error>> {
     let mut storage = open_storage()?;
-    let session = storage.create_session("new")?;
+    let session = storage.create_session(uji::session::model::UNTITLED)?;
     let runtime = Runtime::boot()?;
     runtime.emit(
         events::SESSION_CREATED,
@@ -73,7 +73,7 @@ fn handle_resume(id: Option<String>) -> Result<(), Box<dyn Error>> {
         }
         None => match storage.latest_session()? {
             Some(session) => session,
-            None => storage.create_session("resumed")?,
+            None => storage.create_session(uji::session::model::UNTITLED)?,
         },
     };
     let runtime = Runtime::boot()?;

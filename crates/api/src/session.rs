@@ -10,6 +10,7 @@ use crate::Api;
 pub struct SessionState {
     conversation: Shared,
     submits: RefCell<Vec<String>>,
+    titles: RefCell<Vec<String>>,
 }
 
 impl SessionState {
@@ -17,11 +18,21 @@ impl SessionState {
         Self {
             conversation,
             submits: RefCell::default(),
+            titles: RefCell::default(),
         }
     }
 
     pub fn conversation(&self) -> &Shared {
         &self.conversation
+    }
+
+    pub fn set_title(&self, title: String) {
+        self.conversation.borrow_mut().set_title(title.clone());
+        self.titles.borrow_mut().push(title);
+    }
+
+    pub fn take_titles(&self) -> Vec<String> {
+        std::mem::take(&mut *self.titles.borrow_mut())
     }
 
     pub fn queue_submit(&self, text: String) {
@@ -84,6 +95,19 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
             out.set("total", tally.usage.total())?;
             out.set("requests", tally.turns)?;
             Ok(out)
+        })?,
+    )?;
+
+    let title_api = Rc::clone(api);
+    session.set(
+        "set_title",
+        lua.create_function(move |_, title: String| {
+            let title = title.trim().to_string();
+            if title.is_empty() {
+                return Err(mlua::Error::runtime("set_title needs non-empty text"));
+            }
+            title_api.session().set_title(title);
+            Ok(())
         })?,
     )?;
 

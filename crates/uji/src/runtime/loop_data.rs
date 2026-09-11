@@ -21,6 +21,7 @@ use uji_tui::app::{Action as KeyBinding, App, KeyAction, SuggestItem};
 
 use super::Inner;
 use super::auth::AuthEvent;
+use super::background::{Background, TitleEvent};
 use super::builtin::Builtin;
 use super::events;
 use super::frontend::Frontend;
@@ -61,7 +62,7 @@ pub(crate) struct LoopData {
     pub(crate) cancel: Option<CancelToken>,
     pub(crate) config_dir: Option<PathBuf>,
     pub(crate) job_tx: calloop::channel::Sender<JobEvent>,
-    pub(crate) auth_tx: calloop::channel::Sender<AuthEvent>,
+    pub(crate) background_tx: calloop::channel::Sender<Background>,
     pub(crate) jobs: Running,
     pub(crate) reader_paused: Arc<std::sync::atomic::AtomicBool>,
 }
@@ -185,6 +186,7 @@ impl LoopData {
         self.append(Message::User {
             text: text.to_string(),
         });
+        self.maybe_title(text);
 
         let provider = self.inner.llm.borrow().clone();
         let model = self.inner.llm_model.borrow().clone();
@@ -318,6 +320,7 @@ impl LoopData {
         const DRAINS: &[fn(&mut LoopData)] = &[
             LoopData::apply_composer,
             LoopData::drain_submits,
+            LoopData::drain_titles,
             LoopData::drain_jobs,
             LoopData::drain_exec,
             LoopData::drain_diagnostics,
@@ -355,6 +358,13 @@ impl LoopData {
         } else {
             composer.observe(self.app.input());
         }
+    }
+
+    pub(crate) fn drain_titles(&mut self) {
+        let Some(title) = self.inner.api.session().take_titles().pop() else {
+            return;
+        };
+        self.set_title(title);
     }
 
     pub(crate) fn drain_submits(&mut self) {
@@ -410,7 +420,57 @@ impl LoopData {
         }
     }
 
-    pub(crate) fn on_auth_event(&mut self, event: AuthEvent) {
+    pub(crate) fn on_background(&mut self, event: Background) {
+        match event {
+            Background::Auth(event) => self.on_auth_event(event),
+            Background::Title(event) => self.on_title_event(event),
+        }
+    }
+
+    fn on_title_event(&mut self, event: TitleEvent) {
+        let TitleEvent::Ready { title, usage } = event else {
+            return;
+        };
+        if let Some(usage) = usage {
+            self.app.conversation().borrow_mut().add_usage(usage);
+        }
+        self.set_title(title);
+    }
+
+    fn set_title(&mut self, title: String) {
+        let id = self.app.session().id;
+        if let Err(err) = self.storage.rename_session(&id, &title) {
+            self.inner
+                .report(format!("could not save the session title: {err}"));
+            return;
+        }
+        self.app.set_title(title.clone());
+        self.app
+            .conversation()
+            .borrow_mut()
+            .set_title(title.clone());
+        self.inner.emit(events::SESSION_TITLED, &[("title", title)]);
+        self.dirty = true;
+    }
+
+    fn maybe_title(&mut self, first_message: &str) {
+        if !self.app.session().is_untitled() {
+            return;
+        }
+        if self.app.conversation().borrow().messages().len() != 1 {
+            return;
+        }
+        super::background::title(
+            &self.runtime,
+            Arc::clone(&self.inner.client),
+            self.inner.llm.borrow().clone(),
+            self.inner.llm_model.borrow().clone(),
+            first_message.to_string(),
+            self.background_tx.clone(),
+        );
+    }
+
+    fn on_auth_event(&mut self, event: AuthEvent) {
         match event {
             AuthEvent::Opened { url } => {
                 self.inner
@@ -810,7 +870,7 @@ impl Context for LoopData {
             &self.runtime,
             Arc::clone(&self.inner.client),
             provider,
-            self.auth_tx.clone(),
+            self.background_tx.clone(),
         );
     }
 

@@ -8,6 +8,10 @@ pub struct Time {
     pub updated: i64,
 }
 
+pub const UNTITLED: &str = "untitled";
+
+const PLACEHOLDERS: &[&str] = &["", UNTITLED, "new", "resumed"];
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: SessionId,
@@ -16,6 +20,13 @@ pub struct Session {
     pub title: String,
     pub directory: String,
     pub time: Time,
+}
+
+impl Session {
+    pub fn is_untitled(&self) -> bool {
+        let title = self.title.trim();
+        PLACEHOLDERS.contains(&title)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

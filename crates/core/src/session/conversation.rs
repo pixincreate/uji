@@ -51,6 +51,10 @@ impl Conversation {
         &self.info
     }
 
+    pub fn set_title(&mut self, title: String) {
+        self.info.title = title;
+    }
+
     pub fn messages(&self) -> &[StoredMessage] {
         &self.messages
     }

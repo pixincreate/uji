@@ -195,6 +195,10 @@ impl App {
         &self.session
     }
 
+    pub fn set_title(&mut self, title: String) {
+        self.session.title = title;
+    }
+
     pub fn conversation(&self) -> &Shared {
         &self.conversation
     }

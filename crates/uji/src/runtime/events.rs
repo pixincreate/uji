@@ -10,6 +10,8 @@ pub const TOOL_STARTED: &str = "ToolStarted";
 
 pub const TOOL_FINISHED: &str = "ToolFinished";
 
+pub const SESSION_TITLED: &str = "SessionTitled";
+
 pub const QUIT: &str = "Quit";
 
 pub const STATUS_CHANGED: &str = "status_changed";

@@ -16,6 +16,7 @@ pub trait SessionStorage {
     fn latest_session(&mut self) -> Result<Option<Session>>;
     fn list_sessions(&mut self) -> Result<Vec<Session>>;
     fn delete_session(&mut self, id: &SessionId) -> Result<bool>;
+    fn rename_session(&mut self, id: &SessionId, title: &str) -> Result<()>;
 
     fn append_message(&mut self, session_id: &SessionId, message: Message)
     -> Result<StoredMessage>;
@@ -91,6 +92,14 @@ impl<T: StorageInterface<Connection = SqliteConnection>> SessionStorage for T {
         let conn = self.get_connection();
         let deleted = diesel::delete(sessions::table.find(id.to_string())).execute(conn)?;
         Ok(deleted > 0)
+    }
+
+    fn rename_session(&mut self, id: &SessionId, title: &str) -> Result<()> {
+        let conn = self.get_connection();
+        diesel::update(sessions::table.find(id.to_string()))
+            .set(sessions::title.eq(title))
+            .execute(conn)?;
+        Ok(())
     }
 
     fn append_message(

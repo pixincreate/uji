@@ -1,5 +1,6 @@
 pub mod context;
 pub mod providers;
+pub mod title;
 
 use std::collections::HashMap;
 use std::path::Path;
