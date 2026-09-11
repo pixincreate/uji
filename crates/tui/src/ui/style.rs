@@ -1,7 +1,7 @@
 use ratatui::style::{Color as TColor, Modifier, Style};
 use ratatui::symbols;
 use ratatui::widgets::{Block, Borders, Padding};
-use uji_view::model::{Border, Color, Style as ApiStyle, WindowSpec};
+use uji_screen::model::{Border, Color, Style as ApiStyle, WindowSpec};
 
 pub const USER_BG: TColor = TColor::Rgb(0x34, 0x35, 0x41);
 pub const TEXT: TColor = TColor::Rgb(0xd4, 0xd4, 0xd4);

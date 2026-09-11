@@ -3462,8 +3462,8 @@ dependencies = [
  "tokio",
  "uji-api",
  "uji-core",
+ "uji-screen",
  "uji-tui",
- "uji-view",
 ]
 
 [[package]]
@@ -3473,7 +3473,7 @@ dependencies = [
  "mlua",
  "serde",
  "uji-core",
- "uji-view",
+ "uji-screen",
 ]
 
 [[package]]
@@ -3509,6 +3509,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "uji-screen"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "uji-tui"
 version = "0.1.0"
 dependencies = [
@@ -3519,14 +3526,7 @@ dependencies = [
  "ratatui",
  "serde_json",
  "uji-core",
- "uji-view",
-]
-
-[[package]]
-name = "uji-view"
-version = "0.1.0"
-dependencies = [
- "serde",
+ "uji-screen",
 ]
 
 [[package]]

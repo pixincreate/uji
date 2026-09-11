@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use mlua::{Function, Lua, Table, Value};
-use uji_view::keymap::{Binding, Chord, Mode, describe};
+use uji_screen::keymap::{Binding, Chord, Mode, describe};
 
 use crate::Api;
 

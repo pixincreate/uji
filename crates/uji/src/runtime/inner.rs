@@ -6,7 +6,7 @@ use std::sync::Arc;
 use mlua::Lua as LuaState;
 use uji_api::Api;
 use uji_core::session::conversation::Shared;
-use uji_view::state::UiState;
+use uji_screen::state::UiState;
 
 use super::policy;
 use crate::pack;

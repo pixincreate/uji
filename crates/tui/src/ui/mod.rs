@@ -3,8 +3,8 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::text::Line as TLine;
 use ratatui::widgets::{Paragraph, Widget};
-use uji_view::model::{Builtin, Size, WindowSpec};
-use uji_view::state::UiState;
+use uji_screen::model::{Builtin, Size, WindowSpec};
+use uji_screen::state::UiState;
 
 use crate::app::App;
 

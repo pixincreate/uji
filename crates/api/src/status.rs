@@ -4,7 +4,7 @@ use mlua::{Function, Lua, Table, Value};
 
 use crate::Api;
 use crate::registry::Entry;
-use uji_view::model::RunState;
+use uji_screen::model::RunState;
 
 pub fn add(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     let api = Rc::clone(api);

@@ -1,5 +1,5 @@
 [package]
-name = "uji-view"
+name = "uji-screen"
 version.workspace = true
 edition.workspace = true
 

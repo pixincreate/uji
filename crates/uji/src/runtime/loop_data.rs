@@ -5,8 +5,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crossterm::event::{Event as TermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEventKind};
-use uji_view::keymap::{Binding, Chord, Key};
-use uji_view::model::RunState;
+use uji_screen::keymap::{Binding, Chord, Key};
+use uji_screen::model::RunState;
 
 use crate::cmd::{Args, Context};
 use mlua::{LuaSerdeExt, Value as LuaValue};
@@ -158,7 +158,7 @@ impl LoopData {
         let Ok(event) = self.inner.lua.create_table() else {
             return;
         };
-        let _ = event.set("key", uji_view::keymap::describe(chord));
+        let _ = event.set("key", uji_screen::keymap::describe(chord));
         if let Key::Char(c) = chord.key {
             let _ = event.set("char", c.to_string());
         }

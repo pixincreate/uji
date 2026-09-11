@@ -25,7 +25,7 @@ use std::sync::atomic::AtomicBool;
 
 use calloop::{EventLoop, LoopHandle};
 use crossterm::event::Event as TermEvent;
-use uji_view::state::UiState;
+use uji_screen::state::UiState;
 
 use uji_core::llm::StreamEvent;
 use uji_core::session::conversation::{Conversation, Shared};

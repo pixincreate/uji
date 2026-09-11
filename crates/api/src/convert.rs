@@ -1,5 +1,5 @@
 use mlua::Value as LuaValue;
-use uji_view::model::{Border, Color, Size, Split, WinOpts};
+use uji_screen::model::{Border, Color, Size, Split, WinOpts};
 
 pub(crate) trait FromLuaValue: Sized {
     fn from_lua_value(value: &LuaValue) -> mlua::Result<Self>;
@@ -41,7 +41,7 @@ impl FromLuaValue for WinOpts {
         }
         opts.priority = table
             .get::<Option<i64>>("priority")?
-            .unwrap_or(uji_view::model::WIN_DEFAULT_PRIORITY);
+            .unwrap_or(uji_screen::model::WIN_DEFAULT_PRIORITY);
         opts.title = table.get::<Option<String>>("title")?;
         opts.wrap = table.get::<Option<bool>>("wrap")?.unwrap_or(false);
         opts.padding = table.get::<Option<u16>>("padding")?.unwrap_or(0);

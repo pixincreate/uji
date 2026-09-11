@@ -27,7 +27,7 @@ use mlua::{Function, Lua, Table, Value};
 
 use self::action::Actions;
 use uji_core::session::conversation::Shared;
-use uji_view::state::UiState;
+use uji_screen::state::UiState;
 
 use self::handlers::Handlers;
 use self::input::{Capture, Composer};
@@ -36,7 +36,7 @@ use self::registry::Registry;
 use self::scheduled::Scheduled;
 use self::session::SessionState;
 use self::tools::LuaTool;
-use uji_view::keymap::Keymap;
+use uji_screen::keymap::Keymap;
 
 pub struct Api {
     state: Rc<RefCell<UiState>>,

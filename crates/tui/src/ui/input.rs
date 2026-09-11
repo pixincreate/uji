@@ -2,7 +2,7 @@ use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use uji_view::model::WindowSpec;
+use uji_screen::model::WindowSpec;
 
 use crate::app::Mode;
 use crate::ui::Context;

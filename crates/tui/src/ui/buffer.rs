@@ -1,6 +1,6 @@
 use ratatui::style::{Color, Style as TStyle};
 use ratatui::text::{Line as TLine, Span as TSpan};
-use uji_view::model::{Line, Span, Style};
+use uji_screen::model::{Line, Span, Style};
 
 use super::style;
 

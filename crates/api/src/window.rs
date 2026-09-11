@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use mlua::{Function, Lua, LuaSerdeExt, Table, Value as LuaValue};
 
-use uji_view::model::{Builtin, Color, Line, Size, Span, Style, UiConfig, WinOpts};
+use uji_screen::model::{Builtin, Color, Line, Size, Span, Style, UiConfig, WinOpts};
 
 use super::Api;
 use super::convert::FromLuaValue;
@@ -142,7 +142,7 @@ fn parse_color(value: Option<String>) -> mlua::Result<Option<Color>> {
         Some(s) => s
             .parse::<Color>()
             .map(Some)
-            .map_err(|err: uji_view::model::ParseError| mlua::Error::runtime(err.to_string())),
+            .map_err(|err: uji_screen::model::ParseError| mlua::Error::runtime(err.to_string())),
         None => Ok(None),
     }
 }

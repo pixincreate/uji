@@ -1,5 +1,5 @@
 use ratatui::layout::Rect;
-use uji_view::model::{Size, Split, WindowSpec};
+use uji_screen::model::{Size, Split, WindowSpec};
 
 pub(crate) fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
     let x = area.x + area.width.saturating_sub(width) / 2;
