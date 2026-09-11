@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -103,5 +102,3 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     job.set("stop", stop(lua, api)?)?;
     Ok(job)
 }
-
-pub type SharedJobs = RefCell<Jobs>;

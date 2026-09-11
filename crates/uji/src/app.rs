@@ -87,6 +87,17 @@ impl Action {
     }
 }
 
+pub fn filter_items<'a>(items: &'a [String], query: &str) -> Vec<&'a String> {
+    if query.is_empty() {
+        return items.iter().collect();
+    }
+    let needle = query.to_lowercase();
+    items
+        .iter()
+        .filter(|item| item.to_lowercase().contains(&needle))
+        .collect()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SuggestItem {
     pub name: String,
@@ -422,7 +433,10 @@ impl App {
         match &self.mode {
             Mode::Select { cursor, .. } => {
                 let cursor = *cursor;
-                let item = self.select_matches().get(cursor).cloned();
+                let item = self
+                    .select_matches()
+                    .get(cursor)
+                    .map(|item| (*item).clone());
                 self.mode = Mode::Normal;
                 item.map_or(KeyAction::None, KeyAction::Selected)
             }
@@ -548,16 +562,11 @@ impl App {
         }
     }
 
-    fn select_matches(&self) -> Vec<String> {
-        let Mode::Select { items, query, .. } = &self.mode else {
-            return Vec::new();
-        };
-        let needle = query.to_lowercase();
-        items
-            .iter()
-            .filter(|item| item.to_lowercase().contains(&needle))
-            .cloned()
-            .collect()
+    fn select_matches(&self) -> Vec<&String> {
+        match &self.mode {
+            Mode::Select { items, query, .. } => filter_items(items, query),
+            _ => Vec::new(),
+        }
     }
 
     fn select_move(&mut self, delta: isize) {
@@ -613,7 +622,10 @@ impl App {
                     Mode::Select { cursor, .. } => *cursor,
                     _ => 0,
                 };
-                let item = self.select_matches().get(cursor).cloned();
+                let item = self
+                    .select_matches()
+                    .get(cursor)
+                    .map(|item| (*item).clone());
                 self.mode = Mode::Normal;
                 item.map_or(KeyAction::None, KeyAction::Selected)
             }

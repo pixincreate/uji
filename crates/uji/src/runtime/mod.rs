@@ -137,7 +137,7 @@ impl Runtime {
             .handle()
             .insert_source(job_channel, |event, _meta, data: &mut LoopData| {
                 if let calloop::channel::Event::Msg(event) = event {
-                    data.on_job_event(event);
+                    data.on_job_event(&event);
                 }
             })
             .map_err(|err| io::Error::other(format!("register job source: {err}")))?;

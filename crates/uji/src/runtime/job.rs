@@ -12,6 +12,14 @@ pub(crate) enum JobEvent {
     Exit { id: u64, code: i32 },
 }
 
+impl JobEvent {
+    pub(crate) fn id(&self) -> u64 {
+        match self {
+            Self::Stdout { id, .. } | Self::Stderr { id, .. } | Self::Exit { id, .. } => *id,
+        }
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct Running {
     tokens: HashMap<u64, CancelToken>,

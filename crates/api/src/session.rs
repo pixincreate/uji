@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 use mlua::{Lua, Table};
@@ -21,12 +21,36 @@ pub struct MessageView {
 
 #[derive(Default)]
 pub struct SessionState {
-    pub info: RefCell<SessionInfo>,
-    pub messages: RefCell<Vec<MessageView>>,
-    pub submits: RefCell<Vec<String>>,
+    info: RefCell<SessionInfo>,
+    messages: RefCell<Vec<MessageView>>,
+    submits: RefCell<Vec<String>>,
 }
 
 impl SessionState {
+    pub fn set_info(&self, info: SessionInfo) {
+        *self.info.borrow_mut() = info;
+    }
+
+    pub fn set_messages(&self, messages: Vec<MessageView>) {
+        *self.messages.borrow_mut() = messages;
+    }
+
+    pub fn push_message(&self, message: MessageView) {
+        self.messages.borrow_mut().push(message);
+    }
+
+    pub fn queue_submit(&self, text: String) {
+        self.submits.borrow_mut().push(text);
+    }
+
+    pub fn info(&self) -> SessionInfo {
+        self.info.borrow().clone()
+    }
+
+    pub fn messages(&self) -> Ref<'_, Vec<MessageView>> {
+        self.messages.borrow()
+    }
+
     pub fn take_submits(&self) -> Vec<String> {
         std::mem::take(&mut *self.submits.borrow_mut())
     }
@@ -39,7 +63,7 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     session.set(
         "info",
         lua.create_function(move |lua, ()| {
-            let info = info_api.session().info.borrow().clone();
+            let info = info_api.session().info();
             let out = lua.create_table()?;
             out.set("id", info.id)?;
             out.set("title", info.title)?;
@@ -53,7 +77,7 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
         "messages",
         lua.create_function(move |lua, ()| {
             let out = lua.create_table()?;
-            for message in messages_api.session().messages.borrow().iter() {
+            for message in messages_api.session().messages().iter() {
                 let row = lua.create_table()?;
                 row.set("type", message.kind.clone())?;
                 row.set("text", message.text.clone())?;
@@ -73,7 +97,7 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
             if text.trim().is_empty() {
                 return Err(mlua::Error::runtime("submit needs non-empty text"));
             }
-            submit_api.session().submits.borrow_mut().push(text);
+            submit_api.session().queue_submit(text);
             Ok(())
         })?,
     )?;

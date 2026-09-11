@@ -29,12 +29,7 @@ impl Render for Select<'_> {
             .or_else(|| ctx.state.current_provider())
             .unwrap_or_default();
 
-        let needle = self.query.to_lowercase();
-        let matches: Vec<&String> = self
-            .items
-            .iter()
-            .filter(|item| item.to_lowercase().contains(&needle))
-            .collect();
+        let matches = crate::app::filter_items(self.items, self.query);
         let visible = matches
             .len()
             .min(MAX_ROWS)

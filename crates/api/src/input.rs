@@ -46,8 +46,9 @@ impl Composer {
 
     pub fn sync(&self, text: &str) {
         if !self.dirty.get() {
-            self.text.borrow_mut().clear();
-            self.text.borrow_mut().push_str(text);
+            let mut current = self.text.borrow_mut();
+            current.clear();
+            current.push_str(text);
         }
     }
 

@@ -176,8 +176,7 @@ impl LoopData {
         };
         match self.storage.append_message(&self.app.session().id, user) {
             Ok(stored) => {
-                self.app.push_message(stored);
-                self.mirror_session();
+                self.push_message(stored);
                 self.inner.emit(
                     events::MESSAGE_APPENDED,
                     &[("type", "user".into()), ("text", text.to_string())],
@@ -310,27 +309,28 @@ impl LoopData {
         }
     }
 
+    fn push_message(&mut self, stored: crate::session::model::StoredMessage) {
+        self.inner
+            .api
+            .session()
+            .push_message(message_view(&stored.message));
+        self.app.push_message(stored);
+    }
+
     pub(crate) fn mirror_session(&self) {
         let session = self.inner.api.session();
-        {
-            let mut info = session.info.borrow_mut();
-            info.id = self.app.session().id.to_string();
-            info.title.clone_from(&self.app.session().title);
-            info.directory.clone_from(&self.app.session().directory);
-        }
-        let mut messages = session.messages.borrow_mut();
-        messages.clear();
-        for stored in self.app.messages() {
-            let (kind, name) = match &stored.message {
-                Message::Tool { name, .. } => ("tool", Some(name.clone())),
-                other => (other.type_name(), None),
-            };
-            messages.push(uji_api::session::MessageView {
-                kind: kind.to_string(),
-                text: stored.message.text().to_string(),
-                name,
-            });
-        }
+        session.set_info(uji_api::session::SessionInfo {
+            id: self.app.session().id.to_string(),
+            title: self.app.session().title.clone(),
+            directory: self.app.session().directory.clone(),
+        });
+        session.set_messages(
+            self.app
+                .messages()
+                .iter()
+                .map(|stored| message_view(&stored.message))
+                .collect(),
+        );
     }
 
     pub(crate) fn drain_jobs(&mut self) {
@@ -358,27 +358,28 @@ impl LoopData {
         }
     }
 
-    pub(crate) fn on_job_event(&mut self, event: JobEvent) {
-        let (id, handler, arg) = match event {
-            JobEvent::Stdout { id, line } => (id, "stdout", self.lua_text(&line)),
-            JobEvent::Stderr { id, line } => (id, "stderr", self.lua_text(&line)),
-            JobEvent::Exit { id, code } => (id, "exit", LuaValue::Integer(i64::from(code))),
+    pub(crate) fn on_job_event(&mut self, event: &JobEvent) {
+        let exited = matches!(event, JobEvent::Exit { .. });
+        let id = event.id();
+        let arg = match event {
+            JobEvent::Stdout { line, .. } | JobEvent::Stderr { line, .. } => self.lua_text(line),
+            JobEvent::Exit { code, .. } => LuaValue::Integer(i64::from(*code)),
         };
         let callback = {
             let jobs = self.inner.api.jobs();
             let jobs = jobs.borrow();
-            jobs.handlers(id).and_then(|h| match handler {
-                "stdout" => h.on_stdout.clone(),
-                "stderr" => h.on_stderr.clone(),
-                _ => h.on_exit.clone(),
+            jobs.handlers(id).and_then(|handlers| match event {
+                JobEvent::Stdout { .. } => handlers.on_stdout.clone(),
+                JobEvent::Stderr { .. } => handlers.on_stderr.clone(),
+                JobEvent::Exit { .. } => handlers.on_exit.clone(),
             })
         };
         if let Some(callback) = callback
             && let Err(err) = callback.call::<()>((arg,))
         {
-            self.inner.report(format!("job {id} {handler}: {err}"));
+            self.inner.report(format!("job {id}: {err}"));
         }
-        if handler == "exit" {
+        if exited {
             self.inner.api.jobs().borrow_mut().finish(id);
             self.jobs.finish(id);
         }
@@ -445,8 +446,7 @@ impl LoopData {
         };
         match self.storage.append_message(&self.app.session().id, message) {
             Ok(stored) => {
-                self.app.push_message(stored);
-                self.mirror_session();
+                self.push_message(stored);
             }
             Err(err) => eprintln!("uji: failed to persist assistant step: {err}"),
         }
@@ -465,8 +465,7 @@ impl LoopData {
         };
         match self.storage.append_message(&self.app.session().id, message) {
             Ok(stored) => {
-                self.app.push_message(stored);
-                self.mirror_session();
+                self.push_message(stored);
             }
             Err(err) => eprintln!("uji: failed to persist tool result: {err}"),
         }
@@ -619,8 +618,7 @@ impl LoopData {
         };
         match self.storage.append_message(&self.app.session().id, message) {
             Ok(stored) => {
-                self.app.push_message(stored);
-                self.mirror_session();
+                self.push_message(stored);
                 self.inner.emit(
                     events::MESSAGE_APPENDED,
                     &[("type", "error".into()), ("text", error.to_string())],
@@ -644,8 +642,7 @@ impl LoopData {
             .append_message(&self.app.session().id, assistant)
         {
             Ok(stored) => {
-                self.app.push_message(stored);
-                self.mirror_session();
+                self.push_message(stored);
                 self.app.take_pending();
                 self.inner.emit(
                     events::MESSAGE_APPENDED,
@@ -767,6 +764,18 @@ impl Context for LoopData {
             .into_iter()
             .map(|item| item.name)
             .collect()
+    }
+}
+
+fn message_view(message: &Message) -> uji_api::session::MessageView {
+    let (kind, name) = match message {
+        Message::Tool { name, .. } => ("tool", Some(name.clone())),
+        other => (other.type_name(), None),
+    };
+    uji_api::session::MessageView {
+        kind: kind.to_string(),
+        text: message.text().to_string(),
+        name,
     }
 }
 
