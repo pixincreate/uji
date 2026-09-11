@@ -4,7 +4,7 @@ use std::process::Stdio;
 
 use tokio::io::{AsyncBufReadExt, BufReader};
 
-use crate::llm::CancelToken;
+use uji_core::llm::CancelToken;
 
 pub(crate) enum JobEvent {
     Stdout { id: u64, line: String },

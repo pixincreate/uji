@@ -1,13 +1,16 @@
 mod builtin;
 mod error;
 pub mod events;
+pub mod frontend;
 mod inner;
 mod input;
 mod job;
 mod loader;
 mod loop_data;
+mod policy;
 
 pub use error::RuntimeError;
+pub use frontend::{Frontend, Terminal};
 pub(crate) use inner::Inner;
 pub(crate) use loop_data::{Control, LoopData};
 
@@ -17,22 +20,24 @@ use std::io;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 
 use calloop::{EventLoop, LoopHandle};
 use crossterm::event::Event as TermEvent;
-use uji_api::state::UiState;
+use uji_view::state::UiState;
 
-use crate::app::{self, App};
-use crate::llm::StreamEvent;
-use crate::session::model::Session;
-use crate::session::store::SessionStorage;
+use uji_core::llm::StreamEvent;
+use uji_core::session::conversation::{Conversation, Shared};
+use uji_core::session::model::Session;
+use uji_core::session::store::SessionStorage;
+use uji_tui::app::App;
 
 pub struct Runtime {
     inner: Rc<Inner>,
     loop_handle: LoopHandle<'static, LoopData>,
     event_loop: EventLoop<'static, LoopData>,
     config_dir: Option<PathBuf>,
+    conversation: Shared,
 }
 
 impl Runtime {
@@ -42,8 +47,9 @@ impl Runtime {
 
     pub fn boot_in(config_dir: Option<PathBuf>) -> Result<Self, RuntimeError> {
         let state = Rc::new(RefCell::new(UiState::new()));
+        let conversation = Conversation::shared();
         let client = Arc::new(reqwest::Client::new());
-        let inner = Inner::boot(state, client, config_dir.clone());
+        let inner = Inner::boot(state, conversation.clone(), client, config_dir.clone());
 
         let event_loop = EventLoop::try_new()?;
         let loop_handle = event_loop.handle();
@@ -53,6 +59,7 @@ impl Runtime {
             loop_handle,
             event_loop,
             config_dir,
+            conversation,
         })
     }
 
@@ -72,31 +79,41 @@ impl Runtime {
         self.inner.lua.load(chunk).exec()
     }
 
-    pub fn run(self, session: Session, mut storage: Box<dyn SessionStorage>) -> io::Result<()> {
+    pub fn run(self, session: Session, storage: Box<dyn SessionStorage>) -> io::Result<()> {
+        self.run_with(session, storage, Terminal::new())
+    }
+
+    pub fn run_with(
+        self,
+        session: Session,
+        mut storage: Box<dyn SessionStorage>,
+        frontend: impl Frontend + 'static,
+    ) -> io::Result<()> {
         let Self {
             inner,
             loop_handle,
             mut event_loop,
             config_dir,
+            conversation,
         } = self;
 
         let messages = storage.messages(&session.id).map_err(io::Error::other)?;
-        let app = App::new(session, messages, inner.state());
+        conversation.borrow_mut().attach(&session, messages);
+        let app = App::new(session, conversation, inner.state());
 
-        let terminal = app::setup()?;
         let (sender, channel) = calloop::channel::channel::<TermEvent>();
-        let reader_running = Arc::new(AtomicBool::new(true));
-        input::spawn(sender, reader_running.clone());
-
         let (llm_sender, llm_channel) = calloop::channel::channel::<StreamEvent>();
         let (job_sender, job_channel) = calloop::channel::channel::<job::JobEvent>();
+        let reader_paused = Arc::new(AtomicBool::new(false));
 
-        let runtime = tokio::runtime::Runtime::new()?;
+        let mut frontend: Box<dyn Frontend> = Box::new(frontend);
+        frontend.start(sender, Arc::clone(&reader_paused))?;
+
         let mut data = LoopData {
             inner,
             app,
             storage,
-            terminal,
+            frontend,
             dirty: false,
             control: Control::Run,
             llm_tx: llm_sender,
@@ -108,40 +125,15 @@ impl Runtime {
             config_dir,
             job_tx: job_sender,
             jobs: job::Running::default(),
-            runtime,
+            reader_paused,
+            runtime: tokio::runtime::Runtime::new()?,
         };
 
-        data.mirror_session();
         data.inner.resolve_llm(&mut *data.storage);
         data.inner.emit("status_changed", &[]);
         data.refresh_suggestions();
 
-        event_loop
-            .handle()
-            .insert_source(channel, |event, _meta, data: &mut LoopData| match event {
-                calloop::channel::Event::Msg(event) => data.on_term_event(&event),
-                calloop::channel::Event::Closed => data.control = Control::Quit,
-            })
-            .map_err(|err| io::Error::other(format!("register input source: {err}")))?;
-
-        event_loop
-            .handle()
-            .insert_source(llm_channel, |event, _meta, data: &mut LoopData| {
-                if let calloop::channel::Event::Msg(event) = event {
-                    data.on_llm_event(event);
-                }
-            })
-            .map_err(|err| io::Error::other(format!("register llm source: {err}")))?;
-
-        event_loop
-            .handle()
-            .insert_source(job_channel, |event, _meta, data: &mut LoopData| {
-                if let calloop::channel::Event::Msg(event) = event {
-                    data.on_job_event(&event);
-                }
-            })
-            .map_err(|err| io::Error::other(format!("register job source: {err}")))?;
-
+        install_sources(&event_loop.handle(), channel, llm_channel, job_channel)?;
         let timer = calloop::timer::Timer::from_duration(data.timer_interval());
         event_loop
             .handle()
@@ -151,40 +143,46 @@ impl Runtime {
             })
             .map_err(|err| io::Error::other(format!("register timer source: {err}")))?;
 
-        app::draw(&mut data.terminal, &data.app)?;
+        data.frontend.draw(&data.app)?;
         data.dirty = false;
 
         while data.control != Control::Quit {
             event_loop
                 .dispatch(None, &mut data)
                 .map_err(io::Error::other)?;
-
-            data.apply_composer();
-            data.drain_submits();
-            data.drain_jobs();
-            data.drain_diagnostics();
-
-            for callback in data.inner.api.scheduled().take() {
-                let _ = loop_handle.insert_idle(move |data: &mut LoopData| {
-                    if let Err(err) = callback.call::<()>(()) {
-                        eprintln!("uji: scheduled callback error: {err}");
-                    }
-                    data.dirty = true;
-                });
-            }
-
-            if data.control == Control::Reload {
-                data.perform_reload();
-            }
-
-            if data.dirty {
-                app::draw(&mut data.terminal, &data.app)?;
-                data.dirty = false;
-            }
+            data.pump(&loop_handle)?;
         }
 
-        reader_running.store(false, Ordering::Relaxed);
         data.inner.emit(events::QUIT, &[]);
-        app::restore(&mut data.terminal)
+        data.frontend.stop()
     }
+}
+
+fn install_sources(
+    handle: &LoopHandle<'static, LoopData>,
+    term: calloop::channel::Channel<TermEvent>,
+    llm: calloop::channel::Channel<StreamEvent>,
+    jobs: calloop::channel::Channel<job::JobEvent>,
+) -> io::Result<()> {
+    handle
+        .insert_source(term, |event, _meta, data: &mut LoopData| match event {
+            calloop::channel::Event::Msg(event) => data.on_term_event(&event),
+            calloop::channel::Event::Closed => data.control = Control::Quit,
+        })
+        .map_err(|err| io::Error::other(format!("register input source: {err}")))?;
+    handle
+        .insert_source(llm, |event, _meta, data: &mut LoopData| {
+            if let calloop::channel::Event::Msg(event) = event {
+                data.on_llm_event(event);
+            }
+        })
+        .map_err(|err| io::Error::other(format!("register llm source: {err}")))?;
+    handle
+        .insert_source(jobs, |event, _meta, data: &mut LoopData| {
+            if let calloop::channel::Event::Msg(event) = event {
+                data.on_job_event(&event);
+            }
+        })
+        .map_err(|err| io::Error::other(format!("register job source: {err}")))?;
+    Ok(())
 }

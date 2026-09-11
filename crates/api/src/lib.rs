@@ -1,3 +1,4 @@
+pub mod action;
 pub mod agent;
 pub mod command;
 mod convert;
@@ -7,12 +8,12 @@ pub mod input;
 pub mod job;
 pub mod keymap;
 pub mod llm;
-pub mod model;
+
 pub mod registry;
 pub mod schedule;
 pub mod scheduled;
 pub mod session;
-pub mod state;
+
 pub mod status;
 pub mod tools;
 pub mod window;
@@ -24,16 +25,18 @@ use std::rc::Rc;
 
 use mlua::{Function, Lua, Table, Value};
 
-use crate::state::UiState;
+use self::action::Actions;
+use uji_core::session::conversation::Shared;
+use uji_view::state::UiState;
 
 use self::handlers::Handlers;
 use self::input::{Capture, Composer};
 use self::job::Jobs;
-use self::keymap::Keymap;
 use self::registry::Registry;
 use self::scheduled::Scheduled;
 use self::session::SessionState;
 use self::tools::LuaTool;
+use uji_view::keymap::Keymap;
 
 pub struct Api {
     state: Rc<RefCell<UiState>>,
@@ -48,12 +51,14 @@ pub struct Api {
     composer: Composer,
     capture: Capture,
     session_state: SessionState,
+    exec: RefCell<Vec<Vec<String>>>,
     segments: Registry,
     agent_context: Registry,
+    actions: Actions,
 }
 
 impl Api {
-    pub fn new(state: Rc<RefCell<UiState>>) -> Rc<Self> {
+    pub fn new(state: Rc<RefCell<UiState>>, conversation: Shared) -> Rc<Self> {
         Rc::new(Self {
             state,
             scheduled: Scheduled::default(),
@@ -66,9 +71,11 @@ impl Api {
             jobs: RefCell::default(),
             composer: Composer::default(),
             capture: Capture::default(),
-            session_state: SessionState::default(),
+            session_state: SessionState::new(conversation),
+            exec: RefCell::default(),
             segments: Registry::default(),
             agent_context: Registry::default(),
+            actions: Actions::default(),
         })
     }
 
@@ -108,8 +115,20 @@ impl Api {
         &self.composer
     }
 
+    pub fn queue_exec(&self, command: Vec<String>) {
+        self.exec.borrow_mut().push(command);
+    }
+
+    pub fn take_exec(&self) -> Vec<Vec<String>> {
+        std::mem::take(&mut *self.exec.borrow_mut())
+    }
+
     pub fn segments(&self) -> &Registry {
         &self.segments
+    }
+
+    pub fn actions(&self) -> &Actions {
+        &self.actions
     }
 
     pub fn agent_context(&self) -> &Registry {
@@ -125,7 +144,9 @@ impl Api {
     }
 
     pub fn take_notices(&self) -> Vec<String> {
-        std::mem::take(&mut *self.notices.borrow_mut())
+        let mut notices = std::mem::take(&mut *self.notices.borrow_mut());
+        notices.extend(self.state.borrow_mut().take_notices());
+        notices
     }
 
     pub(crate) fn handlers(&self) -> &RefCell<Handlers> {
@@ -135,7 +156,7 @@ impl Api {
     pub fn dispatch(&self, event: &str, ctx: &Table) {
         for handler in self.handlers.borrow().get(event) {
             if let Err(err) = handler.call::<()>((event, ctx.clone())) {
-                eprintln!("uji: handler error for {event}: {err}");
+                self.notify(format!("handler error for {event}: {err}"));
             }
         }
     }
@@ -145,7 +166,7 @@ impl Api {
             match handler.call::<Value>(event_table.clone()) {
                 Ok(value) if !value.is_nil() => return Some(value),
                 Ok(_) => {}
-                Err(err) => eprintln!("uji: {event} handler error: {err}"),
+                Err(err) => self.notify(format!("{event} handler error: {err}")),
             }
         }
         None
@@ -163,6 +184,7 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     ui.set("set_size", window::set_size(lua, api)?)?;
     ui.set("set_title", window::set_title(lua, api)?)?;
     ui.set("configure", window::configure(lua, api)?)?;
+    ui.set("exec", window::exec(lua, api)?)?;
     uji.set("ui", ui)?;
 
     let llm = lua.create_table()?;
@@ -193,6 +215,7 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     uji.set("tool", tool)?;
 
     uji.set("agent", agent::register(lua, api)?)?;
+    uji.set("action", action::register(lua, api)?)?;
     uji.set("keymap", keymap::register(lua, api)?)?;
     uji.set("job", job::register(lua, api)?)?;
     uji.set("input", input::register(lua, api)?)?;

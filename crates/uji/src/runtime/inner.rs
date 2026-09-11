@@ -5,14 +5,15 @@ use std::sync::Arc;
 
 use mlua::Lua as LuaState;
 use uji_api::Api;
-use uji_api::state::UiState;
+use uji_core::session::conversation::Shared;
+use uji_view::state::UiState;
 
-use crate::config::{self, DEFAULT_LUA};
-use crate::llm::{Llm, NotConfigured};
+use super::policy;
 use crate::pack;
-use crate::session::store::SessionStorage;
-use crate::tools::policy::ToolPolicy;
-use crate::tools::policy_lua;
+use uji_core::config::{self, DEFAULT_LUA};
+use uji_core::llm::{Llm, NotConfigured};
+use uji_core::session::store::SessionStorage;
+use uji_core::tools::policy::ToolPolicy;
 
 use super::loader;
 
@@ -28,12 +29,13 @@ pub(crate) struct Inner {
 impl Inner {
     pub(crate) fn boot(
         state: Rc<RefCell<UiState>>,
+        conversation: Shared,
         client: Arc<reqwest::Client>,
         config_dir: Option<PathBuf>,
     ) -> Rc<Self> {
         let inner = Rc::new(Self {
             lua: LuaState::new(),
-            api: Api::new(state),
+            api: Api::new(state, conversation),
             llm: RefCell::new(Arc::new(NotConfigured)),
             llm_model: RefCell::default(),
             client,
@@ -65,6 +67,10 @@ impl Inner {
             inner.report(format!("cannot install the module loader: {err}"));
         }
 
+        inner
+            .api
+            .actions()
+            .reserve(uji_tui::app::Action::names().map(ToString::to_string));
         inner.run_init();
         inner.source_plugins();
         inner.compile_policy();
@@ -80,7 +86,11 @@ impl Inner {
     }
 
     pub(crate) fn compile_policy(&self) {
-        *self.policy.borrow_mut() = policy_lua::compile(&self.lua);
+        let (policy, notices) = policy::compile(&self.lua);
+        *self.policy.borrow_mut() = policy;
+        for notice in notices {
+            self.report(notice);
+        }
     }
 
     pub(crate) fn state(&self) -> Rc<RefCell<UiState>> {
@@ -137,8 +147,8 @@ impl Inner {
     }
 
     pub(crate) fn resolve_llm(&self, storage: &mut dyn SessionStorage) {
-        let (resolved, model, provider_id) = crate::llm::resolve_from_storage(storage);
-        let name = crate::llm::provider(&provider_id)
+        let (resolved, model, provider_id) = uji_core::llm::resolve_from_storage(storage);
+        let name = uji_core::llm::provider(&provider_id)
             .map_or_else(|| provider_id.clone(), |p| p.name.clone());
         *self.llm.borrow_mut() = resolved;
         (*self.llm_model.borrow_mut()).clone_from(&model);

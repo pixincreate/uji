@@ -3,8 +3,8 @@ mod ui;
 use std::error::Error;
 
 use crate::runtime::{Runtime, events};
-use crate::session::model::Session;
-use crate::session::store::SessionStorage;
+use uji_core::session::model::Session;
+use uji_core::session::store::SessionStorage;
 
 pub fn run(mut storage: Box<dyn SessionStorage>) -> Result<(), Box<dyn Error>> {
     let current_dir = std::env::current_dir().map_or_else(

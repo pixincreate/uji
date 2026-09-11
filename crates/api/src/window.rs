@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use mlua::{Function, Lua, LuaSerdeExt, Table, Value as LuaValue};
 
-use crate::model::{Builtin, Color, Line, Size, Span, Style, UiConfig, WinOpts};
+use uji_view::model::{Builtin, Color, Line, Size, Span, Style, UiConfig, WinOpts};
 
 use super::Api;
 use super::convert::FromLuaValue;
@@ -73,6 +73,28 @@ pub fn set_title(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     })
 }
 
+pub fn exec(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    let api = Rc::clone(api);
+    lua.create_function(move |_, opts: Table| {
+        let command = match opts.get::<LuaValue>("cmd")? {
+            LuaValue::String(text) => vec![
+                String::from("sh"),
+                String::from("-c"),
+                text.to_string_lossy(),
+            ],
+            LuaValue::Table(list) => list
+                .sequence_values::<String>()
+                .collect::<mlua::Result<Vec<_>>>()?,
+            _ => return Err(mlua::Error::runtime("cmd must be a string or a list")),
+        };
+        if command.is_empty() {
+            return Err(mlua::Error::runtime("cmd must not be empty"));
+        }
+        api.queue_exec(command);
+        Ok(())
+    })
+}
+
 pub fn configure(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     let state = api.state();
     lua.create_function(move |lua, opts: Table| {
@@ -120,7 +142,7 @@ fn parse_color(value: Option<String>) -> mlua::Result<Option<Color>> {
         Some(s) => s
             .parse::<Color>()
             .map(Some)
-            .map_err(|err: crate::model::ParseError| mlua::Error::runtime(err.to_string())),
+            .map_err(|err: uji_view::model::ParseError| mlua::Error::runtime(err.to_string())),
         None => Ok(None),
     }
 }

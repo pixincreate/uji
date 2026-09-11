@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+uji-core = { path = "../core" }
+uji-view = { path = "../view" }
 mlua = { version = "0.12", features = ["lua54", "vendored", "serde"] }
 serde = { version = "1", features = ["derive"] }
 

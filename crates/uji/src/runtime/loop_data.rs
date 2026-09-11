@@ -1,27 +1,28 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crossterm::event::{Event as TermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEventKind};
-use uji_api::keymap::{Binding, Chord, Key};
-use uji_api::model::RunState;
+use uji_view::keymap::{Binding, Chord, Key};
+use uji_view::model::RunState;
 
-use crate::app::{self, Action as KeyBinding, App, KeyAction, SuggestItem};
 use crate::cmd::{Args, Context};
-use crate::credential;
-use crate::llm::{
+use mlua::{LuaSerdeExt, Value as LuaValue};
+use uji_core::credential;
+use uji_core::llm::{
     AgentConfig, CancelToken, LuaToolSpec, StreamEvent, ToolDecision, ToolSpec, run_agent,
 };
-use crate::session::model::{Message, ToolCall};
-use crate::session::store::SessionStorage;
-use crate::tools::policy::Action;
-use mlua::{LuaSerdeExt, Value as LuaValue};
+use uji_core::session::model::{Message, ToolCall};
+use uji_core::session::store::SessionStorage;
+use uji_core::tools::policy::Action;
+use uji_tui::app::{Action as KeyBinding, App, KeyAction, SuggestItem};
 
 use super::Inner;
 use super::builtin::Builtin;
 use super::events;
+use super::frontend::Frontend;
 use super::job::{JobEvent, Running};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -47,7 +48,7 @@ pub(crate) struct LoopData {
     pub(crate) inner: Rc<Inner>,
     pub(crate) app: App,
     pub(crate) storage: Box<dyn SessionStorage>,
-    pub(crate) terminal: app::Term,
+    pub(crate) frontend: Box<dyn Frontend>,
     pub(crate) dirty: bool,
     pub(crate) control: Control,
     pub(crate) llm_tx: calloop::channel::Sender<StreamEvent>,
@@ -60,6 +61,7 @@ pub(crate) struct LoopData {
     pub(crate) config_dir: Option<PathBuf>,
     pub(crate) job_tx: calloop::channel::Sender<JobEvent>,
     pub(crate) jobs: Running,
+    pub(crate) reader_paused: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl LoopData {
@@ -127,11 +129,18 @@ impl LoopData {
             }
             Some(Binding::Action(name)) => {
                 if let Some(action) = KeyBinding::parse(&name) {
-                    Some(self.app.apply(action))
-                } else {
-                    self.inner.report(format!("unknown keymap action: {name}"));
-                    None
+                    return Some(self.app.apply(action));
                 }
+                match self.inner.api.actions().get(&name) {
+                    Some(handler) => {
+                        if let Err(err) = handler.call::<()>(()) {
+                            self.inner.report(format!("action {name}: {err}"));
+                        }
+                        self.dirty = true;
+                    }
+                    None => self.inner.report(format!("unknown keymap action: {name}")),
+                }
+                None
             }
             None => Some(self.app.handle_key(key)),
         }
@@ -147,7 +156,7 @@ impl LoopData {
         let Ok(event) = self.inner.lua.create_table() else {
             return;
         };
-        let _ = event.set("key", uji_api::keymap::describe(chord));
+        let _ = event.set("key", uji_view::keymap::describe(chord));
         if let Key::Char(c) = chord.key {
             let _ = event.set("char", c.to_string());
         }
@@ -183,24 +192,22 @@ impl LoopData {
                 );
             }
             Err(err) => {
-                eprintln!("uji: failed to persist message: {err}");
+                self.inner
+                    .report(format!("failed to persist message: {err}"));
             }
         }
 
         let provider = self.inner.llm.borrow().clone();
         let model = self.inner.llm_model.borrow().clone();
         let client = Arc::clone(&self.inner.client);
-        let context: Vec<Message> = self
-            .app
-            .messages()
-            .iter()
-            .map(|stored| stored.message.clone())
-            .collect();
-        let context = sanitize_context(&context);
+        let context = {
+            let conversation = self.app.messages();
+            uji_core::llm::context::sanitize(conversation.messages())
+        };
         let system = {
             let state_rc = self.inner.state();
             let state = state_rc.borrow();
-            crate::llm::system_prompt(
+            uji_core::llm::system_prompt(
                 state.opts().agent_system_prompt.as_deref(),
                 &self.app.session().directory,
             )
@@ -219,7 +226,7 @@ impl LoopData {
         }
         self.inner.emit("status_changed", &[]);
         self.runtime.spawn(async move {
-            let tools = crate::tools::builtin_registry();
+            let tools = uji_core::tools::builtin_registry();
             let config = AgentConfig {
                 client: &client,
                 provider: provider.as_ref(),
@@ -283,10 +290,7 @@ impl LoopData {
                 self.maybe_submit_queued();
             }
             StreamEvent::Usage(usage) => {
-                self.inner
-                    .api
-                    .session()
-                    .add_usage(usage.input, usage.output);
+                self.inner.api.session().add_usage(usage);
                 self.inner.emit("status_changed", &[]);
             }
             StreamEvent::Cancelled => {
@@ -318,6 +322,42 @@ impl LoopData {
         system
     }
 
+    pub(crate) fn pump(
+        &mut self,
+        handle: &calloop::LoopHandle<'static, Self>,
+    ) -> std::io::Result<()> {
+        const DRAINS: &[fn(&mut LoopData)] = &[
+            LoopData::apply_composer,
+            LoopData::drain_submits,
+            LoopData::drain_jobs,
+            LoopData::drain_exec,
+            LoopData::drain_diagnostics,
+        ];
+        for drain in DRAINS {
+            drain(self);
+        }
+
+        for callback in self.inner.api.scheduled().take() {
+            let _ = handle.insert_idle(move |data: &mut LoopData| {
+                if let Err(err) = callback.call::<()>(()) {
+                    data.inner
+                        .report(format!("scheduled callback error: {err}"));
+                }
+                data.dirty = true;
+            });
+        }
+
+        if self.control == Control::Reload {
+            self.perform_reload();
+        }
+
+        if self.dirty {
+            self.frontend.draw(&self.app)?;
+            self.dirty = false;
+        }
+        Ok(())
+    }
+
     pub(crate) fn apply_composer(&mut self) {
         let composer = self.inner.api.composer();
         if let Some(text) = composer.take_written() {
@@ -334,28 +374,36 @@ impl LoopData {
         }
     }
 
-    fn push_message(&mut self, stored: crate::session::model::StoredMessage) {
-        self.inner
-            .api
-            .session()
-            .push_message(message_view(&stored.message));
-        self.app.push_message(stored);
+    fn push_message(&mut self, stored: uji_core::session::model::StoredMessage) {
+        self.app.conversation().borrow_mut().push(stored);
     }
 
-    pub(crate) fn mirror_session(&self) {
-        let session = self.inner.api.session();
-        session.set_info(uji_api::session::SessionInfo {
-            id: self.app.session().id.to_string(),
-            title: self.app.session().title.clone(),
-            directory: self.app.session().directory.clone(),
-        });
-        session.set_messages(
-            self.app
-                .messages()
-                .iter()
-                .map(|stored| message_view(&stored.message))
-                .collect(),
-        );
+    pub(crate) fn drain_exec(&mut self) {
+        for command in self.inner.api.take_exec() {
+            let Some((program, args)) = command.split_first() else {
+                continue;
+            };
+            self.reader_paused
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+            std::thread::sleep(Duration::from_millis(120));
+            if let Err(err) = self.frontend.suspend() {
+                self.inner.report(format!("suspend terminal: {err}"));
+            }
+            let status = std::process::Command::new(program).args(args).status();
+            if let Err(err) = self.frontend.resume() {
+                self.inner.report(format!("resume terminal: {err}"));
+            }
+            self.reader_paused
+                .store(false, std::sync::atomic::Ordering::Relaxed);
+            match status {
+                Ok(status) if !status.success() => {
+                    self.inner.report(format!("{program} exited with {status}"));
+                }
+                Err(err) => self.inner.report(format!("run {program}: {err}")),
+                Ok(_) => {}
+            }
+            self.dirty = true;
+        }
     }
 
     pub(crate) fn drain_jobs(&mut self) {
@@ -431,7 +479,8 @@ impl LoopData {
         let state = self.inner.state();
         state.borrow_mut().clear();
         let client = Arc::clone(&self.inner.client);
-        self.inner = Inner::boot(state, client, self.config_dir.clone());
+        let conversation = Rc::clone(self.app.conversation());
+        self.inner = Inner::boot(state, conversation, client, self.config_dir.clone());
         self.inner.resolve_llm(&mut *self.storage);
         self.refresh_suggestions();
         self.drain_diagnostics();
@@ -473,7 +522,9 @@ impl LoopData {
             Ok(stored) => {
                 self.push_message(stored);
             }
-            Err(err) => eprintln!("uji: failed to persist assistant step: {err}"),
+            Err(err) => self
+                .inner
+                .report(format!("failed to persist assistant step: {err}")),
         }
         self.dirty = true;
     }
@@ -492,7 +543,9 @@ impl LoopData {
             Ok(stored) => {
                 self.push_message(stored);
             }
-            Err(err) => eprintln!("uji: failed to persist tool result: {err}"),
+            Err(err) => self
+                .inner
+                .report(format!("failed to persist tool result: {err}")),
         }
         self.dirty = true;
     }
@@ -650,7 +703,7 @@ impl LoopData {
                 );
             }
             Err(err) => {
-                eprintln!("uji: failed to persist error: {err}");
+                self.inner.report(format!("failed to persist error: {err}"));
             }
         }
         self.dirty = true;
@@ -675,7 +728,8 @@ impl LoopData {
                 );
             }
             Err(err) => {
-                eprintln!("uji: failed to persist response: {err}");
+                self.inner
+                    .report(format!("failed to persist response: {err}"));
             }
         }
         self.dirty = true;
@@ -756,7 +810,8 @@ impl Context for LoopData {
 
     fn save_credential(&mut self, provider: &str, key: &str) {
         if let Err(err) = credential::set(provider, key) {
-            eprintln!("uji: failed to save credential: {err}");
+            self.inner
+                .report(format!("failed to save credential: {err}"));
         }
     }
 
@@ -789,18 +844,6 @@ impl Context for LoopData {
             .into_iter()
             .map(|item| item.name)
             .collect()
-    }
-}
-
-fn message_view(message: &Message) -> uji_api::session::MessageView {
-    let (kind, name) = match message {
-        Message::Tool { name, .. } => ("tool", Some(name.clone())),
-        other => (other.type_name(), None),
-    };
-    uji_api::session::MessageView {
-        kind: kind.to_string(),
-        text: message.text().to_string(),
-        name,
     }
 }
 
@@ -854,50 +897,6 @@ fn suggest_pool(data: &LoopData) -> Vec<SuggestItem> {
         .collect();
     items.append(&mut lua);
     items
-}
-
-fn sanitize_context(messages: &[Message]) -> Vec<Message> {
-    let mut answered: HashSet<&str> = HashSet::new();
-    for message in messages {
-        if let Message::Tool { tool_call_id, .. } = message {
-            answered.insert(tool_call_id.as_str());
-        }
-    }
-
-    let mut kept: HashSet<String> = HashSet::new();
-    let mut out = Vec::with_capacity(messages.len());
-    for message in messages {
-        match message {
-            Message::Assistant {
-                text,
-                tool_calls,
-                reasoning_content,
-            } if !tool_calls.is_empty() => {
-                let complete = tool_calls
-                    .iter()
-                    .all(|call| answered.contains(call.id.as_str()));
-                if complete {
-                    for call in tool_calls {
-                        kept.insert(call.id.clone());
-                    }
-                    out.push(message.clone());
-                } else if !text.is_empty() {
-                    out.push(Message::Assistant {
-                        text: text.clone(),
-                        tool_calls: Vec::new(),
-                        reasoning_content: reasoning_content.clone(),
-                    });
-                }
-            }
-            Message::Tool { tool_call_id, .. } => {
-                if kept.contains(tool_call_id.as_str()) {
-                    out.push(message.clone());
-                }
-            }
-            _ => out.push(message.clone()),
-        }
-    }
-    out
 }
 
 fn format_tool_call(name: &str, arguments: &str) -> (String, String) {

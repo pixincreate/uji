@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::config;
+use uji_core::config;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Entry {

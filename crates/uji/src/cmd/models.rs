@@ -1,5 +1,5 @@
 use super::{Action, Args, Context};
-use crate::llm;
+use uji_core::llm;
 
 #[derive(Default)]
 pub struct Models;

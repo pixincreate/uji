@@ -3409,18 +3409,12 @@ dependencies = [
 name = "uji"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "calloop",
  "chrono",
  "chrono-humanize",
  "crossterm",
- "diesel",
- "diesel_migrations",
- "futures-util",
  "globset",
- "keyring",
  "mlua",
- "pulldown-cmark",
  "ratatui",
  "regex",
  "reqwest",
@@ -3429,7 +3423,9 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "uji-api",
- "uuid",
+ "uji-core",
+ "uji-tui",
+ "uji-view",
 ]
 
 [[package]]
@@ -3438,6 +3434,8 @@ version = "0.1.0"
 dependencies = [
  "mlua",
  "serde",
+ "uji-core",
+ "uji-view",
 ]
 
 [[package]]
@@ -3446,6 +3444,47 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "uji",
+]
+
+[[package]]
+name = "uji-core"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "diesel",
+ "diesel_migrations",
+ "futures-util",
+ "globset",
+ "keyring",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "uji-tui"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "chrono-humanize",
+ "crossterm",
+ "pulldown-cmark",
+ "ratatui",
+ "serde_json",
+ "uji-core",
+ "uji-view",
+]
+
+[[package]]
+name = "uji-view"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

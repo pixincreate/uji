@@ -3,8 +3,8 @@ use std::rc::Rc;
 use mlua::{Function, Lua, Table, Value};
 
 use crate::Api;
-use crate::model::RunState;
 use crate::registry::Entry;
+use uji_view::model::RunState;
 
 pub fn add(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     let api = Rc::clone(api);

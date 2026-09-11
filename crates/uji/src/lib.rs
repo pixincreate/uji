@@ -1,22 +1,19 @@
-pub mod app;
 pub mod cmd;
-pub mod config;
-pub mod credential;
 pub mod list;
-pub mod llm;
-pub mod memory;
 pub mod pack;
 pub mod runtime;
-pub mod session;
-pub mod storage;
-pub mod tools;
-pub mod ui;
 
 pub use uji_api as api;
+pub use uji_core as core;
+pub use uji_tui as tui;
+pub use uji_view as view;
 
 pub use runtime::{Runtime, events};
-pub use session::model::{Message, Session, StoredMessage};
-pub use session::store::SessionStorage;
-pub use storage::sqlite::{SqliteStorage, default_db_path};
-pub use uji_api::model::UiModel;
-pub use uji_api::state::UiState;
+pub use uji_core::config;
+pub use uji_core::session;
+pub use uji_core::storage;
+pub use uji_core::{
+    Message, Session, SessionStorage, SqliteStorage, StoredMessage, default_db_path,
+};
+pub use uji_view::model::UiModel;
+pub use uji_view::state::UiState;

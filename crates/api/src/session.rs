@@ -1,73 +1,35 @@
-use std::cell::{Ref, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use mlua::{Lua, Table};
+use uji_core::llm::Usage;
+use uji_core::session::conversation::Shared;
 
 use crate::Api;
 
-#[derive(Default, Clone)]
-pub struct SessionInfo {
-    pub id: String,
-    pub title: String,
-    pub directory: String,
-}
-
-#[derive(Clone)]
-pub struct MessageView {
-    pub kind: String,
-    pub text: String,
-    pub name: Option<String>,
-}
-
-#[derive(Default, Clone, Copy)]
-pub struct Usage {
-    pub input: u64,
-    pub output: u64,
-    pub turns: u64,
-}
-
-#[derive(Default)]
 pub struct SessionState {
-    usage: RefCell<Usage>,
-    info: RefCell<SessionInfo>,
-    messages: RefCell<Vec<MessageView>>,
+    conversation: Shared,
     submits: RefCell<Vec<String>>,
 }
 
 impl SessionState {
-    pub fn set_info(&self, info: SessionInfo) {
-        *self.info.borrow_mut() = info;
+    pub fn new(conversation: Shared) -> Self {
+        Self {
+            conversation,
+            submits: RefCell::default(),
+        }
     }
 
-    pub fn set_messages(&self, messages: Vec<MessageView>) {
-        *self.messages.borrow_mut() = messages;
-    }
-
-    pub fn push_message(&self, message: MessageView) {
-        self.messages.borrow_mut().push(message);
+    pub fn conversation(&self) -> &Shared {
+        &self.conversation
     }
 
     pub fn queue_submit(&self, text: String) {
         self.submits.borrow_mut().push(text);
     }
 
-    pub fn info(&self) -> SessionInfo {
-        self.info.borrow().clone()
-    }
-
-    pub fn messages(&self) -> Ref<'_, Vec<MessageView>> {
-        self.messages.borrow()
-    }
-
-    pub fn add_usage(&self, input: u64, output: u64) {
-        let mut usage = self.usage.borrow_mut();
-        usage.input = usage.input.saturating_add(input);
-        usage.output = usage.output.saturating_add(output);
-        usage.turns = usage.turns.saturating_add(1);
-    }
-
-    pub fn usage(&self) -> Usage {
-        *self.usage.borrow()
+    pub fn add_usage(&self, usage: Usage) {
+        self.conversation.borrow_mut().add_usage(usage);
     }
 
     pub fn take_submits(&self) -> Vec<String> {
@@ -82,11 +44,12 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     session.set(
         "info",
         lua.create_function(move |lua, ()| {
-            let info = info_api.session().info();
+            let conversation = info_api.session().conversation().borrow();
+            let info = conversation.info();
             let out = lua.create_table()?;
-            out.set("id", info.id)?;
-            out.set("title", info.title)?;
-            out.set("directory", info.directory)?;
+            out.set("id", info.id.clone())?;
+            out.set("title", info.title.clone())?;
+            out.set("directory", info.directory.clone())?;
             Ok(out)
         })?,
     )?;
@@ -96,11 +59,12 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
         "messages",
         lua.create_function(move |lua, ()| {
             let out = lua.create_table()?;
-            for message in messages_api.session().messages().iter() {
+            let conversation = messages_api.session().conversation().borrow();
+            for stored in conversation.messages() {
                 let row = lua.create_table()?;
-                row.set("type", message.kind.clone())?;
-                row.set("text", message.text.clone())?;
-                if let Some(name) = &message.name {
+                row.set("type", stored.message.type_name())?;
+                row.set("text", stored.message.text())?;
+                if let uji_core::session::model::Message::Tool { name, .. } = &stored.message {
                     row.set("name", name.clone())?;
                 }
                 out.push(row)?;
@@ -113,12 +77,12 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     session.set(
         "usage",
         lua.create_function(move |lua, ()| {
-            let usage = usage_api.session().usage();
+            let tally = usage_api.session().conversation().borrow().tally();
             let out = lua.create_table()?;
-            out.set("input", usage.input)?;
-            out.set("output", usage.output)?;
-            out.set("total", usage.input.saturating_add(usage.output))?;
-            out.set("requests", usage.turns)?;
+            out.set("input", tally.usage.input)?;
+            out.set("output", tally.usage.output)?;
+            out.set("total", tally.usage.total())?;
+            out.set("requests", tally.turns)?;
             Ok(out)
         })?,
     )?;

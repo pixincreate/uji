@@ -9,10 +9,10 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table};
 
-use crate::app::{self, Term};
-use crate::session::id::now_millis;
-use crate::session::model::Session;
-use crate::ui::style::{MUTED, SELECTED_BG, TEXT};
+use uji_core::session::id::now_millis;
+use uji_core::session::model::Session;
+use uji_tui::app::{self, Term};
+use uji_tui::ui::style::{MUTED, SELECTED_BG, TEXT};
 
 pub(super) struct State {
     cursor: usize,
