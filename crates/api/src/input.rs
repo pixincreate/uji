@@ -31,7 +31,7 @@ impl Capture {
 #[derive(Default)]
 pub struct Composer {
     text: RefCell<String>,
-    dirty: Cell<bool>,
+    written_by_lua: Cell<bool>,
 }
 
 impl Composer {
@@ -41,19 +41,17 @@ impl Composer {
 
     pub fn set(&self, text: String) {
         *self.text.borrow_mut() = text;
-        self.dirty.set(true);
+        self.written_by_lua.set(true);
     }
 
-    pub fn sync(&self, text: &str) {
-        if !self.dirty.get() {
-            let mut current = self.text.borrow_mut();
-            current.clear();
-            current.push_str(text);
-        }
+    pub fn observe(&self, text: &str) {
+        let mut current = self.text.borrow_mut();
+        current.clear();
+        current.push_str(text);
     }
 
-    pub fn take_dirty(&self) -> Option<String> {
-        self.dirty
+    pub fn take_written(&self) -> Option<String> {
+        self.written_by_lua
             .replace(false)
             .then(|| self.text.borrow().clone())
     }

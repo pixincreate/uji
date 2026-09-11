@@ -296,14 +296,17 @@ impl LoopData {
         }
     }
 
-    pub(crate) fn sync_lua_state(&mut self) {
+    pub(crate) fn apply_composer(&mut self) {
         let composer = self.inner.api.composer();
-        if let Some(text) = composer.take_dirty() {
+        if let Some(text) = composer.take_written() {
             self.app.set_input(text);
             self.dirty = true;
         } else {
-            composer.sync(self.app.input());
+            composer.observe(self.app.input());
         }
+    }
+
+    pub(crate) fn drain_submits(&mut self) {
         for text in self.inner.api.session().take_submits() {
             self.submit(&text);
         }

@@ -159,7 +159,8 @@ impl Runtime {
                 .dispatch(None, &mut data)
                 .map_err(io::Error::other)?;
 
-            data.sync_lua_state();
+            data.apply_composer();
+            data.drain_submits();
             data.drain_jobs();
             data.drain_diagnostics();
 
