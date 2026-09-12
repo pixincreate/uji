@@ -1,9 +1,13 @@
 use std::collections::HashMap;
+use std::str::FromStr;
+
+use strum::EnumString;
 
 use globset::GlobMatcher;
 use regex::Regex;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, EnumString)]
+#[strum(serialize_all = "snake_case")]
 pub enum Action {
     Allow,
     #[default]
@@ -12,13 +16,8 @@ pub enum Action {
 }
 
 impl Action {
-    pub fn parse(value: &str) -> Option<Action> {
-        match value {
-            "allow" => Some(Action::Allow),
-            "ask" => Some(Action::Ask),
-            "deny" => Some(Action::Deny),
-            _ => None,
-        }
+    pub fn parse(value: &str) -> Option<Self> {
+        Self::from_str(value).ok()
     }
 }
 

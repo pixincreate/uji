@@ -56,10 +56,6 @@ impl UiState {
         &self.windows
     }
 
-    pub fn windows_mut(&mut self) -> &mut [WindowSpec] {
-        &mut self.windows
-    }
-
     pub fn set_window_lines(&mut self, id: u32, lines: Vec<Line>) {
         if let Some(window) = self.windows.iter_mut().find(|w| w.id == id) {
             window.buffer = lines;

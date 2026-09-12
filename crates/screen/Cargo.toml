@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
+strum = { version = "0.28.0", features = ["derive"] }
 
 [lints]
 workspace = true

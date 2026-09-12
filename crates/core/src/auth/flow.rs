@@ -288,10 +288,11 @@ fn encode_pairs(pairs: &[(&str, &str)]) -> String {
         .join("&")
 }
 
+const MAX_ERROR_BODY_CHARS: usize = 500;
+
 fn clip(body: &str) -> String {
-    const MAX: usize = 500;
     let trimmed = body.trim();
-    match trimmed.char_indices().nth(MAX) {
+    match trimmed.char_indices().nth(MAX_ERROR_BODY_CHARS) {
         Some((index, _)) => format!("{}…", &trimmed[..index]),
         None => trimmed.to_string(),
     }

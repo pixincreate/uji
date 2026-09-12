@@ -1,13 +1,14 @@
 use std::io;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use calloop::channel::Sender;
 use crossterm::event::Event as TermEvent;
-use uji_tui::app::{self, App};
+use uji_tui::app::App;
+use uji_tui::terminal;
+
+use super::input::Reader;
 
 pub trait Frontend {
-    fn start(&mut self, events: Sender<TermEvent>, paused: Arc<AtomicBool>) -> io::Result<()>;
+    fn start(&mut self, events: Sender<TermEvent>) -> io::Result<()>;
     fn draw(&mut self, app: &App) -> io::Result<()>;
     fn suspend(&mut self) -> io::Result<()>;
     fn resume(&mut self) -> io::Result<()>;
@@ -16,8 +17,8 @@ pub trait Frontend {
 
 #[derive(Default)]
 pub struct Terminal {
-    term: Option<app::Term>,
-    reader: Option<Arc<AtomicBool>>,
+    term: Option<terminal::Term>,
+    reader: Option<Reader>,
 }
 
 impl Terminal {
@@ -25,7 +26,7 @@ impl Terminal {
         Self::default()
     }
 
-    fn term(&mut self) -> io::Result<&mut app::Term> {
+    fn term(&mut self) -> io::Result<&mut terminal::Term> {
         self.term
             .as_mut()
             .ok_or_else(|| io::Error::other("terminal is not attached"))
@@ -33,32 +34,37 @@ impl Terminal {
 }
 
 impl Frontend for Terminal {
-    fn start(&mut self, events: Sender<TermEvent>, paused: Arc<AtomicBool>) -> io::Result<()> {
-        self.term = Some(app::setup()?);
-        let running = Arc::new(AtomicBool::new(true));
-        self.reader = Some(Arc::clone(&running));
-        super::input::spawn(events, running, paused);
+    fn start(&mut self, events: Sender<TermEvent>) -> io::Result<()> {
+        self.term = Some(terminal::open()?);
+        self.reader = Some(Reader::spawn(events));
         Ok(())
     }
 
     fn draw(&mut self, app: &App) -> io::Result<()> {
-        app::draw(self.term()?, app)
+        terminal::draw(self.term()?, app)
     }
 
     fn suspend(&mut self) -> io::Result<()> {
-        app::restore(self.term()?)
+        if let Some(reader) = &self.reader {
+            reader.pause();
+        }
+        terminal::restore(self.term()?)
     }
 
     fn resume(&mut self) -> io::Result<()> {
-        app::resume(self.term()?)
+        let resumed = terminal::resume(self.term()?);
+        if let Some(reader) = &self.reader {
+            reader.resume();
+        }
+        resumed
     }
 
     fn stop(&mut self) -> io::Result<()> {
-        if let Some(running) = self.reader.take() {
-            running.store(false, Ordering::Relaxed);
+        if let Some(reader) = self.reader.take() {
+            reader.stop();
         }
         match self.term.as_mut() {
-            Some(term) => app::restore(term),
+            Some(term) => terminal::restore(term),
             None => Ok(()),
         }
     }

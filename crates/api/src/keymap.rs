@@ -54,7 +54,7 @@ pub(crate) fn del(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 pub(crate) fn reset(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     let api = Rc::clone(api);
     lua.create_function(move |_, ()| {
-        api.keymap().borrow_mut().clear();
+        api.keymap().borrow_mut().reset();
         Ok(())
     })
 }

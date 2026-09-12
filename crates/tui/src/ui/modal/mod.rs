@@ -5,7 +5,7 @@ use crate::ui::Context;
 use crate::ui::Render;
 use crate::ui::Surface;
 
-mod confirm;
+pub(crate) mod confirm;
 mod menu;
 mod prompt;
 mod select;
@@ -15,19 +15,19 @@ pub(crate) struct Modal {
     pub(crate) input_rect: Option<Rect>,
 }
 
+/// Rows the input window must grow to when a view takes it over, so the
+/// windows above reflow instead of being covered.
+pub(crate) fn takeover_rows(ctx: &Context<'_>, width: u16) -> Option<u16> {
+    match ctx.app.mode() {
+        Mode::Confirm { title, body, .. } => Some(confirm::rows(ctx, title, body, width)),
+        _ => None,
+    }
+}
+
 impl Render for Modal {
     fn render(&self, ctx: &Context<'_>, surface: &mut Surface<'_>) {
         match ctx.app.mode() {
-            Mode::Normal => {}
-            Mode::Confirm { title, body, allow } => {
-                confirm::Confirm {
-                    title,
-                    body,
-                    allow: *allow,
-                    input_rect: self.input_rect,
-                }
-                .render(ctx, surface);
-            }
+            Mode::Normal | Mode::Confirm { .. } => {}
             Mode::Select {
                 title,
                 items,

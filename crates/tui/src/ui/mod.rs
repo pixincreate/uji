@@ -55,7 +55,7 @@ pub trait Render {
 
 pub fn render(frame: &mut Frame<'_>, app: &App) {
     let state = app.state();
-    let fit = input_fit(frame.area(), &state.borrow(), app.input());
+    let fit = input_fit(frame.area(), app, &state.borrow());
     if let Some((id, height)) = fit {
         state.borrow_mut().set_window_size(id, Size::Fixed(height));
     }
@@ -89,7 +89,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
 
 const MAX_INPUT_ROWS: u16 = 10;
 
-fn input_fit(area: Rect, state: &UiState, input: &str) -> Option<(u32, u16)> {
+fn input_fit(area: Rect, app: &App, state: &UiState) -> Option<(u32, u16)> {
     let rects = layout::layout(area, state.windows());
     let (window, rect) = state
         .windows()
@@ -103,10 +103,13 @@ fn input_fit(area: Rect, state: &UiState, input: &str) -> Option<(u32, u16)> {
     if inner.width == 0 {
         return None;
     }
-    let rows = input::rows_needed(input, usize::from(inner.width));
-    let rows = u16::try_from(rows)
-        .unwrap_or(MAX_INPUT_ROWS)
-        .clamp(1, MAX_INPUT_ROWS);
+    let ctx = Context { app, state };
+    let rows = modal::takeover_rows(&ctx, inner.width).unwrap_or_else(|| {
+        let rows = input::rows_needed(app.input(), usize::from(inner.width));
+        u16::try_from(rows)
+            .unwrap_or(MAX_INPUT_ROWS)
+            .clamp(1, MAX_INPUT_ROWS)
+    });
     let border = rect.height.saturating_sub(inner.height);
     let wanted = rows.saturating_add(border);
     (wanted != current).then_some((window.id, wanted))

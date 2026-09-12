@@ -1,6 +1,10 @@
 use std::collections::HashMap;
+use std::str::FromStr;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+use strum::{EnumString, IntoStaticStr, VariantArray};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString, IntoStaticStr, VariantArray)]
+#[strum(serialize_all = "snake_case")]
 pub enum Mode {
     Normal,
     Confirm,
@@ -11,24 +15,11 @@ pub enum Mode {
 
 impl Mode {
     pub fn parse(name: &str) -> Option<Self> {
-        match name {
-            "normal" => Some(Self::Normal),
-            "confirm" => Some(Self::Confirm),
-            "select" => Some(Self::Select),
-            "prompt" => Some(Self::Prompt),
-            "suggest" => Some(Self::Suggest),
-            _ => None,
-        }
+        Self::from_str(name).ok()
     }
 
     pub fn name(self) -> &'static str {
-        match self {
-            Self::Normal => "normal",
-            Self::Confirm => "confirm",
-            Self::Select => "select",
-            Self::Prompt => "prompt",
-            Self::Suggest => "suggest",
-        }
+        self.into()
     }
 }
 
@@ -62,6 +53,23 @@ pub struct Chord {
 }
 
 impl Chord {
+    pub const fn plain(key: Key) -> Self {
+        Self::modified(key, false, false, false)
+    }
+
+    pub const fn ctrl(key: Key) -> Self {
+        Self::modified(key, true, false, false)
+    }
+
+    const fn modified(key: Key, ctrl: bool, alt: bool, shift: bool) -> Self {
+        Self {
+            key,
+            ctrl,
+            alt,
+            shift,
+        }
+    }
+
     pub fn new(key: Key, ctrl: bool, alt: bool, shift: bool) -> Self {
         let key = match key {
             Key::Char(c) => Key::Char(c.to_ascii_lowercase()),
@@ -158,9 +166,21 @@ pub enum Binding {
     Unbound,
 }
 
-#[derive(Debug, Default)]
+const DEFAULTS: &[(Chord, &str)] = &[(Chord::ctrl(Key::Char('c')), "quit")];
+
+#[derive(Debug)]
 pub struct Keymap {
     map: HashMap<(Mode, Chord), Binding>,
+}
+
+impl Default for Keymap {
+    fn default() -> Self {
+        let mut keymap = Self {
+            map: HashMap::new(),
+        };
+        keymap.reset();
+        keymap
+    }
 }
 
 impl Keymap {
@@ -172,8 +192,13 @@ impl Keymap {
         self.map.get(&(mode, chord))
     }
 
-    pub fn clear(&mut self) {
+    pub fn reset(&mut self) {
         self.map.clear();
+        for (chord, action) in DEFAULTS {
+            for mode in Mode::VARIANTS.iter().copied() {
+                self.set(mode, *chord, Binding::Action((*action).to_string()));
+            }
+        }
     }
 
     pub fn entries(&self) -> impl Iterator<Item = (&(Mode, Chord), &Binding)> {

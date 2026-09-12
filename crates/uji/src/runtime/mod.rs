@@ -10,6 +10,7 @@ mod job;
 mod loader;
 mod loop_data;
 mod policy;
+mod signal;
 
 pub use error::RuntimeError;
 pub use frontend::{Frontend, Terminal};
@@ -22,13 +23,12 @@ use std::io;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 
 use calloop::{EventLoop, LoopHandle};
 use crossterm::event::Event as TermEvent;
 use uji_screen::state::UiState;
 
-use uji_core::llm::StreamEvent;
+use signal::Signal;
 use uji_core::session::conversation::{Conversation, Shared};
 use uji_core::session::model::Session;
 use uji_core::session::store::SessionStorage;
@@ -103,15 +103,10 @@ impl Runtime {
         conversation.borrow_mut().attach(&session, messages);
         let app = App::new(session, conversation, inner.state());
 
-        let (sender, channel) = calloop::channel::channel::<TermEvent>();
-        let (llm_sender, llm_channel) = calloop::channel::channel::<StreamEvent>();
-        let (job_sender, job_channel) = calloop::channel::channel::<job::JobEvent>();
-        let (background_sender, background_channel) =
-            calloop::channel::channel::<background::Background>();
-        let reader_paused = Arc::new(AtomicBool::new(false));
-
+        let (keys, key_channel) = calloop::channel::channel::<TermEvent>();
+        let (signals, signal_channel) = calloop::channel::channel::<Signal>();
         let mut frontend: Box<dyn Frontend> = Box::new(frontend);
-        frontend.start(sender, Arc::clone(&reader_paused))?;
+        frontend.start(keys)?;
 
         let mut data = LoopData {
             inner,
@@ -120,31 +115,22 @@ impl Runtime {
             frontend,
             dirty: false,
             control: Control::Run,
-            llm_tx: llm_sender,
+            signals,
             active: None,
             action_done: false,
             pending_tool: None,
             queued: VecDeque::new(),
             cancel: None,
+            deferred: VecDeque::new(),
+            last_reveal: std::time::Instant::now(),
             config_dir,
-            job_tx: job_sender,
-            background_tx: background_sender,
             jobs: job::Running::default(),
-            reader_paused,
             runtime: tokio::runtime::Runtime::new()?,
         };
 
-        data.inner.resolve_llm(&mut *data.storage);
-        data.inner.emit(events::STATUS_CHANGED, &[]);
-        data.refresh_suggestions();
+        data.bootstrap()?;
 
-        install_sources(
-            &event_loop.handle(),
-            channel,
-            llm_channel,
-            job_channel,
-            background_channel,
-        )?;
+        install_sources(&event_loop.handle(), key_channel, signal_channel)?;
         let timer = calloop::timer::Timer::from_duration(data.timer_interval());
         event_loop
             .handle()
@@ -159,7 +145,7 @@ impl Runtime {
 
         while data.control != Control::Quit {
             event_loop
-                .dispatch(None, &mut data)
+                .dispatch(data.frame_timeout(), &mut data)
                 .map_err(io::Error::other)?;
             data.pump(&loop_handle)?;
         }
@@ -171,37 +157,21 @@ impl Runtime {
 
 fn install_sources(
     handle: &LoopHandle<'static, LoopData>,
-    term: calloop::channel::Channel<TermEvent>,
-    llm: calloop::channel::Channel<StreamEvent>,
-    jobs: calloop::channel::Channel<job::JobEvent>,
-    background: calloop::channel::Channel<background::Background>,
+    keys: calloop::channel::Channel<TermEvent>,
+    signals: calloop::channel::Channel<Signal>,
 ) -> io::Result<()> {
     handle
-        .insert_source(term, |event, _meta, data: &mut LoopData| match event {
+        .insert_source(keys, |event, _meta, data: &mut LoopData| match event {
             calloop::channel::Event::Msg(event) => data.on_term_event(&event),
             calloop::channel::Event::Closed => data.control = Control::Quit,
         })
         .map_err(|err| io::Error::other(format!("register input source: {err}")))?;
     handle
-        .insert_source(llm, |event, _meta, data: &mut LoopData| {
-            if let calloop::channel::Event::Msg(event) = event {
-                data.on_llm_event(event);
+        .insert_source(signals, |event, _meta, data: &mut LoopData| {
+            if let calloop::channel::Event::Msg(signal) = event {
+                data.on_signal(signal);
             }
         })
-        .map_err(|err| io::Error::other(format!("register llm source: {err}")))?;
-    handle
-        .insert_source(jobs, |event, _meta, data: &mut LoopData| {
-            if let calloop::channel::Event::Msg(event) = event {
-                data.on_job_event(&event);
-            }
-        })
-        .map_err(|err| io::Error::other(format!("register job source: {err}")))?;
-    handle
-        .insert_source(background, |event, _meta, data: &mut LoopData| {
-            if let calloop::channel::Event::Msg(event) = event {
-                data.on_background(event);
-            }
-        })
-        .map_err(|err| io::Error::other(format!("register background source: {err}")))?;
+        .map_err(|err| io::Error::other(format!("register signal source: {err}")))?;
     Ok(())
 }

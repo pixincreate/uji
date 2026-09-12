@@ -11,7 +11,7 @@ use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table};
 
 use uji_core::session::id::now_millis;
 use uji_core::session::model::Session;
-use uji_tui::app::{self, Term};
+use uji_tui::terminal::{self, Term};
 use uji_tui::ui::style::{MUTED, SELECTED_BG, TEXT};
 
 pub(super) struct State {
@@ -21,7 +21,7 @@ pub(super) struct State {
 }
 
 pub(super) fn pick(sessions: &[Session], current_dir: &str) -> io::Result<Option<usize>> {
-    let mut terminal = app::setup()?;
+    let mut terminal = terminal::open()?;
     let mut state = State {
         cursor: 0,
         selected: None,
@@ -29,7 +29,7 @@ pub(super) fn pick(sessions: &[Session], current_dir: &str) -> io::Result<Option
     };
 
     let result = run_loop(&mut terminal, sessions, current_dir, &mut state);
-    let restore = app::restore(&mut terminal);
+    let restore = terminal::restore(&mut terminal);
 
     match (result, restore) {
         (Ok(()), Ok(())) => Ok(state.selected),

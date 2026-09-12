@@ -1,4 +1,3 @@
-use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
@@ -8,7 +7,8 @@ use crate::app::Mode;
 use crate::ui::Context;
 use crate::ui::Render;
 use crate::ui::Surface;
-use crate::ui::style::{MUTED, TEXT, block_for, color_of};
+use crate::ui::modal::confirm;
+use crate::ui::style::{TEXT, block_for, color_of};
 use crate::ui::wrap;
 
 const CURSOR: char = '█';
@@ -20,7 +20,18 @@ pub(crate) struct Input<'a> {
 impl Render for Input<'_> {
     fn render(&self, ctx: &Context<'_>, surface: &mut Surface<'_>) {
         match ctx.app.mode() {
-            Mode::Confirm { .. } => render_confirm_hint(surface),
+            Mode::Confirm { title, body, allow } => {
+                let block = block_for(self.window);
+                let inner = block
+                    .as_ref()
+                    .map_or(surface.area(), |block| block.inner(surface.area()));
+                let lines = confirm::lines(ctx, title, body, *allow, inner.width);
+                let paragraph = Paragraph::new(lines);
+                match block {
+                    Some(block) => surface.render_widget(paragraph.block(block)),
+                    None => surface.render_widget(paragraph),
+                }
+            }
             _ => self.render_input(ctx, surface),
         }
     }
@@ -92,24 +103,4 @@ fn with_cursor(input: &str, at: usize) -> Vec<char> {
 
 fn collect(chars: &[char]) -> String {
     chars.iter().collect()
-}
-
-fn render_confirm_hint(surface: &mut Surface<'_>) {
-    let area = surface.area();
-    if area.height == 0 {
-        return;
-    }
-    let hint = Line::from(Span::styled(
-        "  Press enter to confirm or esc to cancel",
-        Style::default().fg(MUTED).add_modifier(Modifier::DIM),
-    ));
-    surface.render_at(
-        Rect {
-            x: area.x,
-            y: area.y,
-            width: area.width,
-            height: 1,
-        },
-        Paragraph::new(hint),
-    );
 }
