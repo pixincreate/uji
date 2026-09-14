@@ -26,6 +26,8 @@ pub struct App {
     input: String,
     cursor: usize,
     pending: Option<String>,
+    history: Option<usize>,
+    draft: String,
     revealed: usize,
     mode: Mode,
     suggest_pool: Vec<SuggestItem>,
@@ -44,6 +46,8 @@ impl App {
             input: String::new(),
             cursor: 0,
             pending: None,
+            history: None,
+            draft: String::new(),
             revealed: 0,
             mode: Mode::Normal,
             suggest_pool: Vec::new(),
@@ -79,9 +83,44 @@ impl App {
     }
 
     pub fn set_input(&mut self, text: String) {
+        self.history = None;
+        self.replace_input(text);
+    }
+
+    pub(super) fn replace_input(&mut self, text: String) {
         self.cursor = text.len();
         self.input = text;
         self.after_input_change();
+    }
+
+    /// Nth most recently submitted message, 0 being the newest.
+    pub(super) fn submitted(&self, back: usize) -> Option<String> {
+        self.conversation
+            .borrow()
+            .messages()
+            .iter()
+            .rev()
+            .filter_map(|stored| match &stored.message {
+                uji_core::session::model::Message::User { text } => Some(text.clone()),
+                _ => None,
+            })
+            .nth(back)
+    }
+
+    pub(super) fn browsing(&self) -> Option<usize> {
+        self.history
+    }
+
+    pub(super) fn set_browsing(&mut self, at: Option<usize>) {
+        self.history = at;
+    }
+
+    pub(super) fn stash_draft(&mut self) {
+        self.draft = self.input.clone();
+    }
+
+    pub(super) fn take_draft(&mut self) -> String {
+        std::mem::take(&mut self.draft)
     }
 
     pub fn cursor_offset(&self) -> usize {

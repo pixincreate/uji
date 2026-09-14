@@ -107,6 +107,7 @@ impl App {
     }
 
     pub(super) fn take_submit(&mut self) -> KeyAction {
+        self.set_browsing(None);
         let text = self.input.trim().to_string();
         self.input.clear();
         self.cursor = 0;
@@ -119,7 +120,43 @@ impl App {
         }
     }
 
+    /// Walk back through previously submitted messages. The first step stashes
+    /// whatever was being typed so `history_next` can restore it.
+    pub(super) fn history_prev(&mut self) -> KeyAction {
+        let next = if let Some(at) = self.browsing() {
+            at.saturating_add(1)
+        } else {
+            self.stash_draft();
+            0
+        };
+        let Some(text) = self.submitted(next) else {
+            return KeyAction::None;
+        };
+        self.set_browsing(Some(next));
+        self.replace_input(text);
+        KeyAction::None
+    }
+
+    pub(super) fn history_next(&mut self) -> KeyAction {
+        let Some(at) = self.browsing() else {
+            return KeyAction::None;
+        };
+        let text = at
+            .checked_sub(1)
+            .and_then(|newer| self.submitted(newer).map(|text| (newer, text)));
+        if let Some((newer, text)) = text {
+            self.set_browsing(Some(newer));
+            self.replace_input(text);
+        } else {
+            self.set_browsing(None);
+            let draft = self.take_draft();
+            self.replace_input(draft);
+        }
+        KeyAction::None
+    }
+
     pub(super) fn clear_input(&mut self) -> KeyAction {
+        self.set_browsing(None);
         self.input.clear();
         self.cursor = 0;
         self.after_input_change();
@@ -127,6 +164,7 @@ impl App {
     }
 
     fn insert_char(&mut self, c: char) -> KeyAction {
+        self.set_browsing(None);
         self.input.insert(self.cursor, c);
         self.cursor += c.len_utf8();
         self.after_input_change();
@@ -134,6 +172,7 @@ impl App {
     }
 
     pub(super) fn backspace(&mut self) -> KeyAction {
+        self.set_browsing(None);
         if self.cursor > 0 {
             let prev = prev_char_boundary(&self.input, self.cursor);
             self.input.remove(prev);

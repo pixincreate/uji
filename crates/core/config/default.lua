@@ -88,6 +88,7 @@ uji.on("tick", render_activity)
 -- cursor_right, cursor_start, cursor_end, scroll_up, scroll_down, page_up,
 -- page_down, scroll_top, scroll_bottom, modal_up, modal_down, modal_accept,
 -- modal_cancel, suggest_complete, confirm_allow, confirm_deny, confirm_toggle,
+-- history_prev, history_next,
 -- nothing.
 --
 -- uji.keymap.set("normal", "<C-p>", { command = "models" })
