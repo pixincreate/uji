@@ -86,6 +86,29 @@ pub enum LlmError {
 
 const MAX_ERROR_BODY: usize = 2_000;
 
+impl LlmError {
+    pub(crate) fn output_limit() -> Self {
+        Self::Provider("response hit the model's output limit and was cut off".into())
+    }
+
+    pub(crate) fn empty_response() -> Self {
+        Self::Provider("empty response".into())
+    }
+}
+
+pub(crate) async fn decode<T: serde::de::DeserializeOwned>(
+    response: reqwest::Response,
+) -> Result<T, LlmError> {
+    if !response.status().is_success() {
+        return Err(status_error(response).await);
+    }
+    let body = response
+        .text()
+        .await
+        .map_err(|err| LlmError::Http(err.to_string()))?;
+    serde_json::from_str(&body).map_err(|err| LlmError::Provider(err.to_string()))
+}
+
 pub(crate) async fn status_error(response: reqwest::Response) -> LlmError {
     let status = response.status().as_u16();
     let body = response.text().await.unwrap_or_default();

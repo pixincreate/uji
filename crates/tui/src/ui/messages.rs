@@ -8,7 +8,7 @@ use crate::ui::Render;
 use crate::ui::Surface;
 use crate::ui::style::{MUTED, TEXT, USER_BG, block_for};
 use crate::ui::wrap::text as wrap_text;
-use uji_core::session::model::Message;
+use uji_core::session::model::{Message, StoredMessage};
 
 pub(crate) struct Messages<'a> {
     pub(crate) window: &'a WindowSpec,
@@ -22,65 +22,19 @@ impl Render for Messages<'_> {
             .map_or(surface.area(), |b| b.inner(surface.area()));
         let width = usize::from(inner.width);
         let height = usize::from(inner.height);
-        let fill = " ".repeat(width);
-        let mut lines = Vec::new();
-        let mut first = true;
 
+        let mut lines = Vec::new();
         for notice in ctx.app.notices() {
-            push_wrapped(
-                &mut lines,
-                notice,
-                width.saturating_sub(3),
-                Style::default().fg(Color::Red),
-                " ! ",
-                false,
-            );
-            first = false;
+            push_wrapped(&mut lines, notice, width, NOTICE_STYLE, " ! ", Fill::Line);
         }
 
-        let mut in_tool_group = false;
+        let mut grouping = Grouping::after(!lines.is_empty());
         let conversation = ctx.app.messages();
         for stored in conversation.messages() {
-            let grouped = in_tool_group && matches!(stored.message, Message::Tool { .. });
-            if !first && !grouped {
+            if grouping.separates(stored) {
                 lines.push(Line::from(""));
             }
-            first = false;
-            in_tool_group = false;
-            match &stored.message {
-                Message::User { text } => {
-                    let style = Style::default().bg(USER_BG).fg(TEXT);
-                    lines.push(Line::from(fill.clone()).style(style));
-                    push_wrapped(&mut lines, text, width.saturating_sub(2), style, " ", true);
-                    lines.push(Line::from(fill.clone()).style(style));
-                }
-                Message::Assistant {
-                    text, tool_calls, ..
-                } => {
-                    if !text.is_empty() {
-                        push_markdown(&mut lines, text, width);
-                    }
-                    for call in tool_calls {
-                        if !text.is_empty() {
-                            lines.push(Line::from(""));
-                        }
-                        push_tool_header(&mut lines, &call.name, &call.arguments, width);
-                    }
-                    in_tool_group = !tool_calls.is_empty();
-                }
-                Message::Tool { content, .. } => {
-                    push_tool_output(&mut lines, content, width);
-                    in_tool_group = true;
-                }
-                Message::System { text } => {
-                    let style = Style::default().fg(MUTED).add_modifier(Modifier::ITALIC);
-                    push_wrapped(&mut lines, text, width.saturating_sub(1), style, " ", false);
-                }
-                Message::Error { text } => {
-                    let style = Style::default().fg(Color::Red);
-                    push_wrapped(&mut lines, text, width.saturating_sub(1), style, " ", false);
-                }
-            }
+            push_message(&mut lines, stored, width);
         }
         push_pending(&mut lines, ctx, width);
 
@@ -96,23 +50,100 @@ impl Render for Messages<'_> {
     }
 }
 
+#[derive(Default)]
+struct Grouping {
+    started: bool,
+    open_group: bool,
+}
+
+impl Grouping {
+    fn after(started: bool) -> Self {
+        Self {
+            started,
+            open_group: false,
+        }
+    }
+
+    fn separates(&mut self, stored: &StoredMessage) -> bool {
+        let continues = self.open_group && matches!(stored.message, Message::Tool { .. });
+        let separates = self.started && !continues;
+        self.started = true;
+        self.open_group = opens_tool_group(stored);
+        separates
+    }
+}
+
+fn opens_tool_group(stored: &StoredMessage) -> bool {
+    match &stored.message {
+        Message::Assistant { tool_calls, .. } => !tool_calls.is_empty(),
+        Message::Tool { .. } => true,
+        _ => false,
+    }
+}
+
+fn push_message(lines: &mut Vec<Line<'static>>, stored: &StoredMessage, width: usize) {
+    match &stored.message {
+        Message::User { text } => {
+            let style = Style::default().bg(USER_BG).fg(TEXT);
+            let fill = Line::from(" ".repeat(width)).style(style);
+            lines.push(fill.clone());
+            push_wrapped(lines, text, width, style, " ", Fill::Block);
+            lines.push(fill);
+        }
+        Message::Assistant {
+            text, tool_calls, ..
+        } => {
+            if !text.is_empty() {
+                push_markdown(lines, text, width);
+            }
+            for call in tool_calls {
+                if !text.is_empty() {
+                    lines.push(Line::from(""));
+                }
+                push_tool_header(lines, &call.name, &call.arguments, width);
+            }
+        }
+        Message::Tool { content, .. } => push_tool_output(lines, content, width),
+        Message::System { text } => {
+            let style = Style::default().fg(MUTED).add_modifier(Modifier::ITALIC);
+            push_wrapped(lines, text, width, style, " ", Fill::Line);
+        }
+        Message::Error { text } => {
+            push_wrapped(lines, text, width, ERROR_STYLE, " ", Fill::Line);
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Fill {
+    Line,
+    Block,
+}
+
 fn push_wrapped(
     lines: &mut Vec<Line<'static>>,
     text: &str,
     width: usize,
     style: Style,
     prefix: &str,
-    full: bool,
+    fill: Fill,
 ) {
-    for chunk in wrap_text(text, width) {
-        if full {
-            let pad = " ".repeat(width.saturating_sub(chunk.chars().count()));
-            lines.push(Line::from(format!("{prefix}{chunk} {pad}")).style(style));
-        } else {
-            lines.push(Line::from(format!("{prefix}{chunk}")).style(style));
-        }
+    let trailing = usize::from(fill == Fill::Block);
+    let inner = width.saturating_sub(prefix.chars().count() + trailing);
+    for chunk in wrap_text(text, inner) {
+        let line = match fill {
+            Fill::Line => format!("{prefix}{chunk}"),
+            Fill::Block => {
+                let pad = " ".repeat(inner.saturating_sub(chunk.chars().count()));
+                format!("{prefix}{chunk} {pad}")
+            }
+        };
+        lines.push(Line::from(line).style(style));
     }
 }
+
+const NOTICE_STYLE: Style = Style::new().fg(Color::Red);
+const ERROR_STYLE: Style = Style::new().fg(Color::Red);
 
 const MAX_TOOL_PREVIEW_LINES: usize = 8;
 
@@ -210,10 +241,10 @@ fn push_pending(lines: &mut Vec<Line<'static>>, ctx: &Context<'_>, width: usize)
         push_wrapped(
             lines,
             tail,
-            width.saturating_sub(1),
+            width,
             Style::default().fg(TEXT),
             " ",
-            false,
+            Fill::Line,
         );
     }
 }

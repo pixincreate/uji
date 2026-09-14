@@ -25,7 +25,7 @@ impl Render for Input<'_> {
                 let inner = block
                     .as_ref()
                     .map_or(surface.area(), |block| block.inner(surface.area()));
-                let lines = confirm::lines(ctx, title, body, *allow, inner.width);
+                let lines = confirm::lines(ctx, title, body, confirm::choice(*allow), inner.width);
                 let paragraph = Paragraph::new(lines);
                 match block {
                     Some(block) => surface.render_widget(paragraph.block(block)),

@@ -4,6 +4,8 @@ use crate::llm::LlmRequest;
 use crate::llm::providers::acc::ToolAcc;
 use crate::session::model::{Message, ToolCall};
 
+const MAX_TOKENS: &str = "MAX_TOKENS";
+
 #[derive(Serialize)]
 pub struct GeminiRequest {
     #[serde(rename = "systemInstruction", skip_serializing_if = "Option::is_none")]
@@ -142,13 +144,39 @@ impl From<&LlmRequest> for GeminiRequest {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GeminiResponse {
+    #[serde(default)]
     pub candidates: Vec<GeminiCandidate>,
+    #[serde(default)]
+    pub usage_metadata: Option<GeminiUsage>,
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GeminiCandidate {
-    pub content: GeminiResponseContent,
+    #[serde(default)]
+    pub content: Option<GeminiResponseContent>,
+    #[serde(default)]
+    pub finish_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GeminiUsage {
+    #[serde(default)]
+    pub prompt_token_count: u64,
+    #[serde(default)]
+    pub candidates_token_count: u64,
+}
+
+impl From<GeminiUsage> for crate::llm::Usage {
+    fn from(usage: GeminiUsage) -> Self {
+        Self {
+            input: usage.prompt_token_count,
+            output: usage.candidates_token_count,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -157,10 +185,21 @@ pub struct GeminiResponseContent {
 }
 
 impl GeminiResponse {
-    pub fn text(&self) -> String {
+    pub fn truncated(&self) -> bool {
         self.candidates
             .iter()
-            .flat_map(|candidate| candidate.content.parts.iter())
+            .any(|candidate| candidate.finish_reason.as_deref() == Some(MAX_TOKENS))
+    }
+
+    fn parts(&self) -> impl Iterator<Item = &GeminiPart> {
+        self.candidates
+            .iter()
+            .filter_map(|candidate| candidate.content.as_ref())
+            .flat_map(|content| content.parts.iter())
+    }
+
+    pub fn text(&self) -> String {
+        self.parts()
             .filter_map(|part| match part {
                 GeminiPart::Text { text } => Some(text.as_str()),
                 _ => None,
@@ -169,9 +208,7 @@ impl GeminiResponse {
     }
 
     pub fn tool_calls(&self) -> Vec<ToolCall> {
-        self.candidates
-            .iter()
-            .flat_map(|candidate| candidate.content.parts.iter())
+        self.parts()
             .filter_map(|part| match part {
                 GeminiPart::FunctionCall { function_call } => Some(ToolCall {
                     id: function_call.name.clone(),
@@ -191,10 +228,14 @@ pub struct GeminiToolAcc {
 
 impl GeminiToolAcc {
     pub fn apply(&mut self, response: &GeminiResponse) {
-        let Some(candidate) = response.candidates.first() else {
+        let Some(content) = response
+            .candidates
+            .first()
+            .and_then(|candidate| candidate.content.as_ref())
+        else {
             return;
         };
-        for (index, part) in candidate.content.parts.iter().enumerate() {
+        for (index, part) in content.parts.iter().enumerate() {
             if let GeminiPart::FunctionCall { function_call } = part {
                 let entry = self.acc.entry(index);
                 entry.id.clone_from(&function_call.name);

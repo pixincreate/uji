@@ -1,12 +1,27 @@
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
+use uji_screen::model::Color;
 
 use crate::ui::Context;
 use crate::ui::style::{MUTED, TEXT, accent_style, color_of};
 use crate::ui::wrap::text as wrap;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Choice {
+    Allow,
+    Deny,
+}
+
+pub(crate) fn choice(allow: bool) -> Choice {
+    if allow { Choice::Allow } else { Choice::Deny }
+}
+
+fn styled(color: Option<Color>, fallback: Style) -> Style {
+    color.map_or(fallback, |color| Style::default().fg(color_of(color)))
+}
+
 pub(crate) fn rows(ctx: &Context<'_>, title: &str, body: &str, width: u16) -> u16 {
-    let count = lines(ctx, title, body, true, width).len();
+    let count = lines(ctx, title, body, Choice::Allow, width).len();
     u16::try_from(count).unwrap_or(u16::MAX)
 }
 
@@ -14,31 +29,17 @@ pub(crate) fn lines(
     ctx: &Context<'_>,
     title: &str,
     body: &str,
-    allow: bool,
+    choice: Choice,
     width: u16,
 ) -> Vec<Line<'static>> {
     let opts = ctx.state.opts();
     let confirm = &opts.confirm;
 
-    let selected = confirm
-        .selected
-        .map_or_else(accent_style, |color| Style::default().fg(color_of(color)));
-    let unselected = confirm.unselected.map_or_else(
-        || Style::default().fg(MUTED),
-        |color| Style::default().fg(color_of(color)),
-    );
-    let title_style = confirm.title_color.map_or_else(
-        || Style::default().fg(TEXT).add_modifier(Modifier::BOLD),
-        |color| {
-            Style::default()
-                .fg(color_of(color))
-                .add_modifier(Modifier::BOLD)
-        },
-    );
-    let body_style = confirm.body_color.map_or_else(
-        || Style::default().fg(TEXT),
-        |color| Style::default().fg(color_of(color)),
-    );
+    let selected = styled(confirm.selected, accent_style());
+    let unselected = styled(confirm.unselected, Style::default().fg(MUTED));
+    let title_style =
+        styled(confirm.title_color, Style::default().fg(TEXT)).add_modifier(Modifier::BOLD);
+    let body_style = styled(confirm.body_color, Style::default().fg(TEXT));
 
     let inner = usize::from(width).saturating_sub(2).max(1);
     let mut lines: Vec<Line<'static>> = vec![Line::from("")];
@@ -54,7 +55,7 @@ pub(crate) fn lines(
         1,
         &format!("{}, proceed", confirm.yes),
         "y",
-        allow,
+        choice == Choice::Allow,
         selected,
         unselected,
     ));
@@ -62,7 +63,7 @@ pub(crate) fn lines(
         2,
         &format!("{}, and tell uji what to do differently", confirm.no),
         "esc",
-        !allow,
+        choice == Choice::Deny,
         selected,
         unselected,
     ));

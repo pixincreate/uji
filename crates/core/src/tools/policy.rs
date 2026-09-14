@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use strum::EnumString;
+use strum::{EnumString, IntoStaticStr, VariantArray};
 
 use globset::GlobMatcher;
 use regex::Regex;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, EnumString)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, EnumString, IntoStaticStr, VariantArray)]
 #[strum(serialize_all = "snake_case")]
 pub enum Action {
     Allow,

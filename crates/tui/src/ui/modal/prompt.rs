@@ -1,6 +1,7 @@
 use ratatui::text::Line;
 use ratatui::widgets::Clear;
 
+use crate::app::Echo;
 use crate::ui::Context;
 use crate::ui::Render;
 use crate::ui::Surface;
@@ -10,7 +11,7 @@ use crate::ui::modal::menu::Menu;
 pub(crate) struct Prompt<'a> {
     pub(crate) title: &'a str,
     pub(crate) value: &'a str,
-    pub(crate) secret: bool,
+    pub(crate) echo: Echo,
 }
 
 impl Render for Prompt<'_> {
@@ -18,7 +19,7 @@ impl Render for Prompt<'_> {
         let popup = centered_rect(surface.area(), 64, 6);
         surface.render_at(popup, Clear);
 
-        let shown = if self.secret {
+        let shown = if self.echo == Echo::Hidden {
             "•".repeat(self.value.chars().count())
         } else {
             self.value.to_string()

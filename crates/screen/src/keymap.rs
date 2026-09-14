@@ -53,21 +53,12 @@ pub struct Chord {
 }
 
 impl Chord {
-    pub const fn plain(key: Key) -> Self {
-        Self::modified(key, false, false, false)
+    pub fn plain(key: Key) -> Self {
+        Self::new(key, false, false, false)
     }
 
-    pub const fn ctrl(key: Key) -> Self {
-        Self::modified(key, true, false, false)
-    }
-
-    const fn modified(key: Key, ctrl: bool, alt: bool, shift: bool) -> Self {
-        Self {
-            key,
-            ctrl,
-            alt,
-            shift,
-        }
+    pub fn ctrl(key: Key) -> Self {
+        Self::new(key, true, false, false)
     }
 
     pub fn new(key: Key, ctrl: bool, alt: bool, shift: bool) -> Self {
@@ -99,7 +90,7 @@ impl Chord {
             if chars.next().is_some() {
                 return None;
             }
-            return Some(Self::new(Key::Char(first), false, false, false));
+            return Some(Self::plain(Key::Char(first)));
         }
         let mut rest = &spec[1..spec.len() - 1];
         let mut ctrl = false;
@@ -166,7 +157,7 @@ pub enum Binding {
     Unbound,
 }
 
-const DEFAULTS: &[(Chord, &str)] = &[(Chord::ctrl(Key::Char('c')), "quit")];
+const DEFAULTS: &[(Key, &str)] = &[(Key::Char('c'), "quit")];
 
 #[derive(Debug)]
 pub struct Keymap {
@@ -194,9 +185,10 @@ impl Keymap {
 
     pub fn reset(&mut self) {
         self.map.clear();
-        for (chord, action) in DEFAULTS {
+        for (key, action) in DEFAULTS {
+            let chord = Chord::ctrl(*key);
             for mode in Mode::VARIANTS.iter().copied() {
-                self.set(mode, *chord, Binding::Action((*action).to_string()));
+                self.set(mode, chord, Binding::Action((*action).to_string()));
             }
         }
     }

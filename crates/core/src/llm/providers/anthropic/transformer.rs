@@ -4,6 +4,8 @@ use crate::llm::LlmRequest;
 use crate::llm::providers::acc::ToolAcc;
 use crate::session::model::{Message, ToolCall};
 
+const MAX_TOKENS: &str = "max_tokens";
+
 #[derive(Serialize)]
 pub struct SystemBlock {
     #[serde(rename = "type")]
@@ -146,6 +148,27 @@ impl From<&LlmRequest> for AnthropicRequest {
 #[derive(Deserialize)]
 pub struct AnthropicResponse {
     pub content: Vec<AnthropicOutBlock>,
+    #[serde(default)]
+    pub stop_reason: Option<String>,
+    #[serde(default)]
+    pub usage: Option<AnthropicUsage>,
+}
+
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+pub struct AnthropicUsage {
+    #[serde(default)]
+    pub input_tokens: u64,
+    #[serde(default)]
+    pub output_tokens: u64,
+}
+
+impl From<AnthropicUsage> for crate::llm::Usage {
+    fn from(usage: AnthropicUsage) -> Self {
+        Self {
+            input: usage.input_tokens,
+            output: usage.output_tokens,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -162,6 +185,10 @@ pub enum AnthropicOutBlock {
 }
 
 impl AnthropicResponse {
+    pub fn truncated(&self) -> bool {
+        self.stop_reason.as_deref() == Some(MAX_TOKENS)
+    }
+
     pub fn text(&self) -> String {
         self.content
             .iter()
@@ -194,6 +221,16 @@ pub struct AnthropicStreamEvent {
     pub index: Option<usize>,
     pub content_block: Option<AnthropicStreamBlock>,
     pub delta: Option<AnthropicStreamDelta>,
+    #[serde(default)]
+    pub message: Option<AnthropicStreamMessage>,
+    #[serde(default)]
+    pub usage: Option<AnthropicUsage>,
+}
+
+#[derive(Deserialize)]
+pub struct AnthropicStreamMessage {
+    #[serde(default)]
+    pub usage: Option<AnthropicUsage>,
 }
 
 #[derive(Deserialize)]
@@ -208,15 +245,35 @@ pub struct AnthropicStreamBlock {
 
 #[derive(Deserialize)]
 pub struct AnthropicStreamDelta {
-    #[serde(rename = "type")]
+    #[serde(rename = "type", default)]
     pub kind: String,
     #[serde(default)]
     pub text: Option<String>,
     #[serde(default)]
     pub partial_json: Option<String>,
+    #[serde(default)]
+    pub stop_reason: Option<String>,
 }
 
 impl AnthropicStreamEvent {
+    pub fn truncated(&self) -> bool {
+        self.delta
+            .as_ref()
+            .and_then(|delta| delta.stop_reason.as_deref())
+            == Some(MAX_TOKENS)
+    }
+
+    pub fn input_tokens(&self) -> Option<u64> {
+        self.message
+            .as_ref()
+            .and_then(|message| message.usage)
+            .map(|usage| usage.input_tokens)
+    }
+
+    pub fn output_tokens(&self) -> Option<u64> {
+        self.usage.map(|usage| usage.output_tokens)
+    }
+
     pub fn text_delta(&self) -> Option<&str> {
         if self.kind == "content_block_delta" {
             self.delta.as_ref().and_then(|delta| {

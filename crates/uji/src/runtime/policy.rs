@@ -2,7 +2,10 @@ use globset::Glob;
 use mlua::{Lua, Table, Value as LuaValue};
 use regex::Regex;
 
+use strum::VariantArray;
 use uji_core::tools::policy::{Action, Matcher, Rule, ToolPolicy, ToolRules};
+
+const PRECEDENCE: [Action; Action::VARIANTS.len()] = [Action::Deny, Action::Allow, Action::Ask];
 
 pub(super) fn compile(lua: &Lua) -> (ToolPolicy, Vec<String>) {
     let mut policy = ToolPolicy::default();
@@ -46,8 +49,8 @@ fn tool_rules(value: LuaValue, notices: &mut Vec<String>) -> Option<ToolRules> {
     {
         default = action;
     }
-    for key in ["deny", "allow", "ask"] {
-        let action = Action::parse(key)?;
+    for action in PRECEDENCE {
+        let key: &'static str = action.into();
         if let Ok(Some(entries)) = table.get::<Option<Vec<String>>>(key) {
             for entry in entries {
                 match matcher(&entry) {

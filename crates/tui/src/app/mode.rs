@@ -4,6 +4,12 @@ pub struct SuggestItem {
     pub desc: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Echo {
+    Plain,
+    Hidden,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Mode {
     Normal,
@@ -16,7 +22,7 @@ pub enum Mode {
     Prompt {
         title: String,
         value: String,
-        secret: bool,
+        echo: Echo,
     },
     Suggest {
         items: Vec<SuggestItem>,

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use crate::llm::{
-    Llm, LlmConfig, LlmError, LlmRequest, LlmResponse, response_lines, send, status_error,
+    Llm, LlmConfig, LlmError, LlmRequest, LlmResponse, decode, response_lines, send, status_error,
 };
 
 use super::transformer::{OpenAiChunk, OpenAiRequest, OpenAiResponse, OpenAiToolAcc};
@@ -38,9 +38,7 @@ impl OpenAi {
 
 fn truncated(finish_reason: Option<&str>) -> Result<(), LlmError> {
     if finish_reason == Some("length") {
-        return Err(LlmError::Provider(
-            "response hit the model's output limit and was cut off".into(),
-        ));
+        return Err(LlmError::output_limit());
     }
     Ok(())
 }
@@ -54,21 +52,13 @@ impl Llm for OpenAi {
     ) -> Result<LlmResponse, LlmError> {
         let provider_request = OpenAiRequest::from(request);
         let response = self.post(client, &provider_request).await?;
-        if !response.status().is_success() {
-            return Err(status_error(response).await);
-        }
-        let body = response
-            .text()
-            .await
-            .map_err(|err| LlmError::Http(err.to_string()))?;
-        let parsed: OpenAiResponse =
-            serde_json::from_str(&body).map_err(|err| LlmError::Provider(err.to_string()))?;
+        let parsed: OpenAiResponse = decode(response).await?;
         let text = parsed.text().unwrap_or_default().to_string();
         let tool_calls = parsed.tool_calls();
         if tool_calls.is_empty() {
             truncated(parsed.finish_reason())?;
             if text.is_empty() {
-                return Err(LlmError::Provider("empty response".into()));
+                return Err(LlmError::empty_response());
             }
         }
         let reasoning_content = parsed.reasoning_content().map(str::to_string);

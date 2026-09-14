@@ -3,17 +3,17 @@ use std::collections::HashSet;
 use crate::session::model::{Message, StoredMessage};
 
 pub fn sanitize(stored: &[StoredMessage]) -> Vec<Message> {
-    let messages = stored.iter().map(|entry| &entry.message);
-    let mut answered: HashSet<&str> = HashSet::new();
-    for message in messages.clone() {
+    let messages = || stored.iter().map(|entry| &entry.message);
+    let mut has_result: HashSet<&str> = HashSet::new();
+    for message in messages() {
         if let Message::Tool { tool_call_id, .. } = message {
-            answered.insert(tool_call_id.as_str());
+            has_result.insert(tool_call_id.as_str());
         }
     }
 
-    let mut kept: HashSet<String> = HashSet::new();
+    let mut requested: HashSet<&str> = HashSet::new();
     let mut out = Vec::with_capacity(stored.len());
-    for message in messages {
+    for message in messages() {
         match message {
             Message::Assistant {
                 text,
@@ -22,10 +22,10 @@ pub fn sanitize(stored: &[StoredMessage]) -> Vec<Message> {
             } if !tool_calls.is_empty() => {
                 let complete = tool_calls
                     .iter()
-                    .all(|call| answered.contains(call.id.as_str()));
+                    .all(|call| has_result.contains(call.id.as_str()));
                 if complete {
                     for call in tool_calls {
-                        kept.insert(call.id.clone());
+                        requested.insert(call.id.as_str());
                     }
                     out.push(message.clone());
                 } else if !text.is_empty() {
@@ -37,7 +37,7 @@ pub fn sanitize(stored: &[StoredMessage]) -> Vec<Message> {
                 }
             }
             Message::Tool { tool_call_id, .. } => {
-                if kept.contains(tool_call_id.as_str()) {
+                if requested.contains(tool_call_id.as_str()) {
                     out.push(message.clone());
                 }
             }

@@ -22,10 +22,11 @@ impl Args {
         Self { raw, tokens }
     }
 }
+use uji_tui::app::Echo;
 
 pub trait Context {
     fn open_select(&mut self, title: String, items: Vec<String>);
-    fn open_prompt(&mut self, title: String, value: String, secret: bool);
+    fn open_prompt(&mut self, title: String, value: String, echo: Echo);
     fn set_setting(&mut self, key: &str, value: &str);
     fn get_setting(&mut self, key: &str) -> Option<String>;
     fn save_credential(&mut self, provider: &str, key: &str);

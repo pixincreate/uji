@@ -7,7 +7,7 @@ pub mod stream;
 
 pub use action::{Action, KeyAction, filter_items};
 pub use composer::Composer;
-pub use mode::{Mode, SuggestItem};
+pub use mode::{Echo, Mode, SuggestItem};
 pub use scroll::Scroll;
 pub use stream::Stream;
 
@@ -157,12 +157,8 @@ impl App {
         };
     }
 
-    pub fn open_prompt(&mut self, title: String, value: String, secret: bool) {
-        self.mode = Mode::Prompt {
-            title,
-            value,
-            secret,
-        };
+    pub fn open_prompt(&mut self, title: String, value: String, echo: Echo) {
+        self.mode = Mode::Prompt { title, value, echo };
     }
 
     pub fn open_confirm(&mut self, title: String, body: String) {

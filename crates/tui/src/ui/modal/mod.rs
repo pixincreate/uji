@@ -15,8 +15,6 @@ pub(crate) struct Modal {
     pub(crate) input_rect: Option<Rect>,
 }
 
-/// Rows the input window must grow to when a view takes it over, so the
-/// windows above reflow instead of being covered.
 pub(crate) fn takeover_rows(ctx: &Context<'_>, width: u16) -> Option<u16> {
     match ctx.app.mode() {
         Mode::Confirm { title, body, .. } => Some(confirm::rows(ctx, title, body, width)),
@@ -42,15 +40,11 @@ impl Render for Modal {
                 }
                 .render(ctx, surface);
             }
-            Mode::Prompt {
-                title,
-                value,
-                secret,
-            } => {
+            Mode::Prompt { title, value, echo } => {
                 prompt::Prompt {
                     title,
                     value,
-                    secret: *secret,
+                    echo: *echo,
                 }
                 .render(ctx, surface);
             }

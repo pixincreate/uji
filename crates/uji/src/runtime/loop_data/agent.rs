@@ -264,23 +264,18 @@ impl LoopData {
     ) {
         let args_json: serde_json::Value =
             serde_json::from_str(tool.arguments.as_str()).unwrap_or(serde_json::Value::Null);
-        let Ok(args_lua) = self.inner.lua.to_value(&args_json) else {
-            let _ = reply.send(ToolDecision::Deny {
-                reason: String::from("failed to decode arguments"),
-            });
-            return;
-        };
-        let LuaValue::Table(args_table) = args_lua else {
-            let _ = reply.send(ToolDecision::Deny {
-                reason: String::from("arguments must be an object"),
-            });
-            return;
-        };
-
-        let Ok(event) = self.inner.lua.create_table() else {
-            let _ = reply.send(ToolDecision::Deny {
-                reason: String::from("failed to build event"),
-            });
+        let prepared = self
+            .inner
+            .lua
+            .to_value(&args_json)
+            .ok()
+            .and_then(|args| match args {
+                LuaValue::Table(table) => Some(table),
+                _ => None,
+            })
+            .zip(self.inner.lua.create_table().ok());
+        let Some((args_table, event)) = prepared else {
+            deny(reply, "could not prepare the tool call for review");
             return;
         };
         let _ = event.set("name", tool.name.clone());
@@ -395,6 +390,12 @@ impl LoopData {
             reasoning_content,
         });
     }
+}
+
+fn deny(reply: tokio::sync::oneshot::Sender<ToolDecision>, reason: &str) {
+    let _ = reply.send(ToolDecision::Deny {
+        reason: reason.to_string(),
+    });
 }
 
 fn parse_tool_decision(value: Option<LuaValue>) -> Option<ToolApproval> {

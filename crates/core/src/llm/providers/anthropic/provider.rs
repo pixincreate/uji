@@ -4,8 +4,8 @@ use tokio::sync::Mutex;
 use crate::auth::{self, Tokens};
 use crate::credential::{self, Credential};
 use crate::llm::{
-    Llm, LlmConfig, LlmError, LlmRequest, LlmResponse, OAuthSession, response_lines, send,
-    status_error,
+    Llm, LlmConfig, LlmError, LlmRequest, LlmResponse, OAuthSession, Usage, decode, response_lines,
+    send, status_error,
 };
 
 use super::transformer::{
@@ -108,25 +108,22 @@ impl Llm for Anthropic {
     ) -> Result<LlmResponse, LlmError> {
         let provider_request = self.build(request);
         let response = self.post(client, &provider_request).await?;
-        if !response.status().is_success() {
-            return Err(status_error(response).await);
-        }
-        let body = response
-            .text()
-            .await
-            .map_err(|err| LlmError::Http(err.to_string()))?;
-        let parsed: AnthropicResponse =
-            serde_json::from_str(&body).map_err(|err| LlmError::Provider(err.to_string()))?;
+        let parsed: AnthropicResponse = decode(response).await?;
         let text = parsed.text();
-        if text.is_empty() && parsed.tool_calls().is_empty() {
-            return Err(LlmError::Provider("empty response".into()));
-        }
         let tool_calls = parsed.tool_calls();
+        if tool_calls.is_empty() {
+            if parsed.truncated() {
+                return Err(LlmError::output_limit());
+            }
+            if text.is_empty() {
+                return Err(LlmError::empty_response());
+            }
+        }
         Ok(LlmResponse {
             text,
             tool_calls,
             reasoning_content: None,
-            usage: None,
+            usage: parsed.usage.map(Into::into),
         })
     }
 
@@ -145,6 +142,8 @@ impl Llm for Anthropic {
 
         let mut full = String::new();
         let mut acc = AnthropicToolAcc::default();
+        let mut usage = Usage::default();
+        let mut hit_limit = false;
         response_lines(response, |line| {
             let Some(data) = line.strip_prefix("data: ") else {
                 return;
@@ -154,16 +153,26 @@ impl Llm for Anthropic {
                     on_delta(delta.to_string());
                     full.push_str(delta);
                 }
+                if let Some(input) = event.input_tokens() {
+                    usage.input = input;
+                }
+                if let Some(output) = event.output_tokens() {
+                    usage.output = output;
+                }
+                hit_limit |= event.truncated();
                 acc.apply(&event);
             }
         })
         .await?;
         let tool_calls = acc.finish();
+        if tool_calls.is_empty() && hit_limit {
+            return Err(LlmError::output_limit());
+        }
         Ok(LlmResponse {
             text: full,
             tool_calls,
             reasoning_content: None,
-            usage: None,
+            usage: (usage.total() > 0).then_some(usage),
         })
     }
 }

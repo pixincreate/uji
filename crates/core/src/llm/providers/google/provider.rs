@@ -1,10 +1,17 @@
 use async_trait::async_trait;
 
 use crate::llm::{
-    Llm, LlmConfig, LlmError, LlmRequest, LlmResponse, response_lines, send, status_error,
+    Llm, LlmConfig, LlmError, LlmRequest, LlmResponse, Usage, decode, response_lines, send,
+    status_error,
 };
 
 use super::transformer::{GeminiRequest, GeminiResponse, GeminiToolAcc};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Streaming {
+    On,
+    Off,
+}
 
 pub struct Gemini {
     pub base_url: String,
@@ -27,13 +34,12 @@ impl Gemini {
         &self,
         client: &reqwest::Client,
         model: &str,
-        stream: bool,
+        streaming: Streaming,
         request: &GeminiRequest,
     ) -> Result<reqwest::Response, LlmError> {
-        let suffix = if stream {
-            ":streamGenerateContent?alt=sse"
-        } else {
-            ":generateContent"
+        let suffix = match streaming {
+            Streaming::On => ":streamGenerateContent?alt=sse",
+            Streaming::Off => ":generateContent",
         };
         let url = format!("{}/models/{model}{suffix}", self.base_url);
         let mut builder = client.post(&url);
@@ -53,27 +59,24 @@ impl Llm for Gemini {
     ) -> Result<LlmResponse, LlmError> {
         let provider_request = GeminiRequest::from(request);
         let response = self
-            .post(client, &request.model, false, &provider_request)
+            .post(client, &request.model, Streaming::Off, &provider_request)
             .await?;
-        if !response.status().is_success() {
-            return Err(status_error(response).await);
-        }
-        let body = response
-            .text()
-            .await
-            .map_err(|err| LlmError::Http(err.to_string()))?;
-        let parsed: GeminiResponse =
-            serde_json::from_str(&body).map_err(|err| LlmError::Provider(err.to_string()))?;
+        let parsed: GeminiResponse = decode(response).await?;
         let text = parsed.text();
         let tool_calls = parsed.tool_calls();
-        if text.is_empty() && tool_calls.is_empty() {
-            return Err(LlmError::Provider("empty response".into()));
+        if tool_calls.is_empty() {
+            if parsed.truncated() {
+                return Err(LlmError::output_limit());
+            }
+            if text.is_empty() {
+                return Err(LlmError::empty_response());
+            }
         }
         Ok(LlmResponse {
             text,
             tool_calls,
             reasoning_content: None,
-            usage: None,
+            usage: parsed.usage_metadata.map(Into::into),
         })
     }
 
@@ -85,7 +88,7 @@ impl Llm for Gemini {
     ) -> Result<LlmResponse, LlmError> {
         let provider_request = GeminiRequest::from(request);
         let response = self
-            .post(client, &request.model, true, &provider_request)
+            .post(client, &request.model, Streaming::On, &provider_request)
             .await?;
         if !response.status().is_success() {
             return Err(status_error(response).await);
@@ -93,6 +96,8 @@ impl Llm for Gemini {
 
         let mut full = String::new();
         let mut acc = GeminiToolAcc::default();
+        let mut usage = Usage::default();
+        let mut hit_limit = false;
         response_lines(response, |line| {
             let Some(data) = line.strip_prefix("data: ") else {
                 return;
@@ -103,16 +108,23 @@ impl Llm for Gemini {
                     on_delta(text.clone());
                     full.push_str(&text);
                 }
+                if let Some(reported) = parsed.usage_metadata {
+                    usage = reported.into();
+                }
+                hit_limit |= parsed.truncated();
                 acc.apply(&parsed);
             }
         })
         .await?;
         let tool_calls = acc.finish();
+        if tool_calls.is_empty() && hit_limit {
+            return Err(LlmError::output_limit());
+        }
         Ok(LlmResponse {
             text: full,
             tool_calls,
             reasoning_content: None,
-            usage: None,
+            usage: (usage.total() > 0).then_some(usage),
         })
     }
 }

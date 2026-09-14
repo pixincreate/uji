@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use uji_core::credential;
-use uji_tui::app::SuggestItem;
+use uji_tui::app::{Echo, SuggestItem};
 
 use super::{Control, LoopData, ModalInput};
 use crate::cmd::{Args, Context};
@@ -57,8 +57,8 @@ impl Context for LoopData {
         self.app.open_select(title, items);
     }
 
-    fn open_prompt(&mut self, title: String, value: String, secret: bool) {
-        self.app.open_prompt(title, value, secret);
+    fn open_prompt(&mut self, title: String, value: String, echo: Echo) {
+        self.app.open_prompt(title, value, echo);
     }
 
     fn set_setting(&mut self, key: &str, value: &str) {

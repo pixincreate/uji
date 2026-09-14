@@ -1,5 +1,6 @@
 use super::{Action, Args, Context};
 use uji_core::llm;
+use uji_tui::app::Echo;
 
 const SUBSCRIPTION: &str = "Subscription (sign in with browser)";
 const API_KEY: &str = "API key";
@@ -59,7 +60,7 @@ impl Action for Login {
             Step::BaseUrl => {
                 self.draft.base_url = value;
                 self.step = Step::Model;
-                ctx.open_prompt("model".into(), String::new(), false);
+                ctx.open_prompt("model".into(), String::new(), Echo::Plain);
             }
             Step::Model => {
                 self.draft.model = value;
@@ -117,7 +118,7 @@ impl Login {
 
     fn ask_base_url<C: Context>(&mut self, ctx: &mut C) {
         self.step = Step::BaseUrl;
-        ctx.open_prompt("base_url".into(), String::new(), false);
+        ctx.open_prompt("base_url".into(), String::new(), Echo::Plain);
     }
 
     fn ask_api_key<C: Context>(&mut self, ctx: &mut C) {
@@ -127,7 +128,7 @@ impl Login {
         } else {
             format!("{} (enter to skip)", self.draft.auth_env.join(" or "))
         };
-        ctx.open_prompt(title, String::new(), true);
+        ctx.open_prompt(title, String::new(), Echo::Hidden);
     }
 
     fn finish_configure<C: Context>(&self, ctx: &mut C) {
