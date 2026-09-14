@@ -20,7 +20,7 @@ impl Builtin {
     pub(crate) fn from_name(name: &str) -> Option<Self> {
         match name {
             "login" => Some(Self::Login(Login::default())),
-            "models" => Some(Self::Models(Models)),
+            "models" => Some(Self::Models(Models::default())),
             "reload" => Some(Self::Reload(Reload)),
             "sync" => Some(Self::Sync(Sync)),
             "help" => Some(Self::Help(Help)),

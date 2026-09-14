@@ -212,12 +212,7 @@ impl LlmConfig {
     }
 
     pub fn resolve_key(&self) -> Option<String> {
-        self.api_key.clone().or_else(|| {
-            self.auth_env
-                .iter()
-                .filter_map(|name| std::env::var(name).ok())
-                .find(|key| !key.is_empty())
-        })
+        self.api_key.clone().or_else(|| env_key(&self.auth_env))
     }
 }
 
@@ -302,6 +297,17 @@ impl Catalog {
     pub fn all(&self) -> &[Provider] {
         &self.providers
     }
+}
+
+fn env_key(names: &[String]) -> Option<String> {
+    names
+        .iter()
+        .filter_map(|name| std::env::var(name).ok())
+        .find(|key| !key.is_empty())
+}
+
+pub fn authenticated(provider: &Provider) -> bool {
+    credential::load(&provider.id).is_some() || env_key(&provider.auth_env).is_some()
 }
 
 fn oauth_session(provider_id: &str, known: Option<&Provider>) -> Option<OAuthSession> {

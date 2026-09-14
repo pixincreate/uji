@@ -43,6 +43,24 @@ pub trait Context {
     fn command_names(&self) -> Vec<String>;
 }
 
+pub(crate) fn remember_model<C: Context>(ctx: &mut C, provider_id: &str, model: &str) {
+    ctx.set_setting("llm.model", model);
+    ctx.set_setting(&format!("llm.model.{provider_id}"), model);
+}
+
+pub(crate) fn model_for<C: Context>(ctx: &mut C, provider: &Provider) -> String {
+    let stored = ctx
+        .get_setting(&format!("llm.model.{}", provider.id))
+        .or_else(|| ctx.get_setting("llm.model"))
+        .filter(|model| !model.is_empty());
+    if provider.models.is_empty() {
+        return stored.unwrap_or_default();
+    }
+    stored
+        .filter(|model| provider.models.iter().any(|known| known == model))
+        .unwrap_or_else(|| provider.default_model().to_string())
+}
+
 pub trait Action {
     fn name(&self) -> &'static str;
     fn desc(&self) -> &'static str {

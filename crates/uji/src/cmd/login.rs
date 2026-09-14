@@ -134,13 +134,13 @@ impl Login {
         ctx.set_setting("llm.provider", &self.draft.provider_id);
         if self.draft.is_custom {
             ctx.set_setting("llm.base_url", &self.draft.base_url);
-            ctx.set_setting("llm.model", &self.draft.model);
+            let model = self.draft.model.clone();
+            super::remember_model(ctx, &self.draft.provider_id, &model);
         } else {
             ctx.set_setting("llm.base_url", "");
-            if ctx.get_setting("llm.model").is_none()
-                && let Some(provider) = ctx.provider(&self.draft.provider_id)
-            {
-                ctx.set_setting("llm.model", provider.default_model());
+            if let Some(provider) = ctx.provider(&self.draft.provider_id) {
+                let model = super::model_for(ctx, &provider);
+                super::remember_model(ctx, &provider.id, &model);
             }
         }
         ctx.resolve_llm();
