@@ -108,8 +108,10 @@ impl From<&LlmRequest> for OpenAiRequest {
                     tool_calls: Vec::new(),
                     tool_call_id: Some(tool_call_id.clone()),
                 }),
-                Message::System { text } => messages.push(message("system", Some(text.clone()))),
-                Message::Error { .. } => {}
+                Message::System { text } => {
+                    messages.push(message("system", Some(text.clone())));
+                }
+                Message::Error { .. } | Message::Compaction { .. } => {}
             }
         }
         let tools = request

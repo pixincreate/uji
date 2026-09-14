@@ -144,6 +144,7 @@ impl Llm for Anthropic {
         let mut acc = AnthropicToolAcc::default();
         let mut usage = Usage::default();
         let mut hit_limit = false;
+        let mut complete = false;
         response_lines(response, |line| {
             let Some(data) = line.strip_prefix("data: ") else {
                 return;
@@ -160,10 +161,14 @@ impl Llm for Anthropic {
                     usage.output = output;
                 }
                 hit_limit |= event.truncated();
+                complete |= event.kind == "message_stop";
                 acc.apply(&event);
             }
         })
         .await?;
+        if !complete {
+            return Err(LlmError::truncated_stream());
+        }
         let tool_calls = acc.finish();
         if tool_calls.is_empty() && hit_limit {
             return Err(LlmError::output_limit());

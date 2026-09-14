@@ -1,5 +1,6 @@
 pub mod context;
 pub mod providers;
+pub mod summary;
 pub mod title;
 
 use std::collections::HashMap;
@@ -31,7 +32,7 @@ pub(crate) async fn send<T: Serialize + ?Sized>(
         .json(request)
         .send()
         .await
-        .map_err(|err| LlmError::Http(err.to_string()))
+        .map_err(LlmError::transport)
 }
 
 pub struct LlmRequest {
@@ -76,7 +77,7 @@ pub struct LlmResponse {
 #[derive(Debug, thiserror::Error)]
 pub enum LlmError {
     #[error("http: {0}")]
-    Http(String),
+    Http(HttpError),
     #[error("authentication rejected ({0}) - check the api key for this provider")]
     Auth(u16),
     #[error("provider: {0}")]
@@ -85,7 +86,58 @@ pub enum LlmError {
 
 const MAX_ERROR_BODY: usize = 2_000;
 
+#[derive(Debug, Clone)]
+pub struct HttpError {
+    pub status: Option<u16>,
+    pub retry_after: Option<Duration>,
+    pub body: String,
+}
+
+impl std::fmt::Display for HttpError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.status {
+            Some(status) => write!(f, "{status}: {}", self.body),
+            None => f.write_str(&self.body),
+        }
+    }
+}
+
+impl HttpError {
+    fn retryable(&self) -> bool {
+        match self.status {
+            None | Some(408 | 409 | 425 | 429) => true,
+            Some(status) => (500..600).contains(&status),
+        }
+    }
+}
+
 impl LlmError {
+    pub(crate) fn truncated_stream() -> Self {
+        Self::transport("the provider closed the stream before the reply finished")
+    }
+
+    pub(crate) fn transport(err: impl std::fmt::Display) -> Self {
+        Self::Http(HttpError {
+            status: None,
+            retry_after: None,
+            body: err.to_string(),
+        })
+    }
+
+    pub fn retryable(&self) -> bool {
+        match self {
+            Self::Http(http) => http.retryable(),
+            Self::Auth(_) | Self::Provider(_) => false,
+        }
+    }
+
+    pub fn retry_after(&self) -> Option<Duration> {
+        match self {
+            Self::Http(http) => http.retry_after,
+            Self::Auth(_) | Self::Provider(_) => None,
+        }
+    }
+
     pub(crate) fn output_limit() -> Self {
         Self::Provider("response hit the model's output limit and was cut off".into())
     }
@@ -101,22 +153,29 @@ pub(crate) async fn decode<T: serde::de::DeserializeOwned>(
     if !response.status().is_success() {
         return Err(status_error(response).await);
     }
-    let body = response
-        .text()
-        .await
-        .map_err(|err| LlmError::Http(err.to_string()))?;
+    let body = response.text().await.map_err(LlmError::transport)?;
     serde_json::from_str(&body).map_err(|err| LlmError::Provider(err.to_string()))
 }
 
 pub(crate) async fn status_error(response: reqwest::Response) -> LlmError {
     let status = response.status().as_u16();
+    let retry_after = retry_after(response.headers());
     let body = response.text().await.unwrap_or_default();
     if status == 401 || status == 403 {
         LlmError::Auth(status)
     } else {
-        let body = clip(body.trim(), MAX_ERROR_BODY);
-        LlmError::Http(format!("{status}: {body}"))
+        LlmError::Http(HttpError {
+            status: Some(status),
+            retry_after,
+            body: clip(body.trim(), MAX_ERROR_BODY),
+        })
     }
+}
+
+fn retry_after(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+    let value = headers.get(reqwest::header::RETRY_AFTER)?.to_str().ok()?;
+    let seconds = value.trim().parse::<u64>().ok()?;
+    Some(Duration::from_secs(seconds.min(MAX_RETRY_AFTER_SECS)))
 }
 
 pub(crate) fn clip(text: &str, max: usize) -> String {
@@ -237,12 +296,116 @@ pub struct Provider {
     #[serde(default)]
     pub oauth: Option<crate::auth::OAuthConfig>,
     #[serde(default)]
-    pub models: Vec<String>,
+    pub context_window: Option<u64>,
+    #[serde(default)]
+    pub models: Vec<Model>,
+}
+
+const MAX_RETRY_AFTER_SECS: u64 = 60;
+const RETRY_ATTEMPTS: u32 = 5;
+const RETRY_INITIAL: Duration = Duration::from_secs(2);
+const RETRY_FACTOR: u32 = 2;
+const RETRY_JITTER: f64 = 0.25;
+const RETRY_CEILING: Duration = Duration::from_secs(30);
+
+fn backoff(attempt: u32) -> Duration {
+    let step = RETRY_INITIAL.saturating_mul(RETRY_FACTOR.saturating_pow(attempt));
+    let capped = step.min(RETRY_CEILING);
+    let jitter = 1.0 + RETRY_JITTER * (rand::random::<f64>() * 2.0 - 1.0);
+    capped.mul_f64(jitter.max(0.0))
+}
+
+pub const DEFAULT_CONTEXT_WINDOW: u64 = 128_000;
+pub const DEFAULT_RESERVE: u64 = 20_000;
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(from = "ModelSpec")]
+pub struct Model {
+    pub id: String,
+    pub context: Option<u64>,
+    pub output: Option<u64>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ModelSpec {
+    Id(String),
+    Full {
+        id: String,
+        #[serde(default)]
+        context: Option<u64>,
+        #[serde(default)]
+        output: Option<u64>,
+    },
+}
+
+impl From<ModelSpec> for Model {
+    fn from(spec: ModelSpec) -> Self {
+        match spec {
+            ModelSpec::Id(id) => Self {
+                id,
+                context: None,
+                output: None,
+            },
+            ModelSpec::Full {
+                id,
+                context,
+                output,
+            } => Self {
+                id,
+                context,
+                output,
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Budget {
+    pub window: u64,
+    pub reserve: u64,
+}
+
+impl Default for Budget {
+    fn default() -> Self {
+        Self {
+            window: DEFAULT_CONTEXT_WINDOW,
+            reserve: DEFAULT_RESERVE,
+        }
+    }
+}
+
+impl Budget {
+    pub fn usable(self) -> u64 {
+        self.window.saturating_sub(self.reserve)
+    }
+
+    pub fn overflows(self, used: u64) -> bool {
+        used >= self.usable()
+    }
 }
 
 impl Provider {
     pub fn default_model(&self) -> &str {
-        self.models.first().map_or("", String::as_str)
+        self.models.first().map_or("", |model| model.id.as_str())
+    }
+
+    pub fn model(&self, id: &str) -> Option<&Model> {
+        self.models.iter().find(|model| model.id == id)
+    }
+
+    pub fn budget(&self, model_id: &str) -> Budget {
+        let known = self.model(model_id);
+        let window = known
+            .and_then(|model| model.context)
+            .or(self.context_window)
+            .unwrap_or(DEFAULT_CONTEXT_WINDOW);
+        let reserve = known
+            .and_then(|model| model.output)
+            .unwrap_or(DEFAULT_RESERVE)
+            .min(DEFAULT_RESERVE)
+            .min(window / 4);
+        Budget { window, reserve }
     }
 }
 
@@ -261,7 +424,7 @@ impl Catalog {
     pub fn builtin() -> Self {
         let mut providers: Vec<Provider> =
             serde_json::from_str(include_str!("providers.json")).unwrap_or_default();
-        let models: HashMap<String, Vec<String>> =
+        let models: HashMap<String, Vec<Model>> =
             serde_json::from_str(include_str!("models.json")).unwrap_or_default();
         for provider in &mut providers {
             if let Some(known) = models.get(&provider.id) {
@@ -349,6 +512,11 @@ pub enum ToolDecision {
 
 pub enum StreamEvent {
     Delta(String),
+    Restarted {
+        attempt: u32,
+        of: u32,
+        wait: Duration,
+    },
     AssistantStep {
         text: String,
         tool_calls: Vec<ToolCall>,
@@ -442,6 +610,49 @@ pub struct LuaToolSpec {
     pub subject: String,
 }
 
+async fn generate(
+    config: &AgentConfig<'_>,
+    request: &LlmRequest,
+    on_event: &mut (dyn FnMut(StreamEvent) + Send),
+) -> Option<LlmResponse> {
+    let mut attempt = 0;
+    loop {
+        let mut on_delta = |delta: String| on_event(StreamEvent::Delta(delta));
+        let streaming = config
+            .provider
+            .stream(config.client, request, &mut on_delta);
+        let outcome = tokio::select! {
+            result = streaming => result,
+            () = config.cancel.cancelled() => {
+                on_event(StreamEvent::Cancelled);
+                return None;
+            }
+        };
+        let err = match outcome {
+            Ok(response) => return Some(response),
+            Err(err) => err,
+        };
+        if attempt >= RETRY_ATTEMPTS || !err.retryable() || config.cancel.is_cancelled() {
+            on_event(StreamEvent::Failed(err.to_string()));
+            return None;
+        }
+        let wait = err.retry_after().unwrap_or_else(|| backoff(attempt));
+        attempt = attempt.saturating_add(1);
+        on_event(StreamEvent::Restarted {
+            attempt,
+            of: RETRY_ATTEMPTS,
+            wait,
+        });
+        tokio::select! {
+            () = tokio::time::sleep(wait) => {}
+            () = config.cancel.cancelled() => {
+                on_event(StreamEvent::Cancelled);
+                return None;
+            }
+        }
+    }
+}
+
 pub async fn run_agent(
     config: &AgentConfig<'_>,
     mut messages: Vec<Message>,
@@ -461,23 +672,8 @@ pub async fn run_agent(
             messages: messages.clone(),
             tools: tool_specs.clone(),
         };
-        let mut on_delta = |delta: String| on_event(StreamEvent::Delta(delta));
-        let streaming = config
-            .provider
-            .stream(config.client, &request, &mut on_delta);
-        let response = tokio::select! {
-            result = streaming => result,
-            () = config.cancel.cancelled() => {
-                on_event(StreamEvent::Cancelled);
-                return;
-            }
-        };
-        let response = match response {
-            Ok(response) => response,
-            Err(err) => {
-                on_event(StreamEvent::Failed(err.to_string()));
-                return;
-            }
+        let Some(response) = generate(config, &request, on_event).await else {
+            return;
         };
         if let Some(usage) = response.usage {
             on_event(StreamEvent::Usage(usage));
@@ -651,7 +847,7 @@ pub(crate) async fn response_lines(
     let mut buf = String::new();
     let mut stream = response.bytes_stream();
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|err| LlmError::Http(err.to_string()))?;
+        let chunk = chunk.map_err(LlmError::transport)?;
         buf.push_str(&String::from_utf8_lossy(&chunk));
         while let Some(pos) = buf.find('\n') {
             let line = buf[..pos].trim_end_matches('\r').to_string();
@@ -664,7 +860,8 @@ pub(crate) async fn response_lines(
 
 pub struct Selection {
     pub llm: Arc<dyn Llm>,
-    pub provider: String,
+    pub id: String,
+    pub name: String,
     pub model: String,
 }
 
@@ -686,7 +883,8 @@ pub fn resolve_from_storage(storage: &mut dyn SessionStorage, catalog: &Catalog)
     );
     Selection {
         llm: resolve(known.map(|entry| entry.wire), &config),
-        provider: known.map_or(provider_id, |entry| entry.name.clone()),
+        name: known.map_or_else(|| provider_id.clone(), |entry| entry.name.clone()),
+        id: provider_id,
         model,
     }
 }

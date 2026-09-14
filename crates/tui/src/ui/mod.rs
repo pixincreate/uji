@@ -15,6 +15,7 @@ pub mod markdown;
 pub mod messages;
 pub mod modal;
 pub mod style;
+pub mod transcript;
 pub mod wrap;
 
 pub struct Context<'a> {

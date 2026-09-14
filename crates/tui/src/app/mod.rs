@@ -11,7 +11,7 @@ pub use mode::{Echo, Mode, SuggestItem};
 pub use scroll::Scroll;
 pub use stream::Stream;
 
-use std::cell::{Ref, RefCell};
+use std::cell::{Ref, RefCell, RefMut};
 use std::rc::Rc;
 
 use uji_screen::keymap;
@@ -30,6 +30,7 @@ pub struct App {
     mode: Mode,
     suggest_pool: Vec<SuggestItem>,
     notices: Vec<String>,
+    transcript: RefCell<crate::ui::transcript::Transcript>,
 }
 
 impl App {
@@ -44,6 +45,7 @@ impl App {
             mode: Mode::Normal,
             suggest_pool: Vec::new(),
             notices: Vec::new(),
+            transcript: RefCell::default(),
         }
     }
 
@@ -61,6 +63,10 @@ impl App {
 
     pub fn messages(&self) -> Ref<'_, Conversation> {
         self.conversation.borrow()
+    }
+
+    pub fn transcript(&self) -> RefMut<'_, crate::ui::transcript::Transcript> {
+        self.transcript.borrow_mut()
     }
 
     pub fn state(&self) -> &Rc<RefCell<UiState>> {

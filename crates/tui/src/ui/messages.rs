@@ -27,21 +27,52 @@ impl Render for Messages<'_> {
         for notice in ctx.app.notices() {
             push_wrapped(&mut lines, notice, width, NOTICE_STYLE, " ! ", Fill::Line);
         }
-
-        let mut grouping = Grouping::after(!lines.is_empty());
-        let conversation = ctx.app.messages();
-        for stored in conversation.messages() {
-            if grouping.separates(stored) {
-                lines.push(Line::from(""));
-            }
-            push_message(&mut lines, stored, width);
+        if !lines.is_empty() {
+            lines.push(Line::from(""));
         }
-        push_pending(&mut lines, ctx, width);
+        let leading = lines.len();
 
-        let total = lines.len();
+        let conversation = ctx.app.messages();
+        let pending = ctx.app.pending().unwrap_or_default();
+        let (committed, partial) = split_committed(pending);
+        let mut transcript = ctx.app.transcript();
+        let (folded, streamed) =
+            transcript.frame(&conversation, committed, width, push_message, push_markdown);
+
+        let above = leading.saturating_add(folded.len());
+        let mut gap = Vec::new();
+        if !pending.is_empty() && above > 0 {
+            gap.push(Line::from(""));
+        }
+        let mut tail = Vec::new();
+        if !partial.is_empty() {
+            push_wrapped(
+                &mut tail,
+                partial,
+                width,
+                Style::default().fg(TEXT),
+                " ",
+                Fill::Line,
+            );
+        }
+
+        let total = above
+            .saturating_add(gap.len())
+            .saturating_add(streamed.len())
+            .saturating_add(tail.len());
         let start = ctx.app.resolve_scroll(total.saturating_sub(height), height);
         let end = start.saturating_add(height).min(total);
-        let paragraph = Paragraph::new(lines[start..end].to_vec());
+        let window: Vec<Line<'static>> = lines
+            .iter()
+            .chain(folded.iter())
+            .chain(gap.iter())
+            .chain(streamed.iter())
+            .chain(tail.iter())
+            .skip(start)
+            .take(end.saturating_sub(start))
+            .cloned()
+            .collect();
+        let paragraph = Paragraph::new(window);
         let paragraph = match block {
             Some(block) => paragraph.block(block),
             None => paragraph,
@@ -50,38 +81,7 @@ impl Render for Messages<'_> {
     }
 }
 
-#[derive(Default)]
-struct Grouping {
-    started: bool,
-    open_group: bool,
-}
-
-impl Grouping {
-    fn after(started: bool) -> Self {
-        Self {
-            started,
-            open_group: false,
-        }
-    }
-
-    fn separates(&mut self, stored: &StoredMessage) -> bool {
-        let continues = self.open_group && matches!(stored.message, Message::Tool { .. });
-        let separates = self.started && !continues;
-        self.started = true;
-        self.open_group = opens_tool_group(stored);
-        separates
-    }
-}
-
-fn opens_tool_group(stored: &StoredMessage) -> bool {
-    match &stored.message {
-        Message::Assistant { tool_calls, .. } => !tool_calls.is_empty(),
-        Message::Tool { .. } => true,
-        _ => false,
-    }
-}
-
-fn push_message(lines: &mut Vec<Line<'static>>, stored: &StoredMessage, width: usize) {
+pub(crate) fn push_message(lines: &mut Vec<Line<'static>>, stored: &StoredMessage, width: usize) {
     match &stored.message {
         Message::User { text } => {
             let style = Style::default().bg(USER_BG).fg(TEXT);
@@ -111,7 +111,18 @@ fn push_message(lines: &mut Vec<Line<'static>>, stored: &StoredMessage, width: u
         Message::Error { text } => {
             push_wrapped(lines, text, width, ERROR_STYLE, " ", Fill::Line);
         }
+        Message::Compaction { .. } => push_divider(lines, width),
     }
+}
+
+fn push_divider(lines: &mut Vec<Line<'static>>, width: usize) {
+    let label = " compacted ";
+    let rule = width.saturating_sub(label.chars().count() + 2) / 2;
+    let bar = "─".repeat(rule);
+    lines.push(Line::from(Span::styled(
+        format!(" {bar}{label}{bar}"),
+        Style::default().fg(MUTED).add_modifier(Modifier::DIM),
+    )));
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -223,29 +234,6 @@ fn push_tool_output(lines: &mut Vec<Line<'static>>, content: &str, width: usize)
             format!("     … +{omitted} lines"),
             Style::default().fg(MUTED).add_modifier(Modifier::DIM),
         )));
-    }
-}
-
-fn push_pending(lines: &mut Vec<Line<'static>>, ctx: &Context<'_>, width: usize) {
-    let Some(pending) = ctx.app.pending() else {
-        return;
-    };
-    if !lines.is_empty() {
-        lines.push(Line::from(""));
-    }
-    let (committed, tail) = split_committed(pending);
-    if !committed.is_empty() {
-        push_markdown(lines, committed, width);
-    }
-    if !tail.is_empty() {
-        push_wrapped(
-            lines,
-            tail,
-            width,
-            Style::default().fg(TEXT),
-            " ",
-            Fill::Line,
-        );
     }
 }
 

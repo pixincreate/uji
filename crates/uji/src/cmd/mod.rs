@@ -1,9 +1,11 @@
+pub mod compact;
 pub mod help;
 pub mod login;
 pub mod models;
 pub mod reload;
 pub mod sync;
 
+pub use compact::Compact;
 pub use help::Help;
 pub use login::Login;
 pub use models::Models;
@@ -33,6 +35,7 @@ pub trait Context {
     fn save_credential(&mut self, provider: &str, key: &str);
     fn resolve_llm(&mut self);
     fn reload(&mut self);
+    fn compact(&mut self) -> bool;
     fn sync_packs(&mut self);
     fn start_oauth(&mut self, provider_id: &str);
     fn notify(&mut self, message: &str);
@@ -57,7 +60,7 @@ pub(crate) fn model_for<C: Context>(ctx: &mut C, provider: &Provider) -> String 
         return stored.unwrap_or_default();
     }
     stored
-        .filter(|model| provider.models.iter().any(|known| known == model))
+        .filter(|model| provider.model(model).is_some())
         .unwrap_or_else(|| provider.default_model().to_string())
 }
 

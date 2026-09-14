@@ -13,6 +13,7 @@ impl LoopData {
             Signal::Job(event) => self.on_job_event(&event),
             Signal::Auth(event) => self.on_auth_event(event),
             Signal::Title(event) => self.on_title_event(event),
+            Signal::Compacted(event) => self.on_compacted(event),
         }
     }
 
@@ -54,7 +55,7 @@ impl LoopData {
             return;
         };
         if let Some(usage) = usage {
-            self.app.conversation().borrow_mut().add_usage(usage);
+            self.app.conversation().borrow_mut().add_cost(usage);
         }
         self.set_title(title);
     }

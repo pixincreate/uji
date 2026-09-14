@@ -1,6 +1,7 @@
 mod agent;
 mod background;
 mod commands;
+mod compact;
 mod drains;
 mod input;
 

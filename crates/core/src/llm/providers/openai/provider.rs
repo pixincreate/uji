@@ -89,6 +89,7 @@ impl Llm for OpenAi {
         let mut full = String::new();
         let mut reasoning = String::new();
         let mut finish_reason = None;
+        let mut complete = false;
         let mut usage = None;
         let mut acc = OpenAiToolAcc::default();
         response_lines(response, |line| {
@@ -96,6 +97,7 @@ impl Llm for OpenAi {
                 return;
             };
             if data == "[DONE]" {
+                complete = true;
                 return;
             }
             if let Ok(chunk) = serde_json::from_str::<OpenAiChunk>(data) {
@@ -108,6 +110,7 @@ impl Llm for OpenAi {
                 }
                 if let Some(reason) = chunk.finish_reason() {
                     finish_reason = Some(reason.to_string());
+                    complete = true;
                 }
                 if let Some(reported) = chunk.usage {
                     usage = Some(reported.into());
@@ -116,11 +119,14 @@ impl Llm for OpenAi {
             }
         })
         .await?;
+        if !complete {
+            return Err(LlmError::truncated_stream());
+        }
         let tool_calls = acc.finish();
         if tool_calls.is_empty() {
             truncated(finish_reason.as_deref())?;
             if full.is_empty() {
-                return Err(LlmError::Provider("empty response".into()));
+                return Err(LlmError::empty_response());
             }
         }
         Ok(LlmResponse {

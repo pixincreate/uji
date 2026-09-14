@@ -98,6 +98,7 @@ impl Llm for Gemini {
         let mut acc = GeminiToolAcc::default();
         let mut usage = Usage::default();
         let mut hit_limit = false;
+        let mut complete = false;
         response_lines(response, |line| {
             let Some(data) = line.strip_prefix("data: ") else {
                 return;
@@ -112,10 +113,14 @@ impl Llm for Gemini {
                     usage = reported.into();
                 }
                 hit_limit |= parsed.truncated();
+                complete |= parsed.finished();
                 acc.apply(&parsed);
             }
         })
         .await?;
+        if !complete {
+            return Err(LlmError::truncated_stream());
+        }
         let tool_calls = acc.finish();
         if tool_calls.is_empty() && hit_limit {
             return Err(LlmError::output_limit());

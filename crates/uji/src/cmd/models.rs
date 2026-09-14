@@ -44,15 +44,15 @@ impl Action for Models {
         for provider in &available {
             for model in &provider.models {
                 let label = if qualify {
-                    format!("{} · {model}", provider.name)
+                    format!("{} · {}", provider.name, model.id)
                 } else {
-                    model.clone()
+                    model.id.clone()
                 };
                 self.choices.insert(
                     label.clone(),
                     Choice {
                         provider_id: provider.id.clone(),
-                        model: model.clone(),
+                        model: model.id.clone(),
                     },
                 );
                 items.push(label);

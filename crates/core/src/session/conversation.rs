@@ -35,6 +35,7 @@ pub struct Conversation {
     info: Info,
     messages: Vec<StoredMessage>,
     tally: Tally,
+    last_input: u64,
 }
 
 impl Conversation {
@@ -63,7 +64,18 @@ impl Conversation {
         self.messages.push(message);
     }
 
+    pub fn last_input(&self) -> u64 {
+        self.last_input
+    }
+
+    pub fn add_cost(&mut self, usage: Usage) {
+        self.tally.usage.add(usage);
+    }
+
     pub fn add_usage(&mut self, usage: Usage) {
+        if usage.input > 0 {
+            self.last_input = usage.input;
+        }
         self.tally.usage.add(usage);
         self.tally.turns = self.tally.turns.saturating_add(1);
     }

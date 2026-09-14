@@ -22,6 +22,7 @@ pub(crate) struct Inner {
     pub(crate) api: Rc<Api>,
     pub(crate) llm: RefCell<Arc<dyn Llm>>,
     pub(crate) llm_model: RefCell<String>,
+    pub(crate) llm_provider: RefCell<String>,
     pub(crate) client: Arc<reqwest::Client>,
     pub(crate) policy: RefCell<ToolPolicy>,
 }
@@ -38,6 +39,7 @@ impl Inner {
             api: Api::new(state, conversation),
             llm: RefCell::new(Arc::new(NotConfigured)),
             llm_model: RefCell::default(),
+            llm_provider: RefCell::default(),
             client,
             policy: RefCell::new(ToolPolicy::default()),
         });
@@ -153,10 +155,11 @@ impl Inner {
         };
         *self.llm.borrow_mut() = selection.llm;
         self.llm_model.borrow_mut().clone_from(&selection.model);
+        self.llm_provider.borrow_mut().clone_from(&selection.id);
 
         let state = self.state();
         let mut state = state.borrow_mut();
-        state.set_current_provider(selection.provider);
+        state.set_current_provider(selection.name);
         state.set_current_model(selection.model);
     }
 }

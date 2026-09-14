@@ -59,6 +59,8 @@ pub enum Message {
     System { text: String },
     #[serde(rename = "error")]
     Error { text: String },
+    #[serde(rename = "compaction")]
+    Compaction { summary: String, through: i64 },
 }
 
 impl Message {
@@ -69,6 +71,7 @@ impl Message {
             Message::Tool { .. } => "tool",
             Message::System { .. } => "system",
             Message::Error { .. } => "error",
+            Message::Compaction { .. } => "compaction",
         }
     }
 
@@ -79,6 +82,7 @@ impl Message {
             | Message::System { text }
             | Message::Error { text } => text,
             Message::Tool { content, .. } => content,
+            Message::Compaction { summary, .. } => summary,
         }
     }
 }

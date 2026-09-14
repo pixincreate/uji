@@ -33,7 +33,15 @@ pub fn list(lua: &Lua, api: &Rc<Api>) -> mlua::Result<mlua::Function> {
             entry.set("id", provider.id.clone())?;
             entry.set("name", provider.name.clone())?;
             entry.set("base_url", provider.base_url.clone())?;
-            entry.set("models", provider.models.clone())?;
+            let models = lua.create_table()?;
+            for (at, model) in provider.models.iter().enumerate() {
+                let row = lua.create_table()?;
+                row.set("id", model.id.clone())?;
+                row.set("context", model.context)?;
+                row.set("output", model.output)?;
+                models.set(at + 1, row)?;
+            }
+            entry.set("models", models)?;
             out.set(index + 1, entry)?;
         }
         Ok(out)

@@ -87,6 +87,11 @@ impl Context for LoopData {
         self.control = Control::Reload;
     }
 
+    fn compact(&mut self) -> bool {
+        let keep = self.keep_recent();
+        self.run_compaction(keep)
+    }
+
     fn start_oauth(&mut self, provider_id: &str) {
         let Some(provider) = self
             .inner

@@ -20,6 +20,10 @@ impl LoopData {
             self.queued.push_back(text.to_string());
             return;
         }
+        if self.compact_if_needed() {
+            self.queued.push_back(text.to_string());
+            return;
+        }
         self.app.clear_notices();
         self.app.reset_scroll();
         self.inner
@@ -35,7 +39,7 @@ impl LoopData {
         let client = Arc::clone(&self.inner.client);
         let context = {
             let conversation = self.app.messages();
-            uji_core::llm::context::sanitize(conversation.messages())
+            uji_core::llm::context::build(conversation.messages())
         };
         let system = {
             let state_rc = self.inner.state();
@@ -78,7 +82,10 @@ impl LoopData {
     }
 
     pub(crate) fn on_llm_event(&mut self, event: StreamEvent) {
-        if matches!(event, StreamEvent::Cancelled | StreamEvent::Failed(_)) {
+        if matches!(
+            event,
+            StreamEvent::Cancelled | StreamEvent::Failed(_) | StreamEvent::Restarted { .. }
+        ) {
             self.app.reveal_all();
             self.release_deferred();
             self.apply_llm_event(event);
@@ -95,6 +102,15 @@ impl LoopData {
     pub(super) fn apply_llm_event(&mut self, event: StreamEvent) {
         match event {
             StreamEvent::Delta(delta) => self.app.append_pending(&delta),
+            StreamEvent::Restarted { attempt, of, wait } => {
+                self.app.take_pending();
+                self.inner.report(format!(
+                    "request failed, retrying in {}s ({attempt}/{of})",
+                    wait.as_secs().max(1)
+                ));
+                self.drain_diagnostics();
+                self.dirty = true;
+            }
             StreamEvent::AssistantStep {
                 text,
                 tool_calls,

@@ -91,6 +91,19 @@ uji.on("tick", render_activity)
 --   auth_env = { "DEEPSEEK_API_KEY" },
 --   models   = { "deepseek-chat", "deepseek-reasoner" },
 -- })
+--
+-- A model may carry its own limits. Bare strings and tables mix freely, and
+-- anything unspecified falls back to a conservative default:
+--
+-- uji.provider.add({
+--   id = "acme", name = "Acme", wire = "openai-chat",
+--   base_url = "https://api.acme.com/v1",
+--   context_window = 64000,                  -- provider-wide default
+--   models = {
+--     "acme-small",                          -- inherits 64000
+--     { id = "acme-large", context = 1000000, output = 64000 },
+--   },
+-- })
 -- uji.provider.list()
 -- uji.provider.remove("deepseek")
 --

@@ -114,7 +114,7 @@ impl From<&LlmRequest> for GeminiRequest {
                     }
                     system.push_str(text);
                 }
-                Message::Error { .. } => {}
+                Message::Error { .. } | Message::Compaction { .. } => {}
             }
         }
         let system_instruction = if system.is_empty() {
@@ -185,6 +185,12 @@ pub struct GeminiResponseContent {
 }
 
 impl GeminiResponse {
+    pub fn finished(&self) -> bool {
+        self.candidates
+            .iter()
+            .any(|candidate| candidate.finish_reason.is_some())
+    }
+
     pub fn truncated(&self) -> bool {
         self.candidates
             .iter()
