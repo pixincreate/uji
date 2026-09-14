@@ -1,77 +1,45 @@
-use crate::cmd::{Action, Args, Compact, Context, Help, Login, Models, Reload, Sync};
+use crate::cmd::{Action, Compact, Help, Login, Models, Reload, Sync};
 
-pub(crate) enum Builtin {
-    Login(Login),
-    Models(Models),
-    Compact(Compact),
-    Reload(Reload),
-    Sync(Sync),
-    Help(Help),
+pub(crate) struct Builtin {
+    pub(crate) name: &'static str,
+    pub(crate) desc: &'static str,
+    make: fn() -> Box<dyn Action>,
 }
 
-impl Builtin {
-    pub(crate) const ALL: &[(&str, &str)] = &[
-        ("login", "configure provider and auth"),
-        ("models", "pick the default model"),
-        ("reload", "redraw the UI from config"),
-        ("compact", "summarise earlier messages to free context"),
-        ("sync", "update installed packs"),
-        ("help", "list commands"),
-    ];
+pub(crate) const BUILTINS: &[Builtin] = &[
+    Builtin {
+        name: "login",
+        desc: "configure provider and auth",
+        make: || Box::new(Login::default()),
+    },
+    Builtin {
+        name: "models",
+        desc: "pick the default model",
+        make: || Box::new(Models::default()),
+    },
+    Builtin {
+        name: "reload",
+        desc: "redraw the UI from config",
+        make: || Box::new(Reload),
+    },
+    Builtin {
+        name: "compact",
+        desc: "summarise earlier messages to free context",
+        make: || Box::new(Compact),
+    },
+    Builtin {
+        name: "sync",
+        desc: "update installed packs",
+        make: || Box::new(Sync),
+    },
+    Builtin {
+        name: "help",
+        desc: "list commands",
+        make: || Box::new(Help),
+    },
+];
 
-    pub(crate) fn from_name(name: &str) -> Option<Self> {
-        match name {
-            "login" => Some(Self::Login(Login::default())),
-            "models" => Some(Self::Models(Models::default())),
-            "compact" => Some(Self::Compact(Compact)),
-            "reload" => Some(Self::Reload(Reload)),
-            "sync" => Some(Self::Sync(Sync)),
-            "help" => Some(Self::Help(Help)),
-            _ => None,
-        }
-    }
-
-    pub(crate) fn start<C: Context>(&mut self, ctx: &mut C, args: &Args) {
-        match self {
-            Self::Login(login) => login.start(ctx, args),
-            Self::Models(models) => models.start(ctx, args),
-            Self::Compact(compact) => compact.start(ctx, args),
-            Self::Reload(reload) => reload.start(ctx, args),
-            Self::Sync(sync) => sync.start(ctx, args),
-            Self::Help(help) => help.start(ctx, args),
-        }
-    }
-
-    pub(crate) fn on_select<C: Context>(&mut self, ctx: &mut C, item: String) {
-        match self {
-            Self::Login(login) => login.on_select(ctx, item),
-            Self::Models(models) => models.on_select(ctx, item),
-            Self::Compact(compact) => compact.on_select(ctx, item),
-            Self::Reload(reload) => reload.on_select(ctx, item),
-            Self::Sync(sync) => sync.on_select(ctx, item),
-            Self::Help(help) => help.on_select(ctx, item),
-        }
-    }
-
-    pub(crate) fn on_prompt<C: Context>(&mut self, ctx: &mut C, value: String) {
-        match self {
-            Self::Login(login) => login.on_prompt(ctx, value),
-            Self::Models(models) => models.on_prompt(ctx, value),
-            Self::Compact(compact) => compact.on_prompt(ctx, value),
-            Self::Reload(reload) => reload.on_prompt(ctx, value),
-            Self::Sync(sync) => sync.on_prompt(ctx, value),
-            Self::Help(help) => help.on_prompt(ctx, value),
-        }
-    }
-
-    pub(crate) fn on_cancel<C: Context>(&mut self, ctx: &mut C) {
-        match self {
-            Self::Login(login) => login.on_cancel(ctx),
-            Self::Models(models) => models.on_cancel(ctx),
-            Self::Compact(compact) => compact.on_cancel(ctx),
-            Self::Reload(reload) => reload.on_cancel(ctx),
-            Self::Sync(sync) => sync.on_cancel(ctx),
-            Self::Help(help) => help.on_cancel(ctx),
-        }
-    }
+pub(crate) fn build(name: &str) -> Option<Box<dyn Action>> {
+    let found = BUILTINS.iter().find(|builtin| builtin.name == name)?;
+    Some((found.make)())
 }

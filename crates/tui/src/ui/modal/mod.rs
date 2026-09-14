@@ -1,5 +1,3 @@
-use ratatui::layout::Rect;
-
 use crate::app::Mode;
 use crate::ui::Context;
 use crate::ui::Render;
@@ -11,8 +9,27 @@ mod prompt;
 mod select;
 mod suggest;
 
-pub(crate) struct Modal {
-    pub(crate) input_rect: Option<Rect>,
+const PROMPT_ROWS: u16 = 6;
+
+pub(crate) struct Modal;
+
+pub(crate) fn rows(ctx: &Context<'_>, _width: u16) -> Option<u16> {
+    match ctx.app.mode() {
+        Mode::Normal | Mode::Confirm { .. } => None,
+        Mode::Select { items, query, .. } => {
+            let matches = crate::app::filter_items(items, query).len();
+            let visible = matches.min(select::MAX_ROWS);
+            let overflow = u16::from(matches > visible);
+            let rows = u16::try_from(visible).unwrap_or(u16::MAX);
+            Some(rows.saturating_add(4).saturating_add(overflow))
+        }
+        Mode::Prompt { .. } => Some(PROMPT_ROWS),
+        Mode::Suggest { items, .. } => {
+            let max = usize::from(ctx.state.opts().suggest_max_height).max(1);
+            let visible = items.len().min(max);
+            u16::try_from(visible).ok().filter(|rows| *rows > 0)
+        }
+    }
 }
 
 pub(crate) fn takeover_rows(ctx: &Context<'_>, width: u16) -> Option<u16> {
@@ -52,7 +69,6 @@ impl Render for Modal {
                 suggest::Suggest {
                     items,
                     cursor: *cursor,
-                    input_rect: self.input_rect,
                 }
                 .render(ctx, surface);
             }

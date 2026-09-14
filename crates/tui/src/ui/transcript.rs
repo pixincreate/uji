@@ -2,6 +2,9 @@ use ratatui::text::Line;
 use uji_core::session::conversation::Conversation;
 use uji_core::session::model::{Message, StoredMessage};
 
+use crate::app::renderer::Block;
+use crate::ui::style::Palette;
+
 #[derive(Debug, Default, Clone, Copy)]
 struct Grouping {
     started: bool,
@@ -27,52 +30,116 @@ fn opens_tool_group(stored: &StoredMessage) -> bool {
 }
 
 #[derive(Default)]
-struct Committed {
-    text: String,
+struct Cached {
+    key: String,
     lines: Vec<Line<'static>>,
 }
 
-impl Committed {
+impl Cached {
     fn clear(&mut self) {
-        self.text.clear();
+        self.key.clear();
         self.lines.clear();
     }
+
+    fn get(&mut self, key: &str, render: impl FnOnce(&mut Vec<Line<'static>>)) -> &[Line<'static>] {
+        if self.key != key {
+            self.clear();
+            self.key.push_str(key);
+            if !key.is_empty() {
+                render(&mut self.lines);
+            }
+        }
+        &self.lines
+    }
+}
+
+#[derive(Default)]
+struct CachedList {
+    key: Vec<String>,
+    lines: Vec<Line<'static>>,
+}
+
+impl CachedList {
+    fn clear(&mut self) {
+        self.key.clear();
+        self.lines.clear();
+    }
+
+    fn get(
+        &mut self,
+        key: &[String],
+        render: impl FnOnce(&mut Vec<Line<'static>>),
+    ) -> &[Line<'static>] {
+        if self.key != key {
+            self.clear();
+            self.key.extend_from_slice(key);
+            render(&mut self.lines);
+        }
+        &self.lines
+    }
+}
+
+pub struct Input<'a> {
+    pub conversation: &'a Conversation,
+    pub notices: &'a [String],
+    pub pending: &'a str,
+    pub width: usize,
+    pub palette: Palette,
+}
+
+pub struct Rendered<'a> {
+    pub notices: &'a [Line<'static>],
+    pub folded: &'a [Line<'static>],
+    pub pending: &'a [Line<'static>],
 }
 
 #[derive(Default)]
 pub struct Transcript {
     width: usize,
+    palette: Palette,
     folded: usize,
     last_seq: i64,
     grouping: Grouping,
     lines: Vec<Line<'static>>,
-    committed: Committed,
+    notices: CachedList,
+    pending: Cached,
 }
 
 impl Transcript {
     pub(crate) fn frame(
         &mut self,
-        conversation: &Conversation,
-        committed: &str,
-        width: usize,
-        message: impl Fn(&mut Vec<Line<'static>>, &StoredMessage, usize),
-        markdown: impl Fn(&mut Vec<Line<'static>>, &str, usize),
-    ) -> (&[Line<'static>], &[Line<'static>]) {
-        if self.width != width {
-            self.width = width;
+        input: &Input<'_>,
+        render: impl Fn(&mut Vec<Line<'static>>, Block<'_>, usize),
+    ) -> Rendered<'_> {
+        if self.width != input.width || self.palette != input.palette {
+            self.width = input.width;
+            self.palette = input.palette;
             self.reset();
-            self.committed.clear();
+            self.notices.clear();
+            self.pending.clear();
         }
-        self.fold(conversation, width, message);
-        self.commit(committed, width, markdown);
-        (&self.lines, &self.committed.lines)
+        let width = input.width;
+        self.fold(input.conversation, width, &render);
+        self.notices.get(input.notices, |lines| {
+            for notice in input.notices {
+                render(lines, Block::Notice(notice), width);
+            }
+        });
+        self.pending.get(input.pending, |lines| {
+            render(lines, Block::Pending(input.pending), width);
+        });
+        Rendered {
+            notices: &self.notices.lines,
+            folded: &self.lines,
+            pending: &self.pending.lines,
+        }
     }
 
     fn fold(
         &mut self,
         conversation: &Conversation,
         width: usize,
-        render: impl Fn(&mut Vec<Line<'static>>, &StoredMessage, usize),
+        render: &impl Fn(&mut Vec<Line<'static>>, Block<'_>, usize),
     ) {
         let messages = conversation.messages();
         if !self.continues(messages) {
@@ -82,26 +149,10 @@ impl Transcript {
             if self.grouping.separates(stored) {
                 self.lines.push(Line::from(""));
             }
-            render(&mut self.lines, stored, width);
+            render(&mut self.lines, Block::Message(stored), width);
             self.last_seq = stored.seq;
         }
         self.folded = messages.len();
-    }
-
-    fn commit(
-        &mut self,
-        text: &str,
-        width: usize,
-        render: impl Fn(&mut Vec<Line<'static>>, &str, usize),
-    ) {
-        if self.committed.text == text {
-            return;
-        }
-        self.committed.clear();
-        self.committed.text.push_str(text);
-        if !text.is_empty() {
-            render(&mut self.committed.lines, text, width);
-        }
     }
 
     fn reset(&mut self) {

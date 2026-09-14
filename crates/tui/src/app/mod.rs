@@ -2,6 +2,7 @@ pub mod action;
 pub mod composer;
 pub mod keys;
 pub mod mode;
+pub mod renderer;
 pub mod scroll;
 pub mod stream;
 
@@ -31,6 +32,7 @@ pub struct App {
     suggest_pool: Vec<SuggestItem>,
     notices: Vec<String>,
     transcript: RefCell<crate::ui::transcript::Transcript>,
+    renderer: Option<Rc<dyn renderer::BlockRenderer>>,
 }
 
 impl App {
@@ -46,6 +48,7 @@ impl App {
             suggest_pool: Vec::new(),
             notices: Vec::new(),
             transcript: RefCell::default(),
+            renderer: None,
         }
     }
 
@@ -67,6 +70,14 @@ impl App {
 
     pub fn transcript(&self) -> RefMut<'_, crate::ui::transcript::Transcript> {
         self.transcript.borrow_mut()
+    }
+
+    pub fn set_renderer(&mut self, renderer: Rc<dyn renderer::BlockRenderer>) {
+        self.renderer = Some(renderer);
+    }
+
+    pub fn renderer(&self) -> Option<&Rc<dyn renderer::BlockRenderer>> {
+        self.renderer.as_ref()
     }
 
     pub fn state(&self) -> &Rc<RefCell<UiState>> {

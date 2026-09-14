@@ -27,14 +27,14 @@ pub fn layout(area: Rect, windows: &[WindowSpec]) -> Vec<Rect> {
         let reserved: u16 = later
             .iter()
             .filter(|w| is_vertical(w.opts.split) == vertical)
-            .filter_map(|w| match w.opts.size {
+            .filter_map(|w| match w.effective_size() {
                 Size::Fixed(n) => Some(n),
-                Size::Fill => None,
+                Size::Fill | Size::Auto => None,
             })
             .sum();
         let later_fills = later
             .iter()
-            .filter(|w| is_vertical(w.opts.split) == vertical && w.opts.size == Size::Fill)
+            .filter(|w| is_vertical(w.opts.split) == vertical && w.effective_size() == Size::Fill)
             .count();
         let fills = u16::try_from(later_fills)
             .unwrap_or(u16::MAX)
@@ -45,8 +45,8 @@ pub fn layout(area: Rect, windows: &[WindowSpec]) -> Vec<Rect> {
         } else {
             remaining_area.width
         };
-        let take = match win.opts.size {
-            Size::Fill => avail.saturating_sub(reserved) / fills.max(1),
+        let take = match win.effective_size() {
+            Size::Fill | Size::Auto => avail.saturating_sub(reserved) / fills.max(1),
             Size::Fixed(n) => n.min(avail),
         };
 

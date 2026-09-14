@@ -14,8 +14,9 @@ use uji_core::llm::{CancelToken, StreamEvent, ToolDecision};
 use uji_core::session::store::SessionStorage;
 use uji_tui::app::App;
 
+use crate::cmd::Action;
+
 use super::Inner;
-use super::builtin::Builtin;
 use super::frontend::Frontend;
 use super::job::Running;
 use super::signal::Signal;
@@ -48,7 +49,7 @@ pub(crate) struct LoopData {
     pub(crate) control: Control,
     pub(crate) signals: calloop::channel::Sender<Signal>,
     pub(crate) runtime: tokio::runtime::Runtime,
-    pub(crate) active: Option<Builtin>,
+    pub(crate) active: Option<Box<dyn Action>>,
     pub(crate) action_done: bool,
     pub(crate) pending_tool: Option<(String, tokio::sync::oneshot::Sender<ToolDecision>)>,
     pub(crate) queued: VecDeque<String>,

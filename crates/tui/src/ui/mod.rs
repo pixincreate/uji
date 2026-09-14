@@ -21,6 +21,7 @@ pub mod wrap;
 pub struct Context<'a> {
     pub app: &'a App,
     pub state: &'a UiState,
+    pub palette: style::Palette,
 }
 
 pub struct Surface<'a> {
@@ -56,22 +57,36 @@ pub trait Render {
 
 pub fn render(frame: &mut Frame<'_>, app: &App) {
     let state = app.state();
-    let fit = input_fit(frame.area(), app, &state.borrow());
-    if let Some((id, height)) = fit {
-        state.borrow_mut().set_window_size(id, Size::Fixed(height));
+    let fitted = {
+        let s = state.borrow();
+        fits(frame.area(), app, &s)
+    };
+    {
+        let mut s = state.borrow_mut();
+        for (id, rows) in fitted {
+            s.set_window_fitted(id, rows);
+        }
     }
     let rects = {
         let s = state.borrow();
         layout::layout(frame.area(), s.windows())
     };
     let s = state.borrow();
-    let input_rect = s
-        .windows()
-        .iter()
-        .zip(rects.iter().copied())
-        .find(|(window, _)| window.builtin == Some(Builtin::Input))
-        .map(|(_, rect)| rect);
-    let ctx = Context { app, state: &s };
+    let rect_of = |builtin: Builtin| {
+        s.windows()
+            .iter()
+            .zip(rects.iter().copied())
+            .find(|(window, _)| window.builtin == Some(builtin))
+            .map(|(_, rect)| rect)
+    };
+    let modal_rect = rect_of(Builtin::Modal);
+    let input_rect = rect_of(Builtin::Input);
+    let palette = style::Palette::of(&s.opts().theme);
+    let ctx = Context {
+        app,
+        state: &s,
+        palette,
+    };
     for (window, rect) in s.windows().iter().zip(rects.iter().copied()) {
         let mut surface = Surface::new(rect, frame.buffer_mut());
         match window.builtin {
@@ -81,43 +96,73 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
             Some(Builtin::Input) => {
                 input::Input { window }.render(&ctx, &mut surface);
             }
-            None => blit(&mut surface, window),
+            Some(Builtin::Modal) => {}
+            None => blit(&mut surface, window, palette),
         }
     }
-    let mut surface = Surface::new(frame.area(), frame.buffer_mut());
-    modal::Modal { input_rect }.render(&ctx, &mut surface);
+    let area = modal_rect.unwrap_or_else(|| above(frame.area(), input_rect));
+    let mut surface = Surface::new(area, frame.buffer_mut());
+    modal::Modal.render(&ctx, &mut surface);
 }
 
 const MAX_INPUT_ROWS: u16 = 10;
 
-fn input_fit(area: Rect, app: &App, state: &UiState) -> Option<(u32, u16)> {
+fn fits(area: Rect, app: &App, state: &UiState) -> Vec<(u32, u16)> {
     let rects = layout::layout(area, state.windows());
-    let (window, rect) = state
-        .windows()
-        .iter()
-        .zip(rects)
-        .find(|(window, _)| window.builtin == Some(Builtin::Input))?;
-    let Size::Fixed(current) = window.opts.size else {
-        return None;
+    let palette = style::Palette::of(&state.opts().theme);
+    let ctx = Context {
+        app,
+        state,
+        palette,
     };
-    let inner = style::block_for(window).map_or(rect, |block| block.inner(rect));
-    if inner.width == 0 {
-        return None;
+    let mut fitted = Vec::new();
+    for (window, rect) in state.windows().iter().zip(rects) {
+        if window.opts.size != Size::Auto {
+            continue;
+        }
+        let chrome = style::vertical_chrome(window);
+        let content = match window.opts.border {
+            uji_screen::model::Border::Plain | uji_screen::model::Border::Rounded => {
+                rect.width.saturating_sub(2)
+            }
+            _ => rect.width,
+        };
+        if rect.width == 0 {
+            continue;
+        }
+        let rows = match window.builtin {
+            Some(Builtin::Input) => modal::takeover_rows(&ctx, content).unwrap_or_else(|| {
+                let rows = input::rows_needed(app.input(), usize::from(content));
+                u16::try_from(rows)
+                    .unwrap_or(MAX_INPUT_ROWS)
+                    .clamp(1, MAX_INPUT_ROWS)
+            }),
+            Some(Builtin::Modal) => modal::rows(&ctx, content).unwrap_or(0),
+            Some(Builtin::Messages) => continue,
+            None => u16::try_from(window.buffer.len()).unwrap_or(u16::MAX),
+        };
+        let total = if rows == 0 {
+            0
+        } else {
+            rows.saturating_add(chrome)
+        };
+        fitted.push((window.id, total));
     }
-    let ctx = Context { app, state };
-    let rows = modal::takeover_rows(&ctx, inner.width).unwrap_or_else(|| {
-        let rows = input::rows_needed(app.input(), usize::from(inner.width));
-        u16::try_from(rows)
-            .unwrap_or(MAX_INPUT_ROWS)
-            .clamp(1, MAX_INPUT_ROWS)
-    });
-    let border = rect.height.saturating_sub(inner.height);
-    let wanted = rows.saturating_add(border);
-    (wanted != current).then_some((window.id, wanted))
+    fitted
 }
 
-fn blit(surface: &mut Surface<'_>, window: &WindowSpec) {
-    let block = style::block_for(window);
+fn above(area: Rect, input: Option<Rect>) -> Rect {
+    match input {
+        Some(input) if input.y > area.y => Rect {
+            height: input.y.saturating_sub(area.y),
+            ..area
+        },
+        _ => area,
+    }
+}
+
+fn blit(surface: &mut Surface<'_>, window: &WindowSpec, palette: style::Palette) {
+    let block = style::block_for(window, palette);
     let inner = block
         .as_ref()
         .map_or(surface.area(), |block| block.inner(surface.area()));

@@ -1,6 +1,7 @@
 pub mod compact;
 pub mod help;
 pub mod login;
+pub(crate) mod lua;
 pub mod models;
 pub mod reload;
 pub mod sync;
@@ -8,6 +9,7 @@ pub mod sync;
 pub use compact::Compact;
 pub use help::Help;
 pub use login::Login;
+pub(crate) use lua::LuaAction;
 pub use models::Models;
 pub use reload::Reload;
 pub use sync::Sync;
@@ -46,31 +48,21 @@ pub trait Context {
     fn command_names(&self) -> Vec<String>;
 }
 
-pub(crate) fn remember_model<C: Context>(ctx: &mut C, provider_id: &str, model: &str) {
+pub(crate) fn remember_model(ctx: &mut dyn Context, provider_id: &str, model: &str) {
     ctx.set_setting("llm.model", model);
     ctx.set_setting(&format!("llm.model.{provider_id}"), model);
 }
 
-pub(crate) fn model_for<C: Context>(ctx: &mut C, provider: &Provider) -> String {
+pub(crate) fn model_for(ctx: &mut dyn Context, provider: &Provider) -> String {
     let stored = ctx
         .get_setting(&format!("llm.model.{}", provider.id))
-        .or_else(|| ctx.get_setting("llm.model"))
-        .filter(|model| !model.is_empty());
-    if provider.models.is_empty() {
-        return stored.unwrap_or_default();
-    }
-    stored
-        .filter(|model| provider.model(model).is_some())
-        .unwrap_or_else(|| provider.default_model().to_string())
+        .or_else(|| ctx.get_setting("llm.model"));
+    provider.usable_model(stored)
 }
 
 pub trait Action {
-    fn name(&self) -> &'static str;
-    fn desc(&self) -> &'static str {
-        ""
-    }
-    fn start<C: Context>(&mut self, ctx: &mut C, args: &Args);
-    fn on_select<C: Context>(&mut self, _ctx: &mut C, _item: String) {}
-    fn on_prompt<C: Context>(&mut self, _ctx: &mut C, _value: String) {}
-    fn on_cancel<C: Context>(&mut self, _ctx: &mut C) {}
+    fn start(&mut self, ctx: &mut dyn Context, args: &Args);
+    fn on_select(&mut self, _ctx: &mut dyn Context, _item: String) {}
+    fn on_prompt(&mut self, _ctx: &mut dyn Context, _value: String) {}
+    fn on_cancel(&mut self, _ctx: &mut dyn Context) {}
 }

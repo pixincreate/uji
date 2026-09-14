@@ -13,7 +13,9 @@ const KEEP_FRACTION: u64 = 4;
 
 impl LoopData {
     pub(super) fn compact_if_needed(&mut self) -> bool {
-        let budget = self.budget();
+        let Some(budget) = self.budget() else {
+            return false;
+        };
         if !budget.overflows(self.used_tokens()) {
             return false;
         }
@@ -28,7 +30,10 @@ impl LoopData {
     }
 
     pub(super) fn keep_recent(&self) -> u64 {
-        self.budget().usable() / KEEP_FRACTION
+        let room = self
+            .budget()
+            .map_or_else(|| self.used_tokens(), Budget::usable);
+        room / KEEP_FRACTION
     }
 
     pub(super) fn run_compaction(&mut self, keep_recent: u64) -> bool {
@@ -77,6 +82,8 @@ impl LoopData {
                 });
                 self.inner
                     .report(format!("compacted {} earlier messages", cut.span()));
+                self.inner
+                    .emit(events::COMPACTED, &[("count", cut.span().to_string())]);
             }
             CompactEvent::Failed => self
                 .inner
@@ -103,13 +110,13 @@ impl LoopData {
         }
     }
 
-    fn budget(&self) -> Budget {
+    fn budget(&self) -> Option<Budget> {
         let model = self.inner.llm_model.borrow().clone();
         let id = self.inner.llm_provider.borrow().clone();
         let catalog = self.inner.api.providers();
         let catalog = catalog.borrow();
         catalog
             .get(&id)
-            .map_or_else(Budget::default, |provider| provider.budget(&model))
+            .and_then(|provider| provider.budget(&model))
     }
 }

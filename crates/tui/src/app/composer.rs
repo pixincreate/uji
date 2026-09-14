@@ -24,10 +24,6 @@ impl Composer {
         self.cursor
     }
 
-    pub fn recalling(&self) -> bool {
-        matches!(self.recall, Recall::Browsing { .. })
-    }
-
     fn edit(&mut self, change: impl FnOnce(&mut String, &mut usize)) {
         self.recall = Recall::Editing;
         change(&mut self.text, &mut self.cursor);

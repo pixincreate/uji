@@ -8,6 +8,7 @@ use uji_api::Api;
 use uji_core::session::conversation::Shared;
 use uji_screen::state::UiState;
 
+use super::events;
 use super::policy;
 use crate::pack;
 use uji_core::config::{self, DEFAULT_LUA};
@@ -99,6 +100,14 @@ impl Inner {
         self.api.state()
     }
 
+    pub(crate) fn ask(&self, event: &str, fields: &[(&str, String)]) -> Option<mlua::Value> {
+        let ctx = self.lua.create_table().ok()?;
+        for (key, value) in fields {
+            let _ = ctx.set(*key, value.clone());
+        }
+        self.api.ask(event, &ctx)
+    }
+
     pub(crate) fn emit(&self, event: &str, fields: &[(&str, String)]) {
         let Ok(ctx) = self.lua.create_table() else {
             return;
@@ -161,6 +170,14 @@ impl Inner {
         let mut state = state.borrow_mut();
         state.set_current_provider(selection.name);
         state.set_current_model(selection.model);
+        drop(state);
+        self.emit(
+            events::MODEL_CHANGED,
+            &[
+                ("provider", self.llm_provider.borrow().clone()),
+                ("model", self.llm_model.borrow().clone()),
+            ],
+        );
     }
 }
 

@@ -26,6 +26,12 @@ impl Handlers {
         }
     }
 
+    pub fn has(&self, event: &str) -> bool {
+        self.by_event
+            .iter()
+            .any(|(name, list)| name == event && !list.is_empty())
+    }
+
     pub fn get(&self, event: &str) -> Vec<Function> {
         self.by_event
             .iter()

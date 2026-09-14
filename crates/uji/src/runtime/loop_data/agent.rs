@@ -205,8 +205,11 @@ impl LoopData {
         self.app.conversation().borrow_mut().push(stored);
         self.inner.emit(
             events::MESSAGE_APPENDED,
-            &[("type", kind.to_string()), ("text", text)],
+            &[("type", kind.to_string()), ("text", text.clone())],
         );
+        if kind == "error" {
+            self.inner.emit(events::ERROR, &[("text", text)]);
+        }
         self.dirty = true;
     }
 
@@ -261,10 +264,14 @@ impl LoopData {
     }
 
     fn persist_tool_result(&mut self, tool_call_id: String, name: String, content: String) {
-        self.inner.emit(
-            events::TOOL_FINISHED,
-            &[("name", name.clone()), ("content", content.clone())],
-        );
+        let content = self
+            .inner
+            .ask(
+                events::TOOL_FINISHED,
+                &[("name", name.clone()), ("content", content.clone())],
+            )
+            .and_then(replacement_content)
+            .unwrap_or(content);
         self.append(Message::Tool {
             tool_call_id,
             name,
@@ -297,7 +304,7 @@ impl LoopData {
         let _ = event.set("name", tool.name.clone());
         let _ = event.set("arguments", args_table.clone());
 
-        let decision = self.inner.api.dispatch_tool("tool_call", &event);
+        let decision = self.inner.api.ask(events::TOOL_CALL, &event);
         let approval = if let Some(approval) = parse_tool_decision(decision) {
             approval
         } else {
@@ -384,6 +391,7 @@ impl LoopData {
             state.set_turn_started(None);
         }
         self.inner.emit(events::STATUS_CHANGED, &[]);
+        self.inner.emit(events::TURN_FINISHED, &[]);
     }
 
     pub(super) fn maybe_submit_queued(&mut self) {
@@ -412,6 +420,13 @@ fn deny(reply: tokio::sync::oneshot::Sender<ToolDecision>, reason: &str) {
     let _ = reply.send(ToolDecision::Deny {
         reason: reason.to_string(),
     });
+}
+
+fn replacement_content(value: LuaValue) -> Option<String> {
+    let LuaValue::Table(table) = value else {
+        return None;
+    };
+    table.get::<Option<String>>("content").ok().flatten()
 }
 
 fn parse_tool_decision(value: Option<LuaValue>) -> Option<ToolApproval> {

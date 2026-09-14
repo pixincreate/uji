@@ -10,6 +10,7 @@ mod job;
 mod loader;
 mod loop_data;
 mod policy;
+mod renderer;
 mod signal;
 
 pub use error::RuntimeError;
@@ -101,7 +102,8 @@ impl Runtime {
 
         let messages = storage.messages(&session.id).map_err(io::Error::other)?;
         conversation.borrow_mut().attach(&session, messages);
-        let app = App::new(session, conversation, inner.state());
+        let mut app = App::new(session, conversation, inner.state());
+        app.set_renderer(Rc::new(renderer::LuaRenderer::new(Rc::clone(&inner))));
 
         let (keys, key_channel) = calloop::channel::channel::<TermEvent>();
         let (signals, signal_channel) = calloop::channel::channel::<Signal>();

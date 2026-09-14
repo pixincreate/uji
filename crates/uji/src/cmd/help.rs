@@ -3,23 +3,15 @@ use super::{Action, Args, Context};
 pub struct Help;
 
 impl Action for Help {
-    fn name(&self) -> &'static str {
-        "help"
-    }
-
-    fn desc(&self) -> &'static str {
-        "list commands"
-    }
-
-    fn start<C: Context>(&mut self, ctx: &mut C, _args: &Args) {
+    fn start(&mut self, ctx: &mut dyn Context, _args: &Args) {
         ctx.open_select("Commands".into(), ctx.command_names());
     }
 
-    fn on_select<C: Context>(&mut self, ctx: &mut C, _item: String) {
+    fn on_select(&mut self, ctx: &mut dyn Context, _item: String) {
         ctx.finish();
     }
 
-    fn on_cancel<C: Context>(&mut self, ctx: &mut C) {
+    fn on_cancel(&mut self, ctx: &mut dyn Context) {
         ctx.finish();
     }
 }

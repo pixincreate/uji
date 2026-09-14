@@ -315,8 +315,7 @@ fn backoff(attempt: u32) -> Duration {
     capped.mul_f64(jitter.max(0.0))
 }
 
-pub const DEFAULT_CONTEXT_WINDOW: u64 = 128_000;
-pub const DEFAULT_RESERVE: u64 = 20_000;
+pub const MAX_RESERVE: u64 = 20_000;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(from = "ModelSpec")]
@@ -366,15 +365,6 @@ pub struct Budget {
     pub reserve: u64,
 }
 
-impl Default for Budget {
-    fn default() -> Self {
-        Self {
-            window: DEFAULT_CONTEXT_WINDOW,
-            reserve: DEFAULT_RESERVE,
-        }
-    }
-}
-
 impl Budget {
     pub fn usable(self) -> u64 {
         self.window.saturating_sub(self.reserve)
@@ -394,18 +384,27 @@ impl Provider {
         self.models.iter().find(|model| model.id == id)
     }
 
-    pub fn budget(&self, model_id: &str) -> Budget {
+    pub fn usable_model(&self, stored: Option<String>) -> String {
+        let stored = stored.filter(|model| !model.is_empty());
+        if self.models.is_empty() {
+            return stored.unwrap_or_default();
+        }
+        stored
+            .filter(|model| self.model(model).is_some())
+            .unwrap_or_else(|| self.default_model().to_string())
+    }
+
+    pub fn budget(&self, model_id: &str) -> Option<Budget> {
         let known = self.model(model_id);
         let window = known
             .and_then(|model| model.context)
-            .or(self.context_window)
-            .unwrap_or(DEFAULT_CONTEXT_WINDOW);
+            .or(self.context_window)?;
         let reserve = known
             .and_then(|model| model.output)
-            .unwrap_or(DEFAULT_RESERVE)
-            .min(DEFAULT_RESERVE)
+            .unwrap_or(MAX_RESERVE)
+            .min(MAX_RESERVE)
             .min(window / 4);
-        Budget { window, reserve }
+        Some(Budget { window, reserve })
     }
 }
 
@@ -872,9 +871,11 @@ fn setting(storage: &mut dyn SessionStorage, key: &str) -> Option<String> {
 pub fn resolve_from_storage(storage: &mut dyn SessionStorage, catalog: &Catalog) -> Selection {
     let provider_id = setting(storage, "llm.provider").unwrap_or_default();
     let known = catalog.get(&provider_id);
-    let model = setting(storage, "llm.model").unwrap_or_else(|| {
-        known.map_or_else(String::new, |entry| entry.default_model().to_string())
-    });
+    let stored = setting(storage, "llm.model");
+    let model = known.map_or_else(
+        || stored.clone().unwrap_or_default(),
+        |entry| entry.usable_model(stored.clone()),
+    );
     let config = LlmConfig::for_provider(
         provider_id.clone(),
         known,

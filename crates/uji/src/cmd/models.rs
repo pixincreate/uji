@@ -15,15 +15,7 @@ struct Choice {
 }
 
 impl Action for Models {
-    fn name(&self) -> &'static str {
-        "models"
-    }
-
-    fn desc(&self) -> &'static str {
-        "pick the model"
-    }
-
-    fn start<C: Context>(&mut self, ctx: &mut C, _args: &Args) {
+    fn start(&mut self, ctx: &mut dyn Context, _args: &Args) {
         let current = ctx.get_setting("llm.provider").unwrap_or_default();
         let available: Vec<Provider> = ctx
             .providers()
@@ -67,7 +59,7 @@ impl Action for Models {
         ctx.open_select(title, items);
     }
 
-    fn on_select<C: Context>(&mut self, ctx: &mut C, item: String) {
+    fn on_select(&mut self, ctx: &mut dyn Context, item: String) {
         let Some(choice) = self.choices.get(&item) else {
             ctx.finish();
             return;
@@ -83,7 +75,7 @@ impl Action for Models {
         ctx.finish();
     }
 
-    fn on_cancel<C: Context>(&mut self, ctx: &mut C) {
+    fn on_cancel(&mut self, ctx: &mut dyn Context) {
         ctx.finish();
     }
 }

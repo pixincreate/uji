@@ -1,4 +1,4 @@
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use uji_screen::model::WindowSpec;
@@ -8,7 +8,7 @@ use crate::ui::Context;
 use crate::ui::Render;
 use crate::ui::Surface;
 use crate::ui::modal::confirm;
-use crate::ui::style::{TEXT, block_for, color_of};
+use crate::ui::style::{block_for, color_of};
 use crate::ui::wrap;
 
 const CURSOR: char = '█';
@@ -21,7 +21,7 @@ impl Render for Input<'_> {
     fn render(&self, ctx: &Context<'_>, surface: &mut Surface<'_>) {
         match ctx.app.mode() {
             Mode::Confirm { title, body, allow } => {
-                let block = block_for(self.window);
+                let block = block_for(self.window, ctx.palette);
                 let inner = block
                     .as_ref()
                     .map_or(surface.area(), |block| block.inner(surface.area()));
@@ -39,17 +39,17 @@ impl Render for Input<'_> {
 
 impl Input<'_> {
     fn render_input(&self, ctx: &Context<'_>, surface: &mut Surface<'_>) {
-        let block = block_for(self.window);
+        let block = block_for(self.window, ctx.palette);
         let inner = block
             .as_ref()
             .map_or(surface.area(), |block| block.inner(surface.area()));
         let height = usize::from(inner.height).max(1);
 
         let text_style = ctx.state.opts().input_color.map_or_else(
-            || Style::default().fg(TEXT),
+            || Style::default().fg(ctx.palette.text),
             |color| Style::default().fg(color_of(color)),
         );
-        let mut cursor_style = Style::default().fg(Color::White);
+        let mut cursor_style = Style::default().fg(ctx.palette.cursor);
         if ctx.state.opts().cursor_blink {
             cursor_style = cursor_style.add_modifier(Modifier::SLOW_BLINK);
         }

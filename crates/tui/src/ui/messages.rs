@@ -1,12 +1,14 @@
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use uji_screen::model::WindowSpec;
 
+use crate::app::renderer::Block;
 use crate::ui::Context;
 use crate::ui::Render;
 use crate::ui::Surface;
-use crate::ui::style::{MUTED, TEXT, USER_BG, block_for};
+use crate::ui::style::{Palette, block_for};
+use crate::ui::transcript;
 use crate::ui::wrap::text as wrap_text;
 use uji_core::session::model::{Message, StoredMessage};
 
@@ -16,33 +18,46 @@ pub(crate) struct Messages<'a> {
 
 impl Render for Messages<'_> {
     fn render(&self, ctx: &Context<'_>, surface: &mut Surface<'_>) {
-        let block = block_for(self.window);
+        let palette = ctx.palette;
+        let block = block_for(self.window, palette);
         let inner = block
             .as_ref()
             .map_or(surface.area(), |b| b.inner(surface.area()));
         let width = usize::from(inner.width);
         let height = usize::from(inner.height);
 
-        let mut lines = Vec::new();
-        for notice in ctx.app.notices() {
-            push_wrapped(&mut lines, notice, width, NOTICE_STYLE, " ! ", Fill::Line);
-        }
-        if !lines.is_empty() {
-            lines.push(Line::from(""));
-        }
-        let leading = lines.len();
-
+        let renderer = ctx.app.renderer();
         let conversation = ctx.app.messages();
         let pending = ctx.app.pending().unwrap_or_default();
         let (committed, partial) = split_committed(pending);
         let mut transcript = ctx.app.transcript();
-        let (folded, streamed) =
-            transcript.frame(&conversation, committed, width, push_message, push_markdown);
+        let parts = transcript.frame(
+            &transcript::Input {
+                conversation: &conversation,
+                notices: ctx.app.notices(),
+                pending: committed,
+                width,
+                palette,
+            },
+            |lines, block, width| match renderer.and_then(|renderer| renderer.render(block)) {
+                Some(custom) => push_custom(lines, &custom, width),
+                None => push_builtin(lines, block, width, palette),
+            },
+        );
 
-        let above = leading.saturating_add(folded.len());
         let mut gap = Vec::new();
-        if !pending.is_empty() && above > 0 {
+        if !parts.notices.is_empty() {
             gap.push(Line::from(""));
+        }
+        let above = parts
+            .notices
+            .len()
+            .saturating_add(gap.len())
+            .saturating_add(parts.folded.len());
+
+        let mut lead = Vec::new();
+        if !pending.is_empty() && above > 0 {
+            lead.push(Line::from(""));
         }
         let mut tail = Vec::new();
         if !partial.is_empty() {
@@ -50,23 +65,25 @@ impl Render for Messages<'_> {
                 &mut tail,
                 partial,
                 width,
-                Style::default().fg(TEXT),
+                Style::default().fg(palette.text),
                 " ",
                 Fill::Line,
             );
         }
 
         let total = above
-            .saturating_add(gap.len())
-            .saturating_add(streamed.len())
+            .saturating_add(lead.len())
+            .saturating_add(parts.pending.len())
             .saturating_add(tail.len());
         let start = ctx.app.resolve_scroll(total.saturating_sub(height), height);
         let end = start.saturating_add(height).min(total);
-        let window: Vec<Line<'static>> = lines
+        let window: Vec<Line<'static>> = parts
+            .notices
             .iter()
-            .chain(folded.iter())
             .chain(gap.iter())
-            .chain(streamed.iter())
+            .chain(parts.folded.iter())
+            .chain(lead.iter())
+            .chain(parts.pending.iter())
             .chain(tail.iter())
             .skip(start)
             .take(end.saturating_sub(start))
@@ -81,10 +98,38 @@ impl Render for Messages<'_> {
     }
 }
 
-pub(crate) fn push_message(lines: &mut Vec<Line<'static>>, stored: &StoredMessage, width: usize) {
+fn push_builtin(lines: &mut Vec<Line<'static>>, block: Block<'_>, width: usize, palette: Palette) {
+    match block {
+        Block::Notice(text) => push_wrapped(
+            lines,
+            text,
+            width,
+            Style::default().fg(palette.notice),
+            " ! ",
+            Fill::Line,
+        ),
+        Block::Message(stored) => push_message(lines, stored, width, palette),
+        Block::Pending(text) => push_markdown(lines, text, width, palette),
+    }
+}
+
+fn push_custom(lines: &mut Vec<Line<'static>>, custom: &[uji_screen::model::Line], width: usize) {
+    for line in custom {
+        for wrapped in crate::ui::buffer::wrap_line(line, width) {
+            lines.push(crate::ui::buffer::line_to_ratatui(&wrapped, width));
+        }
+    }
+}
+
+pub(crate) fn push_message(
+    lines: &mut Vec<Line<'static>>,
+    stored: &StoredMessage,
+    width: usize,
+    palette: Palette,
+) {
     match &stored.message {
         Message::User { text } => {
-            let style = Style::default().bg(USER_BG).fg(TEXT);
+            let style = Style::default().bg(palette.user_bg).fg(palette.text);
             let fill = Line::from(" ".repeat(width)).style(style);
             lines.push(fill.clone());
             push_wrapped(lines, text, width, style, " ", Fill::Block);
@@ -94,34 +139,45 @@ pub(crate) fn push_message(lines: &mut Vec<Line<'static>>, stored: &StoredMessag
             text, tool_calls, ..
         } => {
             if !text.is_empty() {
-                push_markdown(lines, text, width);
+                push_markdown(lines, text, width, palette);
             }
             for call in tool_calls {
                 if !text.is_empty() {
                     lines.push(Line::from(""));
                 }
-                push_tool_header(lines, &call.name, &call.arguments, width);
+                push_tool_header(lines, &call.name, &call.arguments, width, palette);
             }
         }
-        Message::Tool { content, .. } => push_tool_output(lines, content, width),
+        Message::Tool { content, .. } => push_tool_output(lines, content, width, palette),
         Message::System { text } => {
-            let style = Style::default().fg(MUTED).add_modifier(Modifier::ITALIC);
+            let style = Style::default()
+                .fg(palette.muted)
+                .add_modifier(Modifier::ITALIC);
             push_wrapped(lines, text, width, style, " ", Fill::Line);
         }
         Message::Error { text } => {
-            push_wrapped(lines, text, width, ERROR_STYLE, " ", Fill::Line);
+            push_wrapped(
+                lines,
+                text,
+                width,
+                Style::default().fg(palette.error),
+                " ",
+                Fill::Line,
+            );
         }
-        Message::Compaction { .. } => push_divider(lines, width),
+        Message::Compaction { .. } => push_divider(lines, width, palette),
     }
 }
 
-fn push_divider(lines: &mut Vec<Line<'static>>, width: usize) {
+fn push_divider(lines: &mut Vec<Line<'static>>, width: usize, palette: Palette) {
     let label = " compacted ";
     let rule = width.saturating_sub(label.chars().count() + 2) / 2;
     let bar = "─".repeat(rule);
     lines.push(Line::from(Span::styled(
         format!(" {bar}{label}{bar}"),
-        Style::default().fg(MUTED).add_modifier(Modifier::DIM),
+        Style::default()
+            .fg(palette.muted)
+            .add_modifier(Modifier::DIM),
     )));
 }
 
@@ -153,9 +209,6 @@ fn push_wrapped(
     }
 }
 
-const NOTICE_STYLE: Style = Style::new().fg(Color::Red);
-const ERROR_STYLE: Style = Style::new().fg(Color::Red);
-
 const MAX_TOOL_PREVIEW_LINES: usize = 8;
 
 fn tool_verb(name: &str) -> &'static str {
@@ -185,7 +238,13 @@ fn tool_detail(name: &str, arguments: &str) -> String {
     detail.unwrap_or_else(|| arguments.chars().take(200).collect())
 }
 
-fn push_tool_header(lines: &mut Vec<Line<'static>>, name: &str, arguments: &str, width: usize) {
+fn push_tool_header(
+    lines: &mut Vec<Line<'static>>,
+    name: &str,
+    arguments: &str,
+    width: usize,
+    palette: Palette,
+) {
     let verb = tool_verb(name);
     let detail = tool_detail(name, arguments);
     let detail = detail.replace('\n', " ");
@@ -198,26 +257,28 @@ fn push_tool_header(lines: &mut Vec<Line<'static>>, name: &str, arguments: &str,
     let mut chunks = wrap_text(&head, available).into_iter();
     let first = chunks.next().unwrap_or_default();
     lines.push(Line::from(vec![
-        Span::styled(" • ", Style::default().fg(MUTED)),
+        Span::styled(" • ", Style::default().fg(palette.muted)),
         Span::styled(
             first,
-            Style::default().fg(TEXT).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(palette.text)
+                .add_modifier(Modifier::BOLD),
         ),
     ]));
     for chunk in chunks {
         lines.push(Line::from(Span::styled(
             format!("   {chunk}"),
-            Style::default().fg(TEXT),
+            Style::default().fg(palette.text),
         )));
     }
 }
 
-fn push_tool_output(lines: &mut Vec<Line<'static>>, content: &str, width: usize) {
+fn push_tool_output(lines: &mut Vec<Line<'static>>, content: &str, width: usize, palette: Palette) {
     let failed = content.starts_with("error:") || content.starts_with("denied:");
     let style = if failed {
-        Style::default().fg(Color::Red)
+        Style::default().fg(palette.error)
     } else {
-        Style::default().fg(MUTED)
+        Style::default().fg(palette.muted)
     };
     let available = width.saturating_sub(5).max(1);
     let mut wrapped: Vec<String> = Vec::new();
@@ -232,7 +293,9 @@ fn push_tool_output(lines: &mut Vec<Line<'static>>, content: &str, width: usize)
     if omitted > 0 {
         lines.push(Line::from(Span::styled(
             format!("     … +{omitted} lines"),
-            Style::default().fg(MUTED).add_modifier(Modifier::DIM),
+            Style::default()
+                .fg(palette.muted)
+                .add_modifier(Modifier::DIM),
         )));
     }
 }
@@ -244,8 +307,8 @@ fn split_committed(pending: &str) -> (&str, &str) {
     }
 }
 
-fn push_markdown(lines: &mut Vec<Line<'static>>, text: &str, width: usize) {
-    for mut line in crate::ui::markdown::render(text, width.saturating_sub(1)) {
+fn push_markdown(lines: &mut Vec<Line<'static>>, text: &str, width: usize, palette: Palette) {
+    for mut line in crate::ui::markdown::render(text, width.saturating_sub(1), palette) {
         line.spans.insert(0, Span::raw(" "));
         lines.push(line);
     }

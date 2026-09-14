@@ -1,13 +1,39 @@
 use std::rc::Rc;
 
-use mlua::{Function, Lua};
+use mlua::{Function, Lua, Value};
 
 use super::Api;
 
+#[derive(Clone)]
+pub struct LuaCommand {
+    pub handler: Function,
+    pub desc: String,
+    pub force: bool,
+}
+
 pub fn command(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = api.clone();
-    lua.create_function(move |_, (name, handler): (String, Function)| {
-        api.commands().borrow_mut().insert(name, handler);
+    let api = Rc::clone(api);
+    lua.create_function(move |_, (name, spec): (String, Value)| {
+        let command = parse(spec)?;
+        api.commands().borrow_mut().insert(name, command);
         Ok(())
     })
+}
+
+fn parse(spec: Value) -> mlua::Result<LuaCommand> {
+    match spec {
+        Value::Function(handler) => Ok(LuaCommand {
+            handler,
+            desc: String::new(),
+            force: false,
+        }),
+        Value::Table(opts) => Ok(LuaCommand {
+            handler: opts.get("handler")?,
+            desc: opts.get::<Option<String>>("desc")?.unwrap_or_default(),
+            force: opts.get::<Option<bool>>("force")?.unwrap_or(false),
+        }),
+        _ => Err(mlua::Error::runtime(
+            "uji.command needs a function or a table with a handler",
+        )),
+    }
 }

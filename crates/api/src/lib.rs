@@ -8,6 +8,7 @@ pub mod input;
 pub mod job;
 pub mod keymap;
 pub mod llm;
+pub mod modal;
 pub mod provider;
 
 pub mod registry;
@@ -24,7 +25,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use mlua::{Function, Lua, Table, Value};
+use mlua::{Lua, Table, Value};
 
 use self::action::Actions;
 use uji_core::session::conversation::Shared;
@@ -44,7 +45,7 @@ pub struct Api {
     state: Rc<RefCell<UiState>>,
     scheduled: Scheduled,
     handlers: RefCell<Handlers>,
-    commands: RefCell<HashMap<String, Function>>,
+    commands: RefCell<HashMap<String, command::LuaCommand>>,
     tools: RefCell<HashMap<String, LuaTool>>,
     providers: RefCell<Catalog>,
     keymap: RefCell<Keymap>,
@@ -55,6 +56,7 @@ pub struct Api {
     capture: Capture,
     session_state: SessionState,
     exec: RefCell<Vec<Vec<String>>>,
+    modal: RefCell<Option<modal::ModalRequest>>,
     segments: Registry,
     agent_context: Registry,
     actions: Actions,
@@ -77,6 +79,7 @@ impl Api {
             capture: Capture::default(),
             session_state: SessionState::new(conversation),
             exec: RefCell::default(),
+            modal: RefCell::default(),
             segments: Registry::default(),
             agent_context: Registry::default(),
             actions: Actions::default(),
@@ -91,7 +94,7 @@ impl Api {
         &self.scheduled
     }
 
-    pub fn commands(&self) -> &RefCell<HashMap<String, Function>> {
+    pub fn commands(&self) -> &RefCell<HashMap<String, command::LuaCommand>> {
         &self.commands
     }
 
@@ -121,6 +124,14 @@ impl Api {
 
     pub fn composer(&self) -> &Composer {
         &self.composer
+    }
+
+    pub fn queue_modal(&self, request: modal::ModalRequest) {
+        *self.modal.borrow_mut() = Some(request);
+    }
+
+    pub fn take_modal(&self) -> Option<modal::ModalRequest> {
+        self.modal.borrow_mut().take()
     }
 
     pub fn queue_exec(&self, command: Vec<String>) {
@@ -161,24 +172,37 @@ impl Api {
         &self.handlers
     }
 
-    pub fn dispatch(&self, event: &str, ctx: &Table) {
-        for handler in self.handlers.borrow().get(event) {
-            if let Err(err) = handler.call::<()>((event, ctx.clone())) {
-                self.notify(format!("handler error for {event}: {err}"));
-            }
-        }
+    pub fn dispatch(&self, event: &str, payload: &Table) {
+        self.run(event, payload, Policy::All);
     }
 
-    pub fn dispatch_tool(&self, event: &str, event_table: &Table) -> Option<Value> {
+    pub fn has_handler(&self, event: &str) -> bool {
+        self.handlers.borrow().has(event)
+    }
+
+    pub fn ask(&self, event: &str, payload: &Table) -> Option<Value> {
+        self.run(event, payload, Policy::FirstAnswer)
+    }
+
+    fn run(&self, event: &str, payload: &Table, policy: Policy) -> Option<Value> {
+        let _ = payload.set("event", event);
         for handler in self.handlers.borrow().get(event) {
-            match handler.call::<Value>(event_table.clone()) {
-                Ok(value) if !value.is_nil() => return Some(value),
+            match handler.call::<Value>(payload.clone()) {
+                Ok(value) if policy == Policy::FirstAnswer && !value.is_nil() => {
+                    return Some(value);
+                }
                 Ok(_) => {}
                 Err(err) => self.notify(format!("{event} handler error: {err}")),
             }
         }
         None
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Policy {
+    All,
+    FirstAnswer,
 }
 
 pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
@@ -193,6 +217,8 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     ui.set("set_title", window::set_title(lua, api)?)?;
     ui.set("configure", window::configure(lua, api)?)?;
     ui.set("exec", window::exec(lua, api)?)?;
+    ui.set("select", modal::select(lua, api)?)?;
+    ui.set("prompt", modal::prompt(lua, api)?)?;
     uji.set("ui", ui)?;
 
     let llm = lua.create_table()?;

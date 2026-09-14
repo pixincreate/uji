@@ -3,10 +3,14 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use mlua::Value as LuaValue;
+use uji_api::modal::ModalKind;
 use uji_core::llm::{CancelToken, StreamEvent};
 use uji_screen::model::RunState;
 
+use uji_tui::app::Echo;
+
 use super::{Control, LoopData};
+use crate::cmd::LuaAction;
 use crate::runtime::events;
 use crate::runtime::job::JobEvent;
 use crate::runtime::signal::Signal;
@@ -34,6 +38,7 @@ impl LoopData {
         self.drain_titles();
         self.drain_jobs();
         self.drain_exec();
+        self.drain_modal();
         self.drain_diagnostics();
 
         for callback in self.inner.api.scheduled().take() {
@@ -148,6 +153,21 @@ impl LoopData {
         for text in self.inner.api.session().take_submits() {
             self.submit(&text);
         }
+    }
+
+    fn drain_modal(&mut self) {
+        let Some(request) = self.inner.api.take_modal() else {
+            return;
+        };
+        self.active = Some(Box::new(LuaAction::new(request.on_done)));
+        match request.kind {
+            ModalKind::Select { items } => self.app.open_select(request.title, items),
+            ModalKind::Prompt { value, hidden } => {
+                let echo = if hidden { Echo::Hidden } else { Echo::Plain };
+                self.app.open_prompt(request.title, value, echo);
+            }
+        }
+        self.dirty = true;
     }
 
     fn drain_exec(&mut self) {

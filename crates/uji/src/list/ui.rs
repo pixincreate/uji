@@ -12,7 +12,7 @@ use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table};
 use uji_core::session::id::now_millis;
 use uji_core::session::model::Session;
 use uji_tui::terminal::{self, Term};
-use uji_tui::ui::style::{MUTED, SELECTED_BG, TEXT};
+use uji_tui::ui::style::Palette;
 
 pub(super) struct State {
     cursor: usize,
@@ -111,6 +111,7 @@ fn draw(
     current_dir: &str,
     state: &State,
 ) -> io::Result<()> {
+    let palette = Palette::default();
     terminal.draw(|frame| {
         let [list_area, footer_area] =
             Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(frame.area());
@@ -123,12 +124,16 @@ fn draw(
         let inner = block.inner(list_area);
         let available = usize::from(inner.height).saturating_sub(1);
 
-        let header = Row::new(["TITLE", "UPDATED", "ID"])
-            .style(Style::default().fg(MUTED).add_modifier(Modifier::BOLD));
+        let header = Row::new(["TITLE", "UPDATED", "ID"]).style(
+            Style::default()
+                .fg(palette.muted)
+                .add_modifier(Modifier::BOLD),
+        );
 
         let rows = if sessions.is_empty() {
             vec![Row::new([
-                Cell::from("No sessions in current directory").style(Style::default().fg(MUTED)),
+                Cell::from("No sessions in current directory")
+                    .style(Style::default().fg(palette.muted)),
                 Cell::from(""),
                 Cell::from(""),
             ])]
@@ -142,7 +147,7 @@ fn draw(
                 .enumerate()
                 .map(|(index, session)| {
                     let style = if index == cursor_in_view {
-                        Style::default().bg(SELECTED_BG)
+                        Style::default().bg(palette.selected_bg)
                     } else {
                         Style::default()
                     };
@@ -167,23 +172,23 @@ fn draw(
         .header(header)
         .block(block)
         .column_spacing(2)
-        .style(Style::default().fg(TEXT));
+        .style(Style::default().fg(palette.text));
 
         frame.render_widget(table, list_area);
 
         let hint = if sessions.is_empty() {
             Line::from(vec![
                 Span::styled("esc", Style::default().fg(Color::Cyan)),
-                Span::styled(" quit", Style::default().fg(MUTED)),
+                Span::styled(" quit", Style::default().fg(palette.muted)),
             ])
         } else {
             Line::from(vec![
                 Span::styled("↑/↓", Style::default().fg(Color::Cyan)),
-                Span::styled(" navigate   ", Style::default().fg(MUTED)),
+                Span::styled(" navigate   ", Style::default().fg(palette.muted)),
                 Span::styled("enter", Style::default().fg(Color::Cyan)),
-                Span::styled(" resume   ", Style::default().fg(MUTED)),
+                Span::styled(" resume   ", Style::default().fg(palette.muted)),
                 Span::styled("esc", Style::default().fg(Color::Cyan)),
-                Span::styled(" quit", Style::default().fg(MUTED)),
+                Span::styled(" quit", Style::default().fg(palette.muted)),
             ])
         };
         frame.render_widget(Paragraph::new(hint), footer_area);

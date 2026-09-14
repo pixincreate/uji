@@ -6,7 +6,7 @@ use ratatui::widgets::Paragraph;
 use crate::ui::Context;
 use crate::ui::Render;
 use crate::ui::Surface;
-use crate::ui::style::{MUTED, accent_style, border_fade};
+use crate::ui::style::{Palette, border_fade};
 
 pub(crate) struct Menu<'a> {
     pub(crate) area: Rect,
@@ -15,11 +15,11 @@ pub(crate) struct Menu<'a> {
 }
 
 impl Render for Menu<'_> {
-    fn render(&self, _ctx: &Context<'_>, surface: &mut Surface<'_>) {
+    fn render(&self, ctx: &Context<'_>, surface: &mut Surface<'_>) {
         let [body, footer] =
             Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(self.area);
 
-        draw_border(surface.buf(), body);
+        draw_border(surface.buf(), body, ctx.palette);
 
         let inner = Rect {
             x: body.x + 1,
@@ -51,18 +51,18 @@ impl Render for Menu<'_> {
         };
         surface.render_at(rows_area, Paragraph::new(self.rows.clone()));
 
-        let muted = Style::default().fg(MUTED);
+        let muted = Style::default().fg(ctx.palette.muted);
         let hint = Line::from(vec![
-            Span::styled("⏎", accent_style()),
+            Span::styled("⏎", ctx.palette.accent_style()),
             Span::styled(" confirm   ", muted),
-            Span::styled("esc", accent_style()),
+            Span::styled("esc", ctx.palette.accent_style()),
             Span::styled(" cancel", muted),
         ]);
         surface.render_at(footer, Paragraph::new(hint));
     }
 }
 
-fn draw_border(buf: &mut ratatui::buffer::Buffer, area: Rect) {
+fn draw_border(buf: &mut ratatui::buffer::Buffer, area: Rect, palette: Palette) {
     let w = area.width;
     let h = area.height;
     if w < 3 || h < 3 {
@@ -71,7 +71,7 @@ fn draw_border(buf: &mut ratatui::buffer::Buffer, area: Rect) {
     for i in 1..w - 1 {
         let x = area.x + i;
         let d = i.min(w - 1 - i);
-        let style = border_fade(d);
+        let style = border_fade(palette, d);
         buf[(x, area.y)].set_symbol("─");
         buf[(x, area.y)].set_style(style);
         buf[(x, area.y + h - 1)].set_symbol("─");
@@ -80,7 +80,7 @@ fn draw_border(buf: &mut ratatui::buffer::Buffer, area: Rect) {
     for j in 1..h - 1 {
         let y = area.y + j;
         let d = j.min(h - 1 - j);
-        let style = border_fade(d);
+        let style = border_fade(palette, d);
         buf[(area.x, y)].set_symbol("│");
         buf[(area.x, y)].set_style(style);
         buf[(area.x + w - 1, y)].set_symbol("│");

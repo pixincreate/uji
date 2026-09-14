@@ -2,7 +2,7 @@ use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, T
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
-use crate::ui::style::{CODE, MUTED, TEXT, accent_style};
+use crate::ui::style::Palette;
 
 const BULLETS: &[&str] = &["•", "◦", "▪"];
 
@@ -91,10 +91,12 @@ fn finish_line(mut spans: Vec<Span<'static>>, indent: &str) -> Line<'static> {
     Line::from(spans)
 }
 
-fn heading_style(level: HeadingLevel) -> Style {
+fn heading_style(level: HeadingLevel, palette: Palette) -> Style {
     match level {
-        HeadingLevel::H1 | HeadingLevel::H2 => accent_style(),
-        _ => Style::default().fg(TEXT).add_modifier(Modifier::BOLD),
+        HeadingLevel::H1 | HeadingLevel::H2 => palette.accent_style(),
+        _ => Style::default()
+            .fg(palette.text)
+            .add_modifier(Modifier::BOLD),
     }
 }
 
@@ -108,20 +110,22 @@ struct Renderer {
     in_code: bool,
     marker: Option<String>,
     width: usize,
+    palette: Palette,
 }
 
 impl Renderer {
-    fn new(width: usize) -> Self {
+    fn new(width: usize, palette: Palette) -> Self {
         Self {
             lines: Vec::new(),
             block: Block::default(),
-            style: Style::default().fg(TEXT),
+            style: Style::default().fg(palette.text),
             styles: Vec::new(),
             list: Vec::new(),
             quote: 0,
             in_code: false,
             marker: None,
             width,
+            palette,
         }
     }
 
@@ -162,7 +166,7 @@ impl Renderer {
             }
             Tag::Heading { level, .. } => {
                 self.break_block();
-                self.style = heading_style(level);
+                self.style = heading_style(level, self.palette);
             }
             Tag::Emphasis => self.push_style(Modifier::ITALIC),
             Tag::Strong => self.push_style(Modifier::BOLD),
@@ -187,7 +191,9 @@ impl Renderer {
                 {
                     self.lines.push(Line::from(Span::styled(
                         format!("  {lang}"),
-                        Style::default().fg(MUTED).add_modifier(Modifier::DIM),
+                        Style::default()
+                            .fg(self.palette.muted)
+                            .add_modifier(Modifier::DIM),
                     )));
                 }
             }
@@ -206,7 +212,7 @@ impl Renderer {
                 self.style = self
                     .styles
                     .pop()
-                    .unwrap_or_else(|| Style::default().fg(TEXT));
+                    .unwrap_or_else(|| Style::default().fg(self.palette.text));
             }
             TagEnd::List(_) => {
                 self.list.pop();
@@ -216,7 +222,7 @@ impl Renderer {
             TagEnd::Paragraph | TagEnd::Item => self.flush(),
             TagEnd::Heading(_) => {
                 self.flush();
-                self.style = Style::default().fg(TEXT);
+                self.style = Style::default().fg(self.palette.text);
             }
             _ => {}
         }
@@ -230,7 +236,7 @@ impl Renderer {
                 for raw in text.lines() {
                     self.lines.push(Line::from(Span::styled(
                         format!("  {raw}"),
-                        Style::default().fg(CODE),
+                        Style::default().fg(self.palette.code),
                     )));
                 }
             }
@@ -241,7 +247,8 @@ impl Renderer {
             }
             Event::Code(text) => {
                 self.open();
-                self.block.push(&text, Style::default().fg(CODE));
+                self.block
+                    .push(&text, Style::default().fg(self.palette.code));
             }
             Event::SoftBreak => {
                 let style = self.style;
@@ -252,7 +259,7 @@ impl Renderer {
                 self.break_block();
                 self.lines.push(Line::from(Span::styled(
                     "─".repeat(self.width.min(60)),
-                    Style::default().fg(MUTED),
+                    Style::default().fg(self.palette.muted),
                 )));
             }
             _ => {}
@@ -268,10 +275,10 @@ impl Renderer {
     }
 }
 
-pub(crate) fn render(source: &str, width: usize) -> Vec<Line<'static>> {
+pub(crate) fn render(source: &str, width: usize, palette: Palette) -> Vec<Line<'static>> {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
-    let mut renderer = Renderer::new(width);
+    let mut renderer = Renderer::new(width, palette);
     for event in Parser::new_ext(source, options) {
         renderer.event(event);
     }

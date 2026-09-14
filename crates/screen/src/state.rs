@@ -1,8 +1,8 @@
 use std::time::Instant;
 
 use crate::model::{
-    Builtin, Color, ConfirmConfig, ConfirmOpts, GlobalOpts, Line, RunState, Size, UiConfig,
-    WinOpts, WindowSpec,
+    Builtin, Color, ConfirmConfig, ConfirmOpts, GlobalOpts, Line, RunState, Size, ThemeConfig,
+    UiConfig, WinOpts, WindowSpec,
 };
 
 #[derive(Debug, Default)]
@@ -33,6 +33,7 @@ impl UiState {
         self.windows.insert(
             at,
             WindowSpec {
+                fitted: None,
                 id,
                 builtin,
                 buffer: Vec::new(),
@@ -66,6 +67,17 @@ impl UiState {
         if let Some(window) = self.windows.iter_mut().find(|w| w.id == id) {
             window.buffer.clear();
         }
+    }
+
+    pub fn set_window_fitted(&mut self, id: u32, rows: u16) -> bool {
+        let Some(window) = self.windows.iter_mut().find(|window| window.id == id) else {
+            return false;
+        };
+        if window.fitted == Some(rows) {
+            return false;
+        }
+        window.fitted = Some(rows);
+        true
     }
 
     pub fn set_window_size(&mut self, id: u32, size: Size) {
@@ -122,7 +134,29 @@ impl UiState {
         self.opts.confirm = confirm;
     }
 
+    fn apply_theme(&mut self, config: &ThemeConfig) {
+        let mut theme = self.opts.theme;
+        for (slot, value) in [
+            (&mut theme.text, config.text.as_deref()),
+            (&mut theme.muted, config.muted.as_deref()),
+            (&mut theme.code, config.code.as_deref()),
+            (&mut theme.accent, config.accent.as_deref()),
+            (&mut theme.user_bg, config.user_bg.as_deref()),
+            (&mut theme.selected_bg, config.selected_bg.as_deref()),
+            (&mut theme.cursor, config.cursor.as_deref()),
+            (&mut theme.error, config.error.as_deref()),
+            (&mut theme.notice, config.notice.as_deref()),
+            (&mut theme.border, config.border.as_deref()),
+        ] {
+            if let Some(color) = parse_color(value, &mut self.notices) {
+                *slot = color;
+            }
+        }
+        self.opts.theme = theme;
+    }
+
     pub fn apply_config(&mut self, config: &UiConfig) {
+        self.apply_theme(&config.theme);
         if let Some(cursor_blink) = config.input.cursor_blink {
             self.set_cursor_blink(cursor_blink);
         }

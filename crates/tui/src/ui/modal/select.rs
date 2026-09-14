@@ -6,9 +6,8 @@ use ratatui::widgets::{Clear, Paragraph};
 use crate::ui::Context;
 use crate::ui::Render;
 use crate::ui::Surface;
-use crate::ui::style::{MUTED, TEXT, accent_style};
 
-const MAX_ROWS: usize = 12;
+pub(crate) const MAX_ROWS: usize = 12;
 
 pub(crate) struct Select<'a> {
     pub(crate) title: &'a str,
@@ -41,29 +40,37 @@ impl Render for Select<'_> {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             format!("  {}", self.title),
-            Style::default().fg(TEXT).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(ctx.palette.text)
+                .add_modifier(Modifier::BOLD),
         )));
         lines.push(Line::from(""));
 
         lines.push(Line::from(vec![
-            Span::styled("  > ", accent_style()),
-            Span::styled(self.query.to_string(), Style::default().fg(TEXT)),
-            Span::styled("\u{2588}", Style::default().fg(MUTED)),
+            Span::styled("  > ", ctx.palette.accent_style()),
+            Span::styled(
+                self.query.to_string(),
+                Style::default().fg(ctx.palette.text),
+            ),
+            Span::styled("\u{2588}", Style::default().fg(ctx.palette.muted)),
         ]));
         for (offset, item) in matches[start..start + visible].iter().enumerate() {
             let index = start + offset;
             let active = index == self.cursor;
             let marker = if active { "\u{203a} " } else { "  " };
             let style = if active {
-                accent_style()
+                ctx.palette.accent_style()
             } else {
-                Style::default().fg(TEXT)
+                Style::default().fg(ctx.palette.text)
             };
             let label = format!("{marker}{item}");
             let label: String = label.chars().take(width).collect();
             let mut spans = vec![Span::styled(label, style)];
             if item.as_str() == current {
-                spans.push(Span::styled(" (current)", Style::default().fg(MUTED)));
+                spans.push(Span::styled(
+                    " (current)",
+                    Style::default().fg(ctx.palette.muted),
+                ));
             }
             lines.push(Line::from(spans));
         }
@@ -76,7 +83,9 @@ impl Render for Select<'_> {
                     start + visible,
                     matches.len()
                 ),
-                Style::default().fg(MUTED).add_modifier(Modifier::DIM),
+                Style::default()
+                    .fg(ctx.palette.muted)
+                    .add_modifier(Modifier::DIM),
             )));
         }
 

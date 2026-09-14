@@ -124,6 +124,19 @@ fn span_from_lua(value: LuaValue) -> mlua::Result<Span> {
     }
 }
 
+pub fn lines_from_lua(value: LuaValue) -> mlua::Result<Vec<Line>> {
+    let LuaValue::Table(table) = value else {
+        return Err(mlua::Error::runtime(
+            "a renderer must return a list of lines",
+        ));
+    };
+    let mut lines = Vec::new();
+    for item in table.sequence_values::<LuaValue>() {
+        lines.push(line_from_lua(item?)?);
+    }
+    Ok(lines)
+}
+
 fn line_from_lua(value: LuaValue) -> mlua::Result<Line> {
     match &value {
         LuaValue::Table(table) if !table.contains_key("text")? => {

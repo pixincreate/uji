@@ -3,7 +3,7 @@ use ratatui::text::{Line, Span};
 use uji_screen::model::Color;
 
 use crate::ui::Context;
-use crate::ui::style::{MUTED, TEXT, accent_style, color_of};
+use crate::ui::style::{Palette, color_of};
 use crate::ui::wrap::text as wrap;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -34,12 +34,13 @@ pub(crate) fn lines(
 ) -> Vec<Line<'static>> {
     let opts = ctx.state.opts();
     let confirm = &opts.confirm;
+    let palette = ctx.palette;
 
-    let selected = styled(confirm.selected, accent_style());
-    let unselected = styled(confirm.unselected, Style::default().fg(MUTED));
+    let selected = styled(confirm.selected, palette.accent_style());
+    let unselected = styled(confirm.unselected, Style::default().fg(palette.muted));
     let title_style =
-        styled(confirm.title_color, Style::default().fg(TEXT)).add_modifier(Modifier::BOLD);
-    let body_style = styled(confirm.body_color, Style::default().fg(TEXT));
+        styled(confirm.title_color, Style::default().fg(palette.text)).add_modifier(Modifier::BOLD);
+    let body_style = styled(confirm.body_color, Style::default().fg(palette.text));
 
     let inner = usize::from(width).saturating_sub(2).max(1);
     let mut lines: Vec<Line<'static>> = vec![Line::from("")];
@@ -58,6 +59,7 @@ pub(crate) fn lines(
         choice == Choice::Allow,
         selected,
         unselected,
+        palette,
     ));
     lines.push(option_line(
         2,
@@ -66,6 +68,7 @@ pub(crate) fn lines(
         choice == Choice::Deny,
         selected,
         unselected,
+        palette,
     ));
     lines.push(Line::from(""));
     lines
@@ -78,6 +81,7 @@ fn option_line(
     active: bool,
     selected: Style,
     unselected: Style,
+    palette: Palette,
 ) -> Line<'static> {
     let marker = if active { "\u{203a} " } else { "  " };
     let style = if active { selected } else { unselected };
@@ -86,7 +90,9 @@ fn option_line(
         Span::styled(format!("{index}. {label}"), style),
         Span::styled(
             format!(" ({key})"),
-            Style::default().fg(MUTED).add_modifier(Modifier::DIM),
+            Style::default()
+                .fg(palette.muted)
+                .add_modifier(Modifier::DIM),
         ),
     ])
 }

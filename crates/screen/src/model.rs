@@ -7,12 +7,14 @@ use serde::Deserialize;
 pub enum Builtin {
     Messages,
     Input,
+    Modal,
 }
 
 impl fmt::Display for Builtin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Self::Messages => "messages",
+            Self::Modal => "modal",
             Self::Input => "input",
         })
     }
@@ -25,8 +27,9 @@ impl FromStr for Builtin {
         match s {
             "messages" => Ok(Self::Messages),
             "input" => Ok(Self::Input),
+            "modal" => Ok(Self::Modal),
             other => Err(ParseError(format!(
-                "unknown view: {other} (expected \"messages\" or \"input\")"
+                "unknown view: {other} (expected \"messages\", \"input\" or \"modal\")"
             ))),
         }
     }
@@ -148,6 +151,7 @@ pub enum Border {
 pub enum Size {
     Fill,
     Fixed(u16),
+    Auto,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -194,6 +198,61 @@ pub struct WindowSpec {
     pub builtin: Option<Builtin>,
     pub buffer: Vec<Line>,
     pub opts: WinOpts,
+    pub fitted: Option<u16>,
+}
+
+impl WindowSpec {
+    pub fn effective_size(&self) -> Size {
+        match self.opts.size {
+            Size::Auto => Size::Fixed(self.fitted.unwrap_or(0)),
+            other => other,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Theme {
+    pub text: Color,
+    pub muted: Color,
+    pub code: Color,
+    pub accent: Color,
+    pub user_bg: Color,
+    pub selected_bg: Color,
+    pub cursor: Color,
+    pub error: Color,
+    pub notice: Color,
+    pub border: Color,
+}
+
+impl Default for Theme {
+    fn default() -> Self {
+        Self {
+            text: Color::Rgb(0xd4, 0xd4, 0xd4),
+            muted: Color::Rgb(0x80, 0x80, 0x80),
+            code: Color::Rgb(0xe0, 0xaf, 0x68),
+            accent: Color::Cyan,
+            user_bg: Color::Rgb(0x34, 0x35, 0x41),
+            selected_bg: Color::Rgb(0x3a, 0x3a, 0x4a),
+            cursor: Color::White,
+            error: Color::Red,
+            notice: Color::Red,
+            border: Color::Rgb(0x50, 0x50, 0x53),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct ThemeConfig {
+    pub text: Option<String>,
+    pub muted: Option<String>,
+    pub code: Option<String>,
+    pub accent: Option<String>,
+    pub user_bg: Option<String>,
+    pub selected_bg: Option<String>,
+    pub cursor: Option<String>,
+    pub error: Option<String>,
+    pub notice: Option<String>,
+    pub border: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -206,6 +265,7 @@ pub struct GlobalOpts {
     pub loader_interval_ms: u64,
     pub agent_system_prompt: Option<String>,
     pub confirm: ConfirmOpts,
+    pub theme: Theme,
 }
 
 impl Default for GlobalOpts {
@@ -219,6 +279,7 @@ impl Default for GlobalOpts {
             loader_interval_ms: 80,
             agent_system_prompt: None,
             confirm: ConfirmOpts::default(),
+            theme: Theme::default(),
         }
     }
 }
@@ -251,6 +312,7 @@ impl Default for ConfirmOpts {
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]
 pub struct UiConfig {
+    pub theme: ThemeConfig,
     pub input: InputConfig,
     pub suggest: SuggestConfig,
     pub waiting: WaitingConfig,
@@ -378,8 +440,9 @@ impl FromStr for Size {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "fill" => Ok(Self::Fill),
+            "auto" => Ok(Self::Auto),
             other => Err(ParseError(format!(
-                "unknown size: {other} (expected \"fill\")"
+                "unknown size: {other} (expected \"fill\" or \"auto\")"
             ))),
         }
     }
@@ -389,6 +452,7 @@ impl fmt::Display for Size {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Fill => f.write_str("fill"),
+            Self::Auto => f.write_str("auto"),
             Self::Fixed(n) => write!(f, "{n}"),
         }
     }

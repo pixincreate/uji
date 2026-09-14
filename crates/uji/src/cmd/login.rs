@@ -31,22 +31,14 @@ pub struct Login {
 }
 
 impl Action for Login {
-    fn name(&self) -> &'static str {
-        "login"
-    }
-
-    fn desc(&self) -> &'static str {
-        "configure provider and auth"
-    }
-
-    fn start<C: Context>(&mut self, ctx: &mut C, _args: &Args) {
+    fn start(&mut self, ctx: &mut dyn Context, _args: &Args) {
         self.step = Step::Provider;
         self.draft = Draft::default();
         let names = ctx.providers().iter().map(|p| p.name.clone()).collect();
         ctx.open_select("Provider".into(), names);
     }
 
-    fn on_select<C: Context>(&mut self, ctx: &mut C, item: String) {
+    fn on_select(&mut self, ctx: &mut dyn Context, item: String) {
         match self.step {
             Step::Provider => self.on_provider(ctx, &item),
             Step::Method => self.on_method(ctx, &item),
@@ -54,7 +46,7 @@ impl Action for Login {
         }
     }
 
-    fn on_prompt<C: Context>(&mut self, ctx: &mut C, value: String) {
+    fn on_prompt(&mut self, ctx: &mut dyn Context, value: String) {
         match self.step {
             Step::BaseUrl => {
                 self.draft.base_url = value;
@@ -75,13 +67,13 @@ impl Action for Login {
         }
     }
 
-    fn on_cancel<C: Context>(&mut self, ctx: &mut C) {
+    fn on_cancel(&mut self, ctx: &mut dyn Context) {
         ctx.finish();
     }
 }
 
 impl Login {
-    fn on_provider<C: Context>(&mut self, ctx: &mut C, item: &str) {
+    fn on_provider(&mut self, ctx: &mut dyn Context, item: &str) {
         let Some(provider) = ctx.provider_by_name(item) else {
             ctx.finish();
             return;
@@ -106,7 +98,7 @@ impl Login {
         }
     }
 
-    fn on_method<C: Context>(&mut self, ctx: &mut C, item: &str) {
+    fn on_method(&mut self, ctx: &mut dyn Context, item: &str) {
         if item == SUBSCRIPTION {
             self.finish_configure(ctx);
             ctx.start_oauth(&self.draft.provider_id.clone());
@@ -115,12 +107,12 @@ impl Login {
         }
     }
 
-    fn ask_base_url<C: Context>(&mut self, ctx: &mut C) {
+    fn ask_base_url(&mut self, ctx: &mut dyn Context) {
         self.step = Step::BaseUrl;
         ctx.open_prompt("base_url".into(), String::new(), Echo::Plain);
     }
 
-    fn ask_api_key<C: Context>(&mut self, ctx: &mut C) {
+    fn ask_api_key(&mut self, ctx: &mut dyn Context) {
         self.step = Step::ApiKey;
         let title = if self.draft.auth_env.is_empty() {
             "api_key (enter to skip)".to_string()
@@ -130,7 +122,7 @@ impl Login {
         ctx.open_prompt(title, String::new(), Echo::Hidden);
     }
 
-    fn finish_configure<C: Context>(&self, ctx: &mut C) {
+    fn finish_configure(&self, ctx: &mut dyn Context) {
         ctx.set_setting("llm.provider", &self.draft.provider_id);
         if self.draft.is_custom {
             ctx.set_setting("llm.base_url", &self.draft.base_url);

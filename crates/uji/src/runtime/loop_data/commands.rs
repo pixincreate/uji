@@ -6,7 +6,7 @@ use uji_tui::app::{Echo, SuggestItem};
 
 use super::{Control, LoopData, ModalInput};
 use crate::cmd::{Args, Context};
-use crate::runtime::builtin::Builtin;
+use crate::runtime::builtin::{self, BUILTINS};
 use crate::runtime::events;
 
 impl LoopData {
@@ -23,11 +23,13 @@ impl LoopData {
         };
         let args = Args::parse(rest);
         let lua_command = self.inner.api.commands().borrow().get(name).cloned();
-        if let Some(mut action) = Builtin::from_name(name) {
+        let forced = lua_command.as_ref().is_some_and(|command| command.force);
+        let builtin = if forced { None } else { builtin::build(name) };
+        if let Some(mut action) = builtin {
             action.start(self, &args);
             self.active = Some(action);
-        } else if let Some(handler) = lua_command {
-            if let Err(err) = handler.call::<()>((args.raw.clone(),)) {
+        } else if let Some(command) = lua_command {
+            if let Err(err) = command.handler.call::<()>((args.raw.clone(),)) {
                 self.inner.report(format!("{name}: {err}"));
             }
         } else {
@@ -148,24 +150,33 @@ impl Context for LoopData {
 }
 
 fn suggest_pool(data: &LoopData) -> Vec<SuggestItem> {
-    let mut items: Vec<SuggestItem> = Builtin::ALL
+    let commands = data.inner.api.commands();
+    let commands = commands.borrow();
+    let mut items: Vec<SuggestItem> = BUILTINS
         .iter()
-        .map(|(name, desc)| SuggestItem {
-            name: (*name).to_string(),
-            desc: (*desc).to_string(),
+        .map(|builtin| SuggestItem {
+            name: builtin.name.to_string(),
+            desc: commands
+                .get(builtin.name)
+                .filter(|command| command.force)
+                .map(|command| command.desc.as_str())
+                .filter(|desc| !desc.is_empty())
+                .unwrap_or(builtin.desc)
+                .to_string(),
         })
         .collect();
-    let mut lua: Vec<SuggestItem> = data
-        .inner
-        .api
-        .commands()
-        .borrow()
-        .keys()
-        .map(|name| SuggestItem {
-            name: name.clone(),
-            desc: "lua command".into(),
-        })
-        .collect();
-    items.append(&mut lua);
+    items.extend(
+        commands
+            .iter()
+            .filter(|(name, _)| !BUILTINS.iter().any(|builtin| builtin.name == *name))
+            .map(|(name, command)| SuggestItem {
+                name: name.clone(),
+                desc: if command.desc.is_empty() {
+                    "lua command".to_string()
+                } else {
+                    command.desc.clone()
+                },
+            }),
+    );
     items
 }

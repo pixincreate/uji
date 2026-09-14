@@ -1,19 +1,16 @@
-pub const SESSION_CREATED: &str = "SessionCreated";
-
-pub const SESSION_RESUMED: &str = "SessionResumed";
-
-pub const MESSAGE_SUBMITTED: &str = "MessageSubmitted";
-
-pub const MESSAGE_APPENDED: &str = "MessageAppended";
-
-pub const TOOL_STARTED: &str = "ToolStarted";
-
-pub const TOOL_FINISHED: &str = "ToolFinished";
-
-pub const SESSION_TITLED: &str = "SessionTitled";
-
-pub const QUIT: &str = "Quit";
-
+pub const SESSION_CREATED: &str = "session_created";
+pub const SESSION_RESUMED: &str = "session_resumed";
+pub const SESSION_TITLED: &str = "session_titled";
+pub const MESSAGE_SUBMITTED: &str = "message_submitted";
+pub const MESSAGE_APPENDED: &str = "message_appended";
+pub const RENDER_MESSAGE: &str = "render_message";
+pub const TOOL_CALL: &str = "tool_call";
+pub const TOOL_STARTED: &str = "tool_started";
+pub const TOOL_FINISHED: &str = "tool_finished";
+pub const TURN_FINISHED: &str = "turn_finished";
+pub const MODEL_CHANGED: &str = "model_changed";
+pub const COMPACTED: &str = "compacted";
+pub const ERROR: &str = "error";
 pub const STATUS_CHANGED: &str = "status_changed";
-
 pub const TICK: &str = "tick";
+pub const QUIT: &str = "quit";
