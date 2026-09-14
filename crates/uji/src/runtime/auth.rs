@@ -15,7 +15,7 @@ pub(crate) enum AuthEvent {
 pub(crate) fn start(
     runtime: &tokio::runtime::Runtime,
     client: Arc<reqwest::Client>,
-    provider: &'static Provider,
+    provider: &Provider,
     sender: calloop::channel::Sender<Signal>,
 ) {
     let Some(config) = provider.oauth.clone() else {

@@ -1,5 +1,4 @@
 use super::{Action, Args, Context};
-use uji_core::llm;
 use uji_tui::app::Echo;
 
 const SUBSCRIPTION: &str = "Subscription (sign in with browser)";
@@ -43,7 +42,7 @@ impl Action for Login {
     fn start<C: Context>(&mut self, ctx: &mut C, _args: &Args) {
         self.step = Step::Provider;
         self.draft = Draft::default();
-        let names = llm::providers().iter().map(|p| p.name.clone()).collect();
+        let names = ctx.providers().iter().map(|p| p.name.clone()).collect();
         ctx.open_select("Provider".into(), names);
     }
 
@@ -83,7 +82,7 @@ impl Action for Login {
 
 impl Login {
     fn on_provider<C: Context>(&mut self, ctx: &mut C, item: &str) {
-        let Some(provider) = llm::provider_by_name(item) else {
+        let Some(provider) = ctx.provider_by_name(item) else {
             ctx.finish();
             return;
         };
@@ -139,7 +138,7 @@ impl Login {
         } else {
             ctx.set_setting("llm.base_url", "");
             if ctx.get_setting("llm.model").is_none()
-                && let Some(provider) = llm::provider(&self.draft.provider_id)
+                && let Some(provider) = ctx.provider(&self.draft.provider_id)
             {
                 ctx.set_setting("llm.model", provider.default_model());
             }

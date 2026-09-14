@@ -147,7 +147,10 @@ impl Inner {
     }
 
     pub(crate) fn resolve_llm(&self, storage: &mut dyn SessionStorage) {
-        let selection = uji_core::llm::resolve_from_storage(storage);
+        let selection = {
+            let catalog = self.api.providers().borrow();
+            uji_core::llm::resolve_from_storage(storage, &catalog)
+        };
         *self.llm.borrow_mut() = selection.llm;
         self.llm_model.borrow_mut().clone_from(&selection.model);
 

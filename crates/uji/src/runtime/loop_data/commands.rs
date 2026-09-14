@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use uji_core::credential;
+use uji_core::llm::Provider;
 use uji_tui::app::{Echo, SuggestItem};
 
 use super::{Control, LoopData, ModalInput};
@@ -87,7 +88,14 @@ impl Context for LoopData {
     }
 
     fn start_oauth(&mut self, provider_id: &str) {
-        let Some(provider) = uji_core::llm::provider(provider_id) else {
+        let Some(provider) = self
+            .inner
+            .api
+            .providers()
+            .borrow()
+            .get(provider_id)
+            .cloned()
+        else {
             self.inner
                 .report(format!("unknown provider: {provider_id}"));
             return;
@@ -95,7 +103,7 @@ impl Context for LoopData {
         crate::runtime::auth::start(
             &self.runtime,
             Arc::clone(&self.inner.client),
-            provider,
+            &provider,
             self.signals.clone(),
         );
     }
@@ -112,6 +120,18 @@ impl Context for LoopData {
 
     fn finish(&mut self) {
         self.action_done = true;
+    }
+
+    fn providers(&self) -> Vec<Provider> {
+        self.inner.api.providers().borrow().all().to_vec()
+    }
+
+    fn provider(&self, id: &str) -> Option<Provider> {
+        self.inner.api.providers().borrow().get(id).cloned()
+    }
+
+    fn provider_by_name(&self, name: &str) -> Option<Provider> {
+        self.inner.api.providers().borrow().by_name(name).cloned()
     }
 
     fn command_names(&self) -> Vec<String> {

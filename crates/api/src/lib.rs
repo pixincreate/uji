@@ -8,6 +8,7 @@ pub mod input;
 pub mod job;
 pub mod keymap;
 pub mod llm;
+pub mod provider;
 
 pub mod registry;
 pub mod schedule;
@@ -36,6 +37,7 @@ use self::registry::Registry;
 use self::scheduled::Scheduled;
 use self::session::SessionState;
 use self::tools::LuaTool;
+use uji_core::llm::Catalog;
 use uji_screen::keymap::Keymap;
 
 pub struct Api {
@@ -44,6 +46,7 @@ pub struct Api {
     handlers: RefCell<Handlers>,
     commands: RefCell<HashMap<String, Function>>,
     tools: RefCell<HashMap<String, LuaTool>>,
+    providers: RefCell<Catalog>,
     keymap: RefCell<Keymap>,
     packs: RefCell<Vec<PathBuf>>,
     notices: RefCell<Vec<String>>,
@@ -65,6 +68,7 @@ impl Api {
             handlers: RefCell::default(),
             commands: RefCell::default(),
             tools: RefCell::default(),
+            providers: RefCell::default(),
             keymap: RefCell::default(),
             packs: RefCell::default(),
             notices: RefCell::default(),
@@ -93,6 +97,10 @@ impl Api {
 
     pub fn lua_tools(&self) -> &RefCell<HashMap<String, LuaTool>> {
         &self.tools
+    }
+
+    pub fn providers(&self) -> &RefCell<Catalog> {
+        &self.providers
     }
 
     pub fn keymap(&self) -> &RefCell<Keymap> {
@@ -217,6 +225,7 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     uji.set("agent", agent::register(lua, api)?)?;
     uji.set("action", action::register(lua, api)?)?;
     uji.set("keymap", keymap::register(lua, api)?)?;
+    uji.set("provider", provider::register(lua, api)?)?;
     uji.set("job", job::register(lua, api)?)?;
     uji.set("input", input::register(lua, api)?)?;
     uji.set("session", session::register(lua, api)?)?;

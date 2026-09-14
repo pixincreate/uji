@@ -80,6 +80,23 @@ end
 uji.on("status_changed", render_activity)
 uji.on("tick", render_activity)
 
+-- Providers. Anything speaking an OpenAI-, Anthropic- or Gemini-compatible
+-- API is one table away; uji supplies the wire, you supply the endpoint.
+--
+-- uji.provider.add({
+--   id       = "deepseek",
+--   name     = "DeepSeek",
+--   wire     = "openai-chat",           -- openai-chat | anthropic | gemini
+--   base_url = "https://api.deepseek.com/v1",
+--   auth_env = { "DEEPSEEK_API_KEY" },
+--   models   = { "deepseek-chat", "deepseek-reasoner" },
+-- })
+-- uji.provider.list()
+-- uji.provider.remove("deepseek")
+--
+-- Reusing an existing id overrides that provider, so pointing "ollama" at a
+-- different host is also just an add().
+
 -- Keybindings. Every key is remappable per mode: normal, suggest, select,
 -- prompt, confirm. A binding is either a builtin action name, a slash command
 -- via { command = "models" }, or nil to unbind the key entirely.

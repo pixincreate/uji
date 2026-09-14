@@ -5,7 +5,6 @@ pub mod title;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::LazyLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -191,8 +190,12 @@ pub struct OAuthSession {
 }
 
 impl LlmConfig {
-    pub fn for_provider(provider_id: String, model: String, base_url: Option<String>) -> Self {
-        let known = provider(&provider_id);
+    pub fn for_provider(
+        provider_id: String,
+        known: Option<&Provider>,
+        model: String,
+        base_url: Option<String>,
+    ) -> Self {
         let catalog_url = known
             .map(|entry| entry.base_url.clone())
             .filter(|url| !url.is_empty());
@@ -238,37 +241,70 @@ pub struct Provider {
     pub auth_env: Vec<String>,
     #[serde(default)]
     pub oauth: Option<crate::auth::OAuthConfig>,
+    #[serde(default)]
+    pub models: Vec<String>,
 }
 
 impl Provider {
-    pub fn default_model(&self) -> &'static str {
-        models(&self.id).first().copied().unwrap_or("")
+    pub fn default_model(&self) -> &str {
+        self.models.first().map_or("", String::as_str)
     }
 }
 
-static PROVIDERS: LazyLock<Vec<Provider>> =
-    LazyLock::new(|| serde_json::from_str(include_str!("providers.json")).unwrap_or_default());
-
-pub fn providers() -> &'static [Provider] {
-    PROVIDERS.as_slice()
+#[derive(Debug, Clone)]
+pub struct Catalog {
+    providers: Vec<Provider>,
 }
 
-pub fn provider(id: &str) -> Option<&'static Provider> {
-    PROVIDERS.iter().find(|p| p.id == id)
+impl Default for Catalog {
+    fn default() -> Self {
+        Self::builtin()
+    }
 }
 
-pub fn provider_by_name(name: &str) -> Option<&'static Provider> {
-    PROVIDERS.iter().find(|p| p.name == name)
+impl Catalog {
+    pub fn builtin() -> Self {
+        let mut providers: Vec<Provider> =
+            serde_json::from_str(include_str!("providers.json")).unwrap_or_default();
+        let models: HashMap<String, Vec<String>> =
+            serde_json::from_str(include_str!("models.json")).unwrap_or_default();
+        for provider in &mut providers {
+            if let Some(known) = models.get(&provider.id) {
+                provider.models.clone_from(known);
+            }
+        }
+        Self { providers }
+    }
+
+    pub fn add(&mut self, provider: Provider) {
+        match self
+            .providers
+            .iter_mut()
+            .find(|entry| entry.id == provider.id)
+        {
+            Some(entry) => *entry = provider,
+            None => self.providers.push(provider),
+        }
+    }
+
+    pub fn remove(&mut self, id: &str) {
+        self.providers.retain(|entry| entry.id != id);
+    }
+
+    pub fn get(&self, id: &str) -> Option<&Provider> {
+        self.providers.iter().find(|entry| entry.id == id)
+    }
+
+    pub fn by_name(&self, name: &str) -> Option<&Provider> {
+        self.providers.iter().find(|entry| entry.name == name)
+    }
+
+    pub fn all(&self) -> &[Provider] {
+        &self.providers
+    }
 }
 
-static MODELS: LazyLock<HashMap<&'static str, Vec<&'static str>>> =
-    LazyLock::new(|| serde_json::from_str(include_str!("models.json")).unwrap_or_default());
-
-pub fn models(id: &str) -> &'static [&'static str] {
-    MODELS.get(id).map_or(&[], Vec::as_slice)
-}
-
-fn oauth_session(provider_id: &str, known: Option<&'static Provider>) -> Option<OAuthSession> {
+fn oauth_session(provider_id: &str, known: Option<&Provider>) -> Option<OAuthSession> {
     let config = known?.oauth.clone()?;
     let credential::Credential::OAuth {
         access,
@@ -289,11 +325,11 @@ fn oauth_session(provider_id: &str, known: Option<&'static Provider>) -> Option<
     })
 }
 
-pub fn resolve(config: &LlmConfig) -> Arc<dyn Llm> {
+pub fn resolve(wire: Option<Wire>, config: &LlmConfig) -> Arc<dyn Llm> {
     if config.provider.is_empty() {
         return Arc::new(NotConfigured);
     }
-    match provider(&config.provider).map(|entry| entry.wire) {
+    match wire {
         Some(Wire::Anthropic) => Arc::new(Anthropic::new(config)),
         Some(Wire::Gemini) => Arc::new(Gemini::new(config)),
         Some(Wire::OpenAiChat) | None => Arc::new(OpenAi::new(config)),
@@ -630,19 +666,20 @@ fn setting(storage: &mut dyn SessionStorage, key: &str) -> Option<String> {
     storage.get_setting(key).ok().flatten()
 }
 
-pub fn resolve_from_storage(storage: &mut dyn SessionStorage) -> Selection {
+pub fn resolve_from_storage(storage: &mut dyn SessionStorage, catalog: &Catalog) -> Selection {
     let provider_id = setting(storage, "llm.provider").unwrap_or_default();
-    let known = provider(&provider_id);
+    let known = catalog.get(&provider_id);
     let model = setting(storage, "llm.model").unwrap_or_else(|| {
         known.map_or_else(String::new, |entry| entry.default_model().to_string())
     });
     let config = LlmConfig::for_provider(
         provider_id.clone(),
+        known,
         model.clone(),
         setting(storage, "llm.base_url"),
     );
     Selection {
-        llm: resolve(&config),
+        llm: resolve(known.map(|entry| entry.wire), &config),
         provider: known.map_or(provider_id, |entry| entry.name.clone()),
         model,
     }

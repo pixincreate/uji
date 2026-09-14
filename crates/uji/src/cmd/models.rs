@@ -1,5 +1,4 @@
 use super::{Action, Args, Context};
-use uji_core::llm;
 
 #[derive(Default)]
 pub struct Models;
@@ -15,18 +14,18 @@ impl Action for Models {
 
     fn start<C: Context>(&mut self, ctx: &mut C, _args: &Args) {
         let provider_id = ctx.get_setting("llm.provider").unwrap_or_default();
-        let Some(provider) = llm::provider(&provider_id) else {
+        let Some(provider) = ctx.provider(&provider_id) else {
             ctx.notify("Please run /login to configure a provider");
             ctx.finish();
             return;
         };
-        let model_ids = llm::models(&provider_id);
+        let model_ids = provider.models.clone();
         if model_ids.is_empty() {
             ctx.notify(&format!("no models listed for {}", provider.name));
             ctx.finish();
             return;
         }
-        let items = model_ids.iter().map(|model| (*model).to_string()).collect();
+        let items = model_ids;
         ctx.open_select(format!("{} models", provider.name), items);
     }
 
