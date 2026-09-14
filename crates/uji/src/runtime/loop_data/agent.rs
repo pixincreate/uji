@@ -5,7 +5,8 @@ use mlua::{LuaSerdeExt, Value as LuaValue};
 use uji_core::llm::{
     AgentConfig, CancelToken, LuaToolSpec, StreamEvent, ToolDecision, ToolSpec, run_agent,
 };
-use uji_core::session::model::{Message, ToolCall};
+use uji_core::session::id::{MessageId, now_millis};
+use uji_core::session::model::{Message, StoredMessage, ToolCall};
 use uji_core::tools::policy::Action;
 use uji_screen::model::RunState;
 
@@ -165,18 +166,31 @@ impl LoopData {
         let kind = message.type_name();
         let text = message.text().to_string();
         let id = self.app.session().id;
-        match self.storage.append_message(&id, message) {
-            Ok(stored) => {
-                self.app.conversation().borrow_mut().push(stored);
-                self.inner.emit(
-                    events::MESSAGE_APPENDED,
-                    &[("type", kind.to_string()), ("text", text)],
-                );
+        let stored = match self.storage.append_message(&id, message.clone()) {
+            Ok(stored) => stored,
+            Err(err) => {
+                self.inner
+                    .report(format!("failed to persist {kind} message: {err}"));
+                let seq = self
+                    .app
+                    .messages()
+                    .messages()
+                    .last()
+                    .map_or(0, |last| last.seq)
+                    .saturating_add(1);
+                StoredMessage {
+                    id: MessageId::new(),
+                    seq,
+                    time_created: now_millis(),
+                    message,
+                }
             }
-            Err(err) => self
-                .inner
-                .report(format!("failed to persist {kind} message: {err}")),
-        }
+        };
+        self.app.conversation().borrow_mut().push(stored);
+        self.inner.emit(
+            events::MESSAGE_APPENDED,
+            &[("type", kind.to_string()), ("text", text)],
+        );
         self.dirty = true;
     }
 

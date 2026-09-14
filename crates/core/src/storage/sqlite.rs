@@ -27,7 +27,12 @@ impl StorageInterface for SqliteStorage {
             .ok_or_else(|| StorageError::NotFound("non-utf8 database path".into()))?
             .to_owned();
         let mut conn = SqliteConnection::establish(&url)?;
-        conn.batch_execute("PRAGMA foreign_keys = ON;")?;
+        conn.batch_execute(
+            "PRAGMA busy_timeout = 5000;
+             PRAGMA journal_mode = WAL;
+             PRAGMA synchronous = NORMAL;
+             PRAGMA foreign_keys = ON;",
+        )?;
         conn.run_pending_migrations(MIGRATIONS)?;
         Ok(Self { conn })
     }

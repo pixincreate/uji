@@ -1,7 +1,8 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
 use super::action::{Action, KeyAction, default_action, filter_items};
-use super::{App, Mode};
+use super::{App, Mode, sent};
+use std::rc::Rc;
 
 const SELECT_PAGE: isize = 10;
 
@@ -18,7 +19,7 @@ impl App {
 
     fn handle_normal_key(&mut self, key: KeyEvent) -> KeyAction {
         match key.code {
-            KeyCode::Esc if self.input.is_empty() => KeyAction::Interrupt,
+            KeyCode::Esc if self.input().is_empty() => KeyAction::Interrupt,
             KeyCode::Esc => self.apply(Action::ClearInput),
             KeyCode::Char(c) => self.insert_char(c),
             code => match default_action(code) {
@@ -107,10 +108,7 @@ impl App {
     }
 
     pub(super) fn take_submit(&mut self) -> KeyAction {
-        self.set_browsing(None);
-        let text = self.input.trim().to_string();
-        self.input.clear();
-        self.cursor = 0;
+        let text = self.composer.take().trim().to_string();
         if text.is_empty() {
             KeyAction::None
         } else if let Some(command) = text.strip_prefix('/') {
@@ -120,85 +118,57 @@ impl App {
         }
     }
 
-    /// Walk back through previously submitted messages. The first step stashes
-    /// whatever was being typed so `history_next` can restore it.
     pub(super) fn history_prev(&mut self) -> KeyAction {
-        let next = if let Some(at) = self.browsing() {
-            at.saturating_add(1)
-        } else {
-            self.stash_draft();
-            0
-        };
-        let Some(text) = self.submitted(next) else {
-            return KeyAction::None;
-        };
-        self.set_browsing(Some(next));
-        self.replace_input(text);
+        let conversation = Rc::clone(&self.conversation);
+        self.composer
+            .recall_prev(|back| sent(&conversation.borrow(), back));
+        self.after_input_change();
         KeyAction::None
     }
 
     pub(super) fn history_next(&mut self) -> KeyAction {
-        let Some(at) = self.browsing() else {
-            return KeyAction::None;
-        };
-        let text = at
-            .checked_sub(1)
-            .and_then(|newer| self.submitted(newer).map(|text| (newer, text)));
-        if let Some((newer, text)) = text {
-            self.set_browsing(Some(newer));
-            self.replace_input(text);
-        } else {
-            self.set_browsing(None);
-            let draft = self.take_draft();
-            self.replace_input(draft);
-        }
+        let conversation = Rc::clone(&self.conversation);
+        self.composer
+            .recall_next(|back| sent(&conversation.borrow(), back));
+        self.after_input_change();
         KeyAction::None
     }
 
     pub(super) fn clear_input(&mut self) -> KeyAction {
-        self.set_browsing(None);
-        self.input.clear();
-        self.cursor = 0;
+        self.composer.clear();
         self.after_input_change();
         KeyAction::None
     }
 
     fn insert_char(&mut self, c: char) -> KeyAction {
-        self.set_browsing(None);
-        self.input.insert(self.cursor, c);
-        self.cursor += c.len_utf8();
+        self.composer.insert(c);
         self.after_input_change();
         KeyAction::None
     }
 
     pub(super) fn backspace(&mut self) -> KeyAction {
-        self.set_browsing(None);
-        if self.cursor > 0 {
-            let prev = prev_char_boundary(&self.input, self.cursor);
-            self.input.remove(prev);
-            self.cursor = prev;
-        }
+        self.composer.backspace();
         self.after_input_change();
         KeyAction::None
     }
 
     pub(super) fn cursor_left(&mut self) -> KeyAction {
-        self.cursor = prev_char_boundary(&self.input, self.cursor);
+        self.composer.left();
         KeyAction::None
     }
 
     pub(super) fn cursor_right(&mut self) -> KeyAction {
-        self.cursor = next_char_boundary(&self.input, self.cursor);
+        self.composer.right();
         KeyAction::None
     }
 
     pub(super) fn cursor_start(&mut self) -> KeyAction {
-        self.cursor = 0;
+        self.composer.home();
         KeyAction::None
     }
 
     pub(super) fn cursor_end(&mut self) -> KeyAction {
-        self.cursor = self.input.len();
+        self.composer.end();
         KeyAction::None
     }
 
@@ -260,8 +230,7 @@ impl App {
             }
             Mode::Suggest { .. } => {
                 if let Some(name) = self.highlighted_suggest() {
-                    self.input = format!("/{name}");
-                    self.cursor = self.input.len();
+                    self.composer.set(format!("/{name}"));
                 }
                 self.mode = Mode::Normal;
                 self.take_submit()
@@ -278,8 +247,7 @@ impl App {
     pub(super) fn modal_cancel(&mut self) -> KeyAction {
         match self.mode {
             Mode::Suggest { .. } => {
-                self.input.clear();
-                self.cursor = 0;
+                self.composer.clear();
                 self.mode = Mode::Normal;
                 KeyAction::None
             }
@@ -294,8 +262,7 @@ impl App {
 
     pub(super) fn suggest_complete(&mut self) -> KeyAction {
         if let Some(name) = self.highlighted_suggest() {
-            self.input = format!("/{name} ");
-            self.cursor = self.input.len();
+            self.composer.set(format!("/{name} "));
             self.mode = Mode::Normal;
         }
         KeyAction::None
@@ -358,26 +325,4 @@ fn step(cursor: usize, delta: isize, len: usize) -> usize {
     } else {
         cursor.saturating_add(delta.unsigned_abs()).min(last)
     }
-}
-
-fn prev_char_boundary(s: &str, index: usize) -> usize {
-    if index == 0 {
-        return 0;
-    }
-    let mut i = index - 1;
-    while i > 0 && !s.is_char_boundary(i) {
-        i -= 1;
-    }
-    i
-}
-
-fn next_char_boundary(s: &str, index: usize) -> usize {
-    if index >= s.len() {
-        return s.len();
-    }
-    let mut i = index + 1;
-    while i < s.len() && !s.is_char_boundary(i) {
-        i += 1;
-    }
-    i
 }

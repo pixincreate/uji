@@ -108,30 +108,34 @@ impl<T: StorageInterface<Connection = SqliteConnection>> SessionStorage for T {
         message: Message,
     ) -> Result<StoredMessage> {
         let conn = self.get_connection();
-        let last_seq: Option<i64> = messages::table
-            .filter(messages::session_id.eq(session_id.to_string()))
-            .select(diesel::dsl::max(messages::seq))
-            .first(conn)?;
-        let seq = last_seq.unwrap_or(0) + 1;
-
         let id = MessageId::new();
         let now = now_millis();
         let data = serde_json::to_string(&message)?;
 
-        insert_into(messages::table)
-            .values((
-                messages::id.eq(id.to_string()),
-                messages::session_id.eq(session_id.to_string()),
-                messages::seq.eq(seq),
-                messages::kind.eq(message.type_name()),
-                messages::time_created.eq(now),
-                messages::data.eq(data),
-            ))
-            .execute(conn)?;
+        let seq = conn.immediate_transaction::<i64, StorageError, _>(|conn| {
+            let last_seq: Option<i64> = messages::table
+                .filter(messages::session_id.eq(session_id.to_string()))
+                .select(diesel::dsl::max(messages::seq))
+                .first(conn)?;
+            let seq = last_seq.unwrap_or(0) + 1;
 
-        diesel::update(sessions::table.find(session_id.to_string()))
-            .set(sessions::time_updated.eq(now))
-            .execute(conn)?;
+            insert_into(messages::table)
+                .values((
+                    messages::id.eq(id.to_string()),
+                    messages::session_id.eq(session_id.to_string()),
+                    messages::seq.eq(seq),
+                    messages::kind.eq(message.type_name()),
+                    messages::time_created.eq(now),
+                    messages::data.eq(data),
+                ))
+                .execute(conn)?;
+
+            diesel::update(sessions::table.find(session_id.to_string()))
+                .set(sessions::time_updated.eq(now))
+                .execute(conn)?;
+
+            Ok(seq)
+        })?;
 
         Ok(StoredMessage {
             id,

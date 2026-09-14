@@ -85,19 +85,8 @@ impl Render for Messages<'_> {
         push_pending(&mut lines, ctx, width);
 
         let total = lines.len();
-        let max_scroll = total.saturating_sub(height);
-        let current = ctx.app.scroll();
-        let follow = current == usize::MAX || current >= ctx.app.last_max();
-        let offset = if follow {
-            max_scroll
-        } else {
-            current.min(max_scroll)
-        };
-        ctx.app.set_scroll(offset);
-        ctx.app.set_last_max(max_scroll);
-        ctx.app.set_viewport(height);
-        let start = offset;
-        let end = (start + height).min(total);
+        let start = ctx.app.resolve_scroll(total.saturating_sub(height), height);
+        let end = start.saturating_add(height).min(total);
         let paragraph = Paragraph::new(lines[start..end].to_vec());
         let paragraph = match block {
             Some(block) => paragraph.block(block),
@@ -207,7 +196,7 @@ fn push_tool_output(lines: &mut Vec<Line<'static>>, content: &str, width: usize)
 }
 
 fn push_pending(lines: &mut Vec<Line<'static>>, ctx: &Context<'_>, width: usize) {
-    let Some(pending) = ctx.app.pending().filter(|text| !text.is_empty()) else {
+    let Some(pending) = ctx.app.pending() else {
         return;
     };
     if !lines.is_empty() {
