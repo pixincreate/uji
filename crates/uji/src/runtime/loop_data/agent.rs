@@ -51,6 +51,8 @@ impl LoopData {
         };
         let system = self.with_agent_context(system);
         let lua_tools = self.gather_lua_tools();
+        let roots =
+            uji_core::tools::builtin::Roots::new(self.inner.api.tool_roots().borrow().clone());
         let cwd = self.app.session().directory.clone();
         let sender = self.signals.clone();
         let cancel = CancelToken::new();
@@ -65,7 +67,7 @@ impl LoopData {
         }
         self.inner.emit(events::STATUS_CHANGED, &[]);
         self.runtime.spawn(async move {
-            let tools = uji_core::tools::builtin_registry();
+            let tools = uji_core::tools::builtin_registry(roots);
             let config = AgentConfig {
                 client: &client,
                 provider: provider.as_ref(),

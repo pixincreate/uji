@@ -1,8 +1,11 @@
 use std::fmt::Write as _;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use cap_std::ambient_authority;
+use cap_std::fs::Dir;
 use serde_json::{Value, json};
 
 use crate::llm::ToolSpec;
@@ -33,17 +36,94 @@ fn schema(props: &Value, required: &[&str]) -> Value {
     })
 }
 
-fn resolve(cwd: &Path, path: &str) -> PathBuf {
-    let path = Path::new(path);
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        cwd.join(path)
+/// Extra directories the tools may reach, beyond the working directory.
+/// Reading a sibling repo is legitimate; reaching `~/.ssh` is not, so this is
+/// opt-in and empty by default.
+#[derive(Clone, Default)]
+pub struct Roots {
+    extra: Arc<Vec<PathBuf>>,
+}
+
+impl Roots {
+    pub fn new(extra: Vec<PathBuf>) -> Self {
+        Self {
+            extra: Arc::new(extra),
+        }
+    }
+
+    /// The working directory first, then any configured extras.
+    fn candidates<'a>(&'a self, cwd: &'a Path) -> impl Iterator<Item = &'a Path> {
+        std::iter::once(cwd).chain(self.extra.iter().map(PathBuf::as_path))
     }
 }
 
-fn display(cwd: &Path, path: &Path) -> String {
-    path.strip_prefix(cwd).unwrap_or(path).display().to_string()
+/// A path confined to one root. Every operation goes through `dir`, which
+/// cannot be escaped -- containment is the open itself, not a check performed
+/// beforehand, so there is no window in which a symlink can be swapped in.
+struct Confined {
+    dir: Dir,
+    rel: PathBuf,
+}
+
+/// Whether a relative path stays inside its root. Only used to pick a root and
+/// to produce a message the model can act on; `Dir` is what enforces.
+fn stays_within(path: &Path) -> bool {
+    let mut depth = 0i32;
+    for part in path.components() {
+        match part {
+            Component::ParentDir => depth -= 1,
+            Component::Normal(_) => depth += 1,
+            _ => {}
+        }
+        if depth < 0 {
+            return false;
+        }
+    }
+    true
+}
+
+/// Where `path` sits inside `root`, or `None` if it is not under it.
+fn relative_to(root: &Path, path: &Path) -> Option<PathBuf> {
+    let rel = if path.is_absolute() {
+        path.strip_prefix(root).ok()?.to_path_buf()
+    } else if stays_within(path) {
+        path.to_path_buf()
+    } else {
+        return None;
+    };
+    Some(if rel.as_os_str().is_empty() {
+        PathBuf::from(".")
+    } else {
+        rel
+    })
+}
+
+fn outside(path: &str, cwd: &Path) -> String {
+    format!(
+        "{path} is outside the working directory ({}); tools can only reach files under it",
+        cwd.display()
+    )
+}
+
+fn resolve(cwd: &Path, path: &str, roots: &Roots) -> Result<Confined, String> {
+    let raw = Path::new(path);
+    let (root, rel) = roots
+        .candidates(cwd)
+        .find_map(|root| relative_to(root, raw).map(|rel| (root, rel)))
+        .ok_or_else(|| outside(path, cwd))?;
+    let dir = Dir::open_ambient_dir(root, ambient_authority())
+        .map_err(|err| format!("open {}: {err}", root.display()))?;
+    Ok(Confined { dir, rel })
+}
+
+/// Translate a refusal by `Dir` into something the model can act on. Without
+/// this a blocked symlink reads as a mysterious permission error.
+fn fs_error(action: &str, path: &str, cwd: &Path, err: &std::io::Error) -> String {
+    if err.kind() == std::io::ErrorKind::PermissionDenied {
+        outside(path, cwd)
+    } else {
+        format!("{action} {path}: {err}")
+    }
 }
 
 fn cap(text: String, max: usize) -> String {
@@ -83,7 +163,9 @@ fn is_probably_binary(bytes: &[u8]) -> bool {
     bytes.iter().take(8_000).any(|byte| *byte == 0)
 }
 
-pub struct ReadFile;
+pub struct ReadFile {
+    pub roots: Roots,
+}
 
 #[async_trait]
 impl Tool for ReadFile {
@@ -119,11 +201,14 @@ impl Tool for ReadFile {
 
     async fn run(&self, args: &Value, cwd: &Path) -> Result<String, String> {
         let path = required(args, "path")?;
-        let target = resolve(cwd, &path);
-        if target.is_dir() {
+        let target = resolve(cwd, &path, &self.roots)?;
+        if target.dir.metadata(&target.rel).is_ok_and(|m| m.is_dir()) {
             return Err(format!("{path} is a directory; use list_dir"));
         }
-        let bytes = std::fs::read(&target).map_err(|err| format!("read {path}: {err}"))?;
+        let bytes = target
+            .dir
+            .read(&target.rel)
+            .map_err(|err| fs_error("read", &path, cwd, &err))?;
         if is_probably_binary(&bytes) {
             return Err(format!("{path} looks like a binary file"));
         }
@@ -155,7 +240,9 @@ impl Tool for ReadFile {
     }
 }
 
-pub struct EditFile;
+pub struct EditFile {
+    pub roots: Roots,
+}
 
 #[async_trait]
 impl Tool for EditFile {
@@ -202,8 +289,11 @@ impl Tool for EditFile {
         if old == new {
             return Err("old_string and new_string are identical".into());
         }
-        let target = resolve(cwd, &path);
-        let text = std::fs::read_to_string(&target).map_err(|err| format!("read {path}: {err}"))?;
+        let target = resolve(cwd, &path, &self.roots)?;
+        let text = target
+            .dir
+            .read_to_string(&target.rel)
+            .map_err(|err| fs_error("read", &path, cwd, &err))?;
         let Some(at) = text.find(old.as_str()) else {
             return Err(format!(
                 "old_string was not found in {path}. Read the file again and copy the snippet exactly, without line-number prefixes."
@@ -220,7 +310,10 @@ impl Tool for EditFile {
         } else {
             text.replacen(old.as_str(), &new, 1)
         };
-        std::fs::write(&target, &updated).map_err(|err| format!("write {path}: {err}"))?;
+        target
+            .dir
+            .write(&target.rel, &updated)
+            .map_err(|err| fs_error("write", &path, cwd, &err))?;
         if replace_all {
             Ok(format!("edited {path}: replaced {count} occurrences"))
         } else {
@@ -232,7 +325,9 @@ impl Tool for EditFile {
     }
 }
 
-pub struct WriteFile;
+pub struct WriteFile {
+    pub roots: Roots,
+}
 
 #[async_trait]
 impl Tool for WriteFile {
@@ -263,12 +358,18 @@ impl Tool for WriteFile {
     async fn run(&self, args: &Value, cwd: &Path) -> Result<String, String> {
         let path = required(args, "path")?;
         let content = arg(args, "content");
-        let target = resolve(cwd, &path);
-        let existed = target.exists();
-        if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent).map_err(|err| format!("mkdir {path}: {err}"))?;
+        let target = resolve(cwd, &path, &self.roots)?;
+        let existed = target.dir.metadata(&target.rel).is_ok();
+        if let Some(parent) = target.rel.parent().filter(|p| !p.as_os_str().is_empty()) {
+            target
+                .dir
+                .create_dir_all(parent)
+                .map_err(|err| fs_error("mkdir", &path, cwd, &err))?;
         }
-        std::fs::write(&target, &content).map_err(|err| format!("write {path}: {err}"))?;
+        target
+            .dir
+            .write(&target.rel, &content)
+            .map_err(|err| fs_error("write", &path, cwd, &err))?;
         let lines = content.lines().count();
         if existed {
             Ok(format!("overwrote {path} ({lines} lines)"))
@@ -278,7 +379,9 @@ impl Tool for WriteFile {
     }
 }
 
-pub struct ListDir;
+pub struct ListDir {
+    pub roots: Roots,
+}
 
 #[async_trait]
 impl Tool for ListDir {
@@ -309,8 +412,11 @@ impl Tool for ListDir {
 
     async fn run(&self, args: &Value, cwd: &Path) -> Result<String, String> {
         let path = self.subject(args);
-        let target = resolve(cwd, &path);
-        let entries = std::fs::read_dir(&target).map_err(|err| format!("list {path}: {err}"))?;
+        let target = resolve(cwd, &path, &self.roots)?;
+        let entries = target
+            .dir
+            .read_dir(&target.rel)
+            .map_err(|err| fs_error("list", &path, cwd, &err))?;
         let mut rows: Vec<String> = Vec::new();
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
@@ -328,7 +434,9 @@ impl Tool for ListDir {
     }
 }
 
-pub struct Grep;
+pub struct Grep {
+    pub roots: Roots,
+}
 
 #[async_trait]
 impl Tool for Grep {
@@ -375,12 +483,35 @@ impl Tool for Grep {
             .case_insensitive(!case_sensitive)
             .build()
             .map_err(|err| format!("invalid pattern: {err}"))?;
-        let target = resolve(cwd, &self.subject(args));
+        let path = self.subject(args);
+        let target = resolve(cwd, &path, &self.roots)?;
         let mut matches = Vec::new();
-        if target.is_file() {
-            grep_file(&target, &regex, cwd, &mut matches);
+        let whole_root = target.rel == Path::new(".");
+        if target
+            .dir
+            .metadata(&target.rel)
+            .is_ok_and(|meta| meta.is_file())
+        {
+            let label = target.rel.display().to_string();
+            grep_file(&target.dir, &target.rel, &label, &regex, &mut matches);
         } else {
-            walk_grep(&target, &regex, cwd, 0, &mut matches);
+            let nested = if whole_root {
+                None
+            } else {
+                Some(
+                    target
+                        .dir
+                        .open_dir(&target.rel)
+                        .map_err(|err| fs_error("search", &path, cwd, &err))?,
+                )
+            };
+            let dir = nested.as_ref().unwrap_or(&target.dir);
+            let prefix = if whole_root {
+                PathBuf::new()
+            } else {
+                target.rel.clone()
+            };
+            walk_grep(dir, &prefix, &regex, 0, &mut matches);
         }
         if matches.is_empty() {
             return Ok(format!("no matches for `{pattern}`"));
@@ -397,15 +528,14 @@ impl Tool for Grep {
     }
 }
 
-fn grep_file(path: &Path, regex: &regex::Regex, cwd: &Path, out: &mut Vec<String>) {
-    let Ok(bytes) = std::fs::read(path) else {
+fn grep_file(dir: &Dir, rel: &Path, label: &str, regex: &regex::Regex, out: &mut Vec<String>) {
+    let Ok(bytes) = dir.read(rel) else {
         return;
     };
     if is_probably_binary(&bytes) {
         return;
     }
     let text = String::from_utf8_lossy(&bytes);
-    let name = display(cwd, path);
     for (index, line) in text.lines().enumerate() {
         if out.len() >= MAX_GREP_MATCHES {
             return;
@@ -413,35 +543,49 @@ fn grep_file(path: &Path, regex: &regex::Regex, cwd: &Path, out: &mut Vec<String
         if regex.is_match(line) {
             let line = line.trim_end();
             let line: String = line.chars().take(400).collect();
-            out.push(format!("{name}:{}: {line}", index + 1));
+            out.push(format!("{label}:{}: {line}", index + 1));
         }
     }
 }
 
-fn walk_grep(dir: &Path, regex: &regex::Regex, cwd: &Path, depth: usize, out: &mut Vec<String>) {
+/// Recurses through `Dir` handles rather than reopening by path, so a
+/// symlinked directory cannot walk the search out of the working directory.
+fn walk_grep(dir: &Dir, prefix: &Path, regex: &regex::Regex, depth: usize, out: &mut Vec<String>) {
     if depth > MAX_GREP_DEPTH || out.len() >= MAX_GREP_MATCHES {
         return;
     }
-    let Ok(entries) = std::fs::read_dir(dir) else {
+    let Ok(entries) = dir.entries() else {
         return;
     };
-    let mut paths: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).collect();
-    paths.sort();
-    for path in paths {
+    let mut items: Vec<(String, bool)> = entries
+        .flatten()
+        .map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
+            (name, is_dir)
+        })
+        .collect();
+    items.sort();
+    for (name, is_dir) in items {
         if out.len() >= MAX_GREP_MATCHES {
             return;
         }
-        let name = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        if path.is_dir() {
+        let shown = prefix.join(&name);
+        if is_dir {
             if name.starts_with('.') || SKIP_DIRS.contains(&name.as_str()) {
                 continue;
             }
-            walk_grep(&path, regex, cwd, depth + 1, out);
+            if let Ok(nested) = dir.open_dir(&name) {
+                walk_grep(&nested, &shown, regex, depth.saturating_add(1), out);
+            }
         } else {
-            grep_file(&path, regex, cwd, out);
+            grep_file(
+                dir,
+                Path::new(&name),
+                &shown.display().to_string(),
+                regex,
+                out,
+            );
         }
     }
 }

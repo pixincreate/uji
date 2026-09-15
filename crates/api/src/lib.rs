@@ -57,6 +57,7 @@ pub struct Api {
     session_state: SessionState,
     exec: RefCell<Vec<Vec<String>>>,
     modal: RefCell<Option<modal::ModalRequest>>,
+    tool_roots: RefCell<Vec<PathBuf>>,
     segments: Registry,
     agent_context: Registry,
     actions: Actions,
@@ -80,6 +81,7 @@ impl Api {
             session_state: SessionState::new(conversation),
             exec: RefCell::default(),
             modal: RefCell::default(),
+            tool_roots: RefCell::default(),
             segments: Registry::default(),
             agent_context: Registry::default(),
             actions: Actions::default(),
@@ -176,6 +178,10 @@ impl Api {
         self.run(event, payload, Policy::All);
     }
 
+    pub fn tool_roots(&self) -> &RefCell<Vec<PathBuf>> {
+        &self.tool_roots
+    }
+
     pub fn has_handler(&self, event: &str) -> bool {
         self.handlers.borrow().has(event)
     }
@@ -246,6 +252,8 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     let tool = lua.create_table()?;
     tool.set("register", tools::register(lua, api)?)?;
     tool.set("unregister", tools::unregister(lua, api)?)?;
+    tool.set("roots", tools::roots(lua, api)?)?;
+    tool.set("list_roots", tools::list_roots(lua, api)?)?;
     uji.set("tool", tool)?;
 
     uji.set("agent", agent::register(lua, api)?)?;

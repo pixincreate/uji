@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+cap-std = "3"
 thiserror = "2"
 diesel = { version = "2.3", features = ["sqlite"] }
 diesel_migrations = "2.3"

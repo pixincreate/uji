@@ -37,13 +37,21 @@ impl ToolRegistry {
     }
 }
 
-pub fn builtin_registry() -> ToolRegistry {
+pub fn builtin_registry(roots: builtin::Roots) -> ToolRegistry {
     let mut registry = ToolRegistry::default();
-    registry.register(Arc::new(builtin::ReadFile));
-    registry.register(Arc::new(builtin::EditFile));
-    registry.register(Arc::new(builtin::WriteFile));
-    registry.register(Arc::new(builtin::ListDir));
-    registry.register(Arc::new(builtin::Grep));
+    registry.register(Arc::new(builtin::ReadFile {
+        roots: roots.clone(),
+    }));
+    registry.register(Arc::new(builtin::EditFile {
+        roots: roots.clone(),
+    }));
+    registry.register(Arc::new(builtin::WriteFile {
+        roots: roots.clone(),
+    }));
+    registry.register(Arc::new(builtin::ListDir {
+        roots: roots.clone(),
+    }));
+    registry.register(Arc::new(builtin::Grep { roots }));
     registry.register(Arc::new(builtin::RunCommand));
     registry
 }

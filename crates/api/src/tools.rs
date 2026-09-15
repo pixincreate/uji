@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use mlua::{Function, Lua, Table, Value as LuaValue};
@@ -40,4 +41,36 @@ pub fn unregister(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
         api.lua_tools().borrow_mut().remove(&name);
         Ok(())
     })
+}
+
+pub fn roots(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    let api = Rc::clone(api);
+    lua.create_function(move |_, paths: Vec<String>| {
+        let expanded = paths
+            .iter()
+            .map(|path| PathBuf::from(expand(path)))
+            .collect();
+        *api.tool_roots().borrow_mut() = expanded;
+        Ok(())
+    })
+}
+
+pub fn list_roots(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    let api = Rc::clone(api);
+    lua.create_function(move |lua, ()| {
+        let out = lua.create_table()?;
+        for (at, root) in api.tool_roots().borrow().iter().enumerate() {
+            out.set(at + 1, root.display().to_string())?;
+        }
+        Ok(out)
+    })
+}
+
+fn expand(path: &str) -> String {
+    match path.strip_prefix("~/") {
+        Some(rest) => {
+            std::env::var("HOME").map_or_else(|_| path.to_string(), |home| format!("{home}/{rest}"))
+        }
+        None => path.to_string(),
+    }
 }
