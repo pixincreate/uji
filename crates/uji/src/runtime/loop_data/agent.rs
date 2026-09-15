@@ -59,6 +59,9 @@ impl LoopData {
         self.cancel = Some(cancel.clone());
         let budget = self.budget();
         let keep_recent = self.keep_recent();
+        let effort = *self.inner.llm_effort.borrow();
+        let cache = *self.inner.llm_cache.borrow();
+        let max_output = self.max_output();
         {
             let state_rc = self.inner.state();
             let mut state = state_rc.borrow_mut();
@@ -79,6 +82,9 @@ impl LoopData {
                 cancel,
                 budget,
                 keep_recent,
+                effort,
+                max_output,
+                cache,
             };
             let mut on_event = |event: StreamEvent| {
                 let _ = sender.send(Signal::Llm(event));

@@ -154,8 +154,10 @@ impl Llm for Anthropic {
                     on_delta(delta.to_string());
                     full.push_str(delta);
                 }
-                if let Some(input) = event.input_tokens() {
-                    usage.input = input;
+                if let Some(input) = event.input_usage() {
+                    usage.input = input.input;
+                    usage.cache_read = input.cache_read;
+                    usage.cache_write = input.cache_write;
                 }
                 if let Some(output) = event.output_tokens() {
                     usage.output = output;

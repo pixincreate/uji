@@ -92,6 +92,8 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
             let out = lua.create_table()?;
             out.set("input", tally.usage.input)?;
             out.set("output", tally.usage.output)?;
+            out.set("cache_read", tally.usage.cache_read)?;
+            out.set("cache_write", tally.usage.cache_write)?;
             out.set("total", tally.usage.total())?;
             out.set("requests", tally.turns)?;
             Ok(out)

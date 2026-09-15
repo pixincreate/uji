@@ -46,6 +46,10 @@ impl LoopData {
         self.inner.state().borrow().opts().compaction
     }
 
+    pub(super) fn compaction_reserve(&self) -> Option<u64> {
+        self.compaction_opts().reserve
+    }
+
     pub(super) fn run_compaction(&mut self, keep_recent: u64) -> bool {
         if self.inner.state().borrow().run_state() == RunState::Working {
             return false;
@@ -123,27 +127,6 @@ impl LoopData {
     }
 
     fn used_tokens(&self) -> u64 {
-        let conversation = self.app.messages();
-        let messages = conversation.messages();
-        match conversation.reported_input() {
-            Some((reported, seq)) => {
-                reported.saturating_add(context::estimate_after(messages, seq))
-            }
-            None => context::estimate_tokens(messages),
-        }
-    }
-
-    pub(super) fn budget(&self) -> Option<Budget> {
-        let model = self.inner.llm_model.borrow().clone();
-        let id = self.inner.llm_provider.borrow().clone();
-        let catalog = self.inner.api.providers();
-        let catalog = catalog.borrow();
-        let mut budget = catalog
-            .get(&id)
-            .and_then(|provider| provider.budget(&model))?;
-        if let Some(reserve) = self.compaction_opts().reserve {
-            budget.reserve = reserve.min(budget.window);
-        }
-        Some(budget)
+        self.app.messages().used_tokens()
     }
 }

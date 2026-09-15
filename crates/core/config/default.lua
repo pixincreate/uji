@@ -44,3 +44,5 @@ end
 
 uji.on("status_changed", render_activity)
 uji.on("tick", render_activity)
+
+uji.keymap.set("normal", "<C-e>", { command = "effort" })

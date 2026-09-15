@@ -61,6 +61,23 @@ pub fn model(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     lua.create_function(move |_, ()| Ok(state.borrow().current_model().map(str::to_string)))
 }
 
+pub fn effort(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    let state = api.state();
+    lua.create_function(move |_, ()| Ok(state.borrow().current_effort().map(str::to_string)))
+}
+
+pub fn context(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    let api = Rc::clone(api);
+    lua.create_function(move |lua, ()| {
+        let out = lua.create_table()?;
+        out.set("used", api.session().conversation().borrow().used_tokens())?;
+        if let Some(window) = api.state().borrow().context_window() {
+            out.set("window", window)?;
+        }
+        Ok(out)
+    })
+}
+
 pub fn state(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     let state = api.state();
     lua.create_function(move |_, ()| {

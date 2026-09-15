@@ -41,7 +41,7 @@ pub fn merge_files(into: &mut Vec<String>, extra: &[String]) {
 }
 
 pub fn previous_summary(message: &Message) -> Option<&str> {
-    let Message::System { text } = message else {
+    let Message::User { text } = message else {
         return None;
     };
     let body = text.strip_prefix(SUMMARY_HEADER)?;
@@ -53,7 +53,7 @@ pub fn previous_summary(message: &Message) -> Option<&str> {
 }
 
 pub fn previous_files(message: &Message) -> Vec<String> {
-    let Message::System { text } = message else {
+    let Message::User { text } = message else {
         return Vec::new();
     };
     let Some((_, listed)) = text.rsplit_once(FILES_HEADER) else {
@@ -78,7 +78,7 @@ pub fn summary_message(summary: &str, files: &[String]) -> Message {
         text.push(' ');
         text.push_str(&files.join(", "));
     }
-    Message::System { text }
+    Message::User { text }
 }
 
 pub fn build(stored: &[StoredMessage]) -> Vec<Message> {

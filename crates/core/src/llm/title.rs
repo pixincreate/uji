@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::{Llm, LlmRequest, Usage};
+use super::{DEFAULT_MAX_OUTPUT, Effort, Llm, LlmRequest, Retention, Usage};
 use crate::session::model::Message;
 
 const PROMPT: &str = "You name coding sessions. Read the user's first message and reply \
@@ -28,6 +28,9 @@ pub async fn generate(
             text: clip(first_message, MAX_INPUT),
         }],
         tools: Vec::new(),
+        effort: Effort::Off,
+        cache: Retention::Off,
+        max_output: DEFAULT_MAX_OUTPUT,
     };
     let response = provider.send_request(client, &request).await.ok()?;
     let title = sanitize(&response.text)?;

@@ -1,4 +1,4 @@
-use super::{Llm, LlmRequest, Usage};
+use super::{DEFAULT_MAX_OUTPUT, Effort, Llm, LlmRequest, Retention, Usage};
 use crate::session::model::Message;
 
 const FORMAT: &str = "## Goal\n\
@@ -69,6 +69,9 @@ pub async fn generate(
         system: Some(format!("{instructions}{FORMAT}")),
         messages: vec![Message::User { text }],
         tools: Vec::new(),
+        effort: Effort::Off,
+        cache: Retention::Off,
+        max_output: DEFAULT_MAX_OUTPUT,
     };
     let response = provider.send_request(client, &request).await.ok()?;
     let summary = response.text.trim().to_string();

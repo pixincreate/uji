@@ -83,12 +83,21 @@ impl Conversation {
     }
 
     pub fn add_usage(&mut self, usage: Usage) {
-        if usage.input > 0 {
-            self.reported_input = usage.input;
+        if usage.prefix() > 0 {
+            self.reported_input = usage.prefix();
             self.reported_seq = self.messages.last().map_or(0, |stored| stored.seq);
         }
         self.tally.usage.add(usage);
         self.tally.turns = self.tally.turns.saturating_add(1);
+    }
+
+    pub fn used_tokens(&self) -> u64 {
+        match self.reported_input() {
+            Some((reported, seq)) => {
+                reported.saturating_add(crate::llm::context::estimate_after(&self.messages, seq))
+            }
+            None => crate::llm::context::estimate_tokens(&self.messages),
+        }
     }
 
     pub fn tally(&self) -> Tally {

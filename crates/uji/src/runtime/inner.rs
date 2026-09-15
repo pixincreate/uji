@@ -24,6 +24,8 @@ pub(crate) struct Inner {
     pub(crate) llm: RefCell<Arc<dyn Llm>>,
     pub(crate) llm_model: RefCell<String>,
     pub(crate) llm_provider: RefCell<String>,
+    pub(crate) llm_effort: RefCell<uji_core::llm::Effort>,
+    pub(crate) llm_cache: RefCell<uji_core::llm::Retention>,
     pub(crate) client: Arc<reqwest::Client>,
     pub(crate) policy: RefCell<ToolPolicy>,
 }
@@ -41,6 +43,8 @@ impl Inner {
             llm: RefCell::new(Arc::new(NotConfigured)),
             llm_model: RefCell::default(),
             llm_provider: RefCell::default(),
+            llm_effort: RefCell::default(),
+            llm_cache: RefCell::default(),
             client,
             policy: RefCell::new(ToolPolicy::default()),
         });
@@ -165,11 +169,27 @@ impl Inner {
         *self.llm.borrow_mut() = selection.llm;
         self.llm_model.borrow_mut().clone_from(&selection.model);
         self.llm_provider.borrow_mut().clone_from(&selection.id);
+        *self.llm_effort.borrow_mut() = selection.effort;
+        *self.llm_cache.borrow_mut() = selection.cache;
 
+        let window = {
+            let catalog = self.api.providers().borrow();
+            catalog
+                .get(&selection.id)
+                .and_then(|provider| provider.budget(&selection.model))
+                .map(|budget| budget.window)
+        };
         let state = self.state();
         let mut state = state.borrow_mut();
+        state.set_context_window(window);
         state.set_current_provider(selection.name);
         state.set_current_model(selection.model);
+        state.set_current_effort(
+            selection
+                .effort
+                .enabled()
+                .then(|| selection.effort.to_string()),
+        );
         drop(state);
         self.emit(
             events::MODEL_CHANGED,

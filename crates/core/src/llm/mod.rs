@@ -40,6 +40,120 @@ pub struct LlmRequest {
     pub system: Option<String>,
     pub messages: Vec<Message>,
     pub tools: Vec<ToolSpec>,
+    pub effort: Effort,
+    pub max_output: u32,
+    pub cache: Retention,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Effort {
+    #[default]
+    Off,
+    Minimal,
+    Low,
+    Medium,
+    High,
+}
+
+pub const MIN_ANSWER_TOKENS: u32 = 1024;
+pub const DEFAULT_MAX_OUTPUT: u32 = 8192;
+
+impl Effort {
+    pub const ALL: [Self; 5] = [
+        Self::Off,
+        Self::Minimal,
+        Self::Low,
+        Self::Medium,
+        Self::High,
+    ];
+
+    pub fn budget(self) -> u32 {
+        match self {
+            Self::Off => 0,
+            Self::Minimal => 1024,
+            Self::Low => 2048,
+            Self::Medium => 8192,
+            Self::High => 16384,
+        }
+    }
+
+    pub fn enabled(self) -> bool {
+        self != Self::Off
+    }
+
+    pub fn parse(name: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|effort| effort.name() == name.to_lowercase())
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Minimal => "minimal",
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+        }
+    }
+}
+
+impl std::fmt::Display for Effort {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Retention {
+    Off,
+    #[default]
+    Short,
+    Long,
+}
+
+impl Retention {
+    pub const ALL: [Self; 3] = [Self::Off, Self::Short, Self::Long];
+
+    pub fn enabled(self) -> bool {
+        self != Self::Off
+    }
+
+    pub fn ttl(self) -> Option<&'static str> {
+        match self {
+            Self::Long => Some("1h"),
+            Self::Off | Self::Short => None,
+        }
+    }
+
+    pub fn parse(name: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|retention| retention.name() == name.to_lowercase())
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Short => "short",
+            Self::Long => "long",
+        }
+    }
+}
+
+impl std::fmt::Display for Retention {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+pub fn fit_thinking(effort: Effort, max_output: u32) -> (u32, u32) {
+    let max_tokens = max_output.max(MIN_ANSWER_TOKENS);
+    let mut budget = effort.budget();
+    if budget > 0 && max_tokens <= budget {
+        budget = budget.min(max_tokens.saturating_sub(MIN_ANSWER_TOKENS));
+    }
+    (max_tokens, budget)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,16 +167,26 @@ pub struct ToolSpec {
 pub struct Usage {
     pub input: u64,
     pub output: u64,
+    pub cache_read: u64,
+    pub cache_write: u64,
 }
 
 impl Usage {
+    pub fn prefix(&self) -> u64 {
+        self.input
+            .saturating_add(self.cache_read)
+            .saturating_add(self.cache_write)
+    }
+
     pub fn total(&self) -> u64 {
-        self.input.saturating_add(self.output)
+        self.prefix().saturating_add(self.output)
     }
 
     pub fn add(&mut self, other: Usage) {
         self.input = self.input.saturating_add(other.input);
         self.output = self.output.saturating_add(other.output);
+        self.cache_read = self.cache_read.saturating_add(other.cache_read);
+        self.cache_write = self.cache_write.saturating_add(other.cache_write);
     }
 }
 
@@ -323,6 +447,8 @@ pub struct Model {
     pub id: String,
     pub context: Option<u64>,
     pub output: Option<u64>,
+    pub reasoning: bool,
+    pub cache: bool,
 }
 
 #[derive(Deserialize)]
@@ -335,6 +461,10 @@ enum ModelSpec {
         context: Option<u64>,
         #[serde(default)]
         output: Option<u64>,
+        #[serde(default)]
+        reasoning: bool,
+        #[serde(default)]
+        cache: bool,
     },
 }
 
@@ -345,15 +475,21 @@ impl From<ModelSpec> for Model {
                 id,
                 context: None,
                 output: None,
+                reasoning: false,
+                cache: false,
             },
             ModelSpec::Full {
                 id,
                 context,
                 output,
+                reasoning,
+                cache,
             } => Self {
                 id,
                 context,
                 output,
+                reasoning,
+                cache,
             },
         }
     }
@@ -392,6 +528,14 @@ impl Provider {
         stored
             .filter(|model| self.model(model).is_some())
             .unwrap_or_else(|| self.default_model().to_string())
+    }
+
+    pub fn reasons(&self, model_id: &str) -> bool {
+        self.model(model_id).is_some_and(|model| model.reasoning)
+    }
+
+    pub fn caches(&self, model_id: &str) -> bool {
+        self.model(model_id).is_some_and(|model| model.cache)
     }
 
     pub fn budget(&self, model_id: &str) -> Option<Budget> {
@@ -606,6 +750,9 @@ pub struct AgentConfig<'a> {
     pub cancel: CancelToken,
     pub budget: Option<Budget>,
     pub keep_recent: u64,
+    pub effort: Effort,
+    pub max_output: u32,
+    pub cache: Retention,
 }
 
 #[derive(Clone)]
@@ -720,6 +867,9 @@ pub async fn run_agent(
             system: config.system.clone(),
             messages: messages.clone(),
             tools: tool_specs.clone(),
+            effort: config.effort,
+            max_output: config.max_output,
+            cache: config.cache,
         };
         let Some(response) = generate(config, &request, on_event).await else {
             return;
@@ -912,6 +1062,8 @@ pub struct Selection {
     pub id: String,
     pub name: String,
     pub model: String,
+    pub effort: Effort,
+    pub cache: Retention,
 }
 
 fn setting(storage: &mut dyn SessionStorage, key: &str) -> Option<String> {
@@ -932,10 +1084,24 @@ pub fn resolve_from_storage(storage: &mut dyn SessionStorage, catalog: &Catalog)
         model.clone(),
         setting(storage, "llm.base_url"),
     );
+    let effort = setting(storage, "llm.effort")
+        .and_then(|name| Effort::parse(&name))
+        .filter(|_| known.is_some_and(|entry| entry.reasons(&model)))
+        .unwrap_or_default();
+    let cache = setting(storage, "llm.cache")
+        .and_then(|name| Retention::parse(&name))
+        .unwrap_or_default();
+    let cache = if known.is_some_and(|entry| entry.caches(&model)) {
+        cache
+    } else {
+        Retention::Off
+    };
     Selection {
         llm: resolve(known.map(|entry| entry.wire), &config),
         name: known.map_or_else(|| provider_id.clone(), |entry| entry.name.clone()),
         id: provider_id,
         model,
+        effort,
+        cache,
     }
 }

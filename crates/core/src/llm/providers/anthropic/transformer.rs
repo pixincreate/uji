@@ -1,21 +1,51 @@
 use serde::{Deserialize, Serialize};
 
-use crate::llm::LlmRequest;
 use crate::llm::providers::acc::ToolAcc;
+use crate::llm::{LlmRequest, Retention};
 use crate::session::model::{Message, ToolCall};
 
 const MAX_TOKENS: &str = "max_tokens";
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Thinking {
+    #[serde(rename = "type")]
+    pub kind: &'static str,
+    pub budget_tokens: u32,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct CacheControl {
+    #[serde(rename = "type")]
+    pub kind: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ttl: Option<&'static str>,
+}
+
+impl CacheControl {
+    fn new(retention: Retention) -> Option<Self> {
+        retention.enabled().then(|| Self {
+            kind: "ephemeral",
+            ttl: retention.ttl(),
+        })
+    }
+}
 
 #[derive(Serialize)]
 pub struct SystemBlock {
     #[serde(rename = "type")]
     pub kind: &'static str,
     pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_control: Option<CacheControl>,
 }
 
 impl SystemBlock {
     fn text(text: String) -> Self {
-        Self { kind: "text", text }
+        Self {
+            kind: "text",
+            text,
+            cache_control: None,
+        }
     }
 }
 
@@ -23,6 +53,8 @@ impl SystemBlock {
 pub struct AnthropicRequest {
     pub model: String,
     pub max_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<Thinking>,
     pub system: Vec<SystemBlock>,
     pub messages: Vec<AnthropicMessage>,
     pub stream: bool,
@@ -31,6 +63,27 @@ pub struct AnthropicRequest {
 }
 
 impl AnthropicRequest {
+    fn cached(mut self, retention: Retention) -> Self {
+        let Some(control) = CacheControl::new(retention) else {
+            return self;
+        };
+        if let Some(block) = self.system.last_mut() {
+            block.cache_control = Some(control);
+        }
+        if let Some(tool) = self.tools.last_mut() {
+            tool.cache_control = Some(control);
+        }
+        if let Some(block) = self
+            .messages
+            .iter_mut()
+            .rfind(|message| message.role == "user")
+            .and_then(|message| message.content.last_mut())
+        {
+            block.cache_control = Some(control);
+        }
+        self
+    }
+
     pub fn prepend_system(&mut self, text: &str) {
         if self.system.first().is_some_and(|block| block.text == text) {
             return;
@@ -44,12 +97,31 @@ pub struct AnthropicTool {
     pub name: String,
     pub description: String,
     pub input_schema: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_control: Option<CacheControl>,
 }
 
 #[derive(Serialize)]
 pub struct AnthropicMessage {
     pub role: &'static str,
-    pub content: Vec<AnthropicBlock>,
+    pub content: Vec<Block>,
+}
+
+#[derive(Serialize)]
+pub struct Block {
+    #[serde(flatten)]
+    pub body: AnthropicBlock,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_control: Option<CacheControl>,
+}
+
+impl From<AnthropicBlock> for Block {
+    fn from(body: AnthropicBlock) -> Self {
+        Self {
+            body,
+            cache_control: None,
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -78,23 +150,26 @@ impl From<&LlmRequest> for AnthropicRequest {
             match item {
                 Message::User { text } => messages.push(AnthropicMessage {
                     role: "user",
-                    content: vec![AnthropicBlock::Text { text: text.clone() }],
+                    content: vec![AnthropicBlock::Text { text: text.clone() }.into()],
                 }),
                 Message::Assistant {
                     text, tool_calls, ..
                 } => {
                     let mut blocks = Vec::new();
                     if !text.is_empty() {
-                        blocks.push(AnthropicBlock::Text { text: text.clone() });
+                        blocks.push(AnthropicBlock::Text { text: text.clone() }.into());
                     }
                     for call in tool_calls {
                         let input = serde_json::from_str(&call.arguments)
                             .unwrap_or(serde_json::Value::Null);
-                        blocks.push(AnthropicBlock::ToolUse {
-                            id: call.id.clone(),
-                            name: call.name.clone(),
-                            input,
-                        });
+                        blocks.push(
+                            AnthropicBlock::ToolUse {
+                                id: call.id.clone(),
+                                name: call.name.clone(),
+                                input,
+                            }
+                            .into(),
+                        );
                     }
                     messages.push(AnthropicMessage {
                         role: "assistant",
@@ -107,10 +182,13 @@ impl From<&LlmRequest> for AnthropicRequest {
                     ..
                 } => messages.push(AnthropicMessage {
                     role: "user",
-                    content: vec![AnthropicBlock::ToolResult {
-                        tool_use_id: tool_call_id.clone(),
-                        content: content.clone(),
-                    }],
+                    content: vec![
+                        AnthropicBlock::ToolResult {
+                            tool_use_id: tool_call_id.clone(),
+                            content: content.clone(),
+                        }
+                        .into(),
+                    ],
                 }),
                 Message::System { text } => {
                     if !system.is_empty() {
@@ -128,11 +206,17 @@ impl From<&LlmRequest> for AnthropicRequest {
                 name: tool.name.clone(),
                 description: tool.description.clone(),
                 input_schema: tool.parameters.clone(),
+                cache_control: None,
             })
             .collect();
+        let (max_tokens, budget) = crate::llm::fit_thinking(request.effort, request.max_output);
         Self {
             model: request.model.clone(),
-            max_tokens: 8192,
+            max_tokens,
+            thinking: (budget > 0).then_some(Thinking {
+                kind: "enabled",
+                budget_tokens: budget,
+            }),
             system: if system.is_empty() {
                 Vec::new()
             } else {
@@ -142,6 +226,7 @@ impl From<&LlmRequest> for AnthropicRequest {
             stream: false,
             tools,
         }
+        .cached(request.cache)
     }
 }
 
@@ -156,17 +241,23 @@ pub struct AnthropicResponse {
 
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
 pub struct AnthropicUsage {
-    #[serde(default)]
-    pub input_tokens: u64,
-    #[serde(default)]
-    pub output_tokens: u64,
+    #[serde(default, rename = "input_tokens")]
+    pub input: u64,
+    #[serde(default, rename = "output_tokens")]
+    pub output: u64,
+    #[serde(default, rename = "cache_read_input_tokens")]
+    pub cache_read: u64,
+    #[serde(default, rename = "cache_creation_input_tokens")]
+    pub cache_write: u64,
 }
 
 impl From<AnthropicUsage> for crate::llm::Usage {
     fn from(usage: AnthropicUsage) -> Self {
         Self {
-            input: usage.input_tokens,
-            output: usage.output_tokens,
+            input: usage.input,
+            output: usage.output,
+            cache_read: usage.cache_read,
+            cache_write: usage.cache_write,
         }
     }
 }
@@ -263,15 +354,18 @@ impl AnthropicStreamEvent {
             == Some(MAX_TOKENS)
     }
 
-    pub fn input_tokens(&self) -> Option<u64> {
+    pub fn input_usage(&self) -> Option<crate::llm::Usage> {
         self.message
             .as_ref()
             .and_then(|message| message.usage)
-            .map(|usage| usage.input_tokens)
+            .map(|usage| crate::llm::Usage {
+                output: 0,
+                ..usage.into()
+            })
     }
 
     pub fn output_tokens(&self) -> Option<u64> {
-        self.usage.map(|usage| usage.output_tokens)
+        self.usage.map(|usage| usage.output)
     }
 
     pub fn text_delta(&self) -> Option<&str> {

@@ -11,6 +11,8 @@ pub struct UiState {
     opts: GlobalOpts,
     current_provider: Option<String>,
     current_model: Option<String>,
+    current_effort: Option<String>,
+    context_window: Option<u64>,
     next_window_id: u32,
     run_state: RunState,
     turn_started: Option<Instant>,
@@ -212,6 +214,22 @@ impl UiState {
 
     pub fn set_current_provider(&mut self, provider: String) {
         self.current_provider = Some(provider);
+    }
+
+    pub fn context_window(&self) -> Option<u64> {
+        self.context_window
+    }
+
+    pub fn set_context_window(&mut self, window: Option<u64>) {
+        self.context_window = window;
+    }
+
+    pub fn current_effort(&self) -> Option<&str> {
+        self.current_effort.as_deref()
+    }
+
+    pub fn set_current_effort(&mut self, effort: Option<String>) {
+        self.current_effort = effort;
     }
 
     pub fn set_current_model(&mut self, model: String) {

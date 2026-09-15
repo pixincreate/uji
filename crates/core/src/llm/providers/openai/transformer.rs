@@ -6,6 +6,8 @@ use crate::session::model::{Message, ToolCall};
 
 #[derive(Serialize)]
 pub struct OpenAiRequest {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_effort: Option<&'static str>,
     pub model: String,
     pub messages: Vec<OpenAiMessage>,
     pub stream: bool,
@@ -127,6 +129,13 @@ impl From<&LlmRequest> for OpenAiRequest {
             })
             .collect();
         Self {
+            reasoning_effort: match request.effort {
+                crate::llm::Effort::Off => None,
+                crate::llm::Effort::Minimal => Some("minimal"),
+                crate::llm::Effort::Low => Some("low"),
+                crate::llm::Effort::Medium => Some("medium"),
+                crate::llm::Effort::High => Some("high"),
+            },
             model: request.model.clone(),
             messages,
             stream: false,
@@ -149,13 +158,24 @@ pub struct OpenAiUsage {
     pub prompt_tokens: u64,
     #[serde(default)]
     pub completion_tokens: u64,
+    #[serde(default)]
+    pub prompt_tokens_details: OpenAiPromptDetails,
+}
+
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+pub struct OpenAiPromptDetails {
+    #[serde(default)]
+    pub cached_tokens: u64,
 }
 
 impl From<OpenAiUsage> for crate::llm::Usage {
     fn from(usage: OpenAiUsage) -> Self {
+        let cache_read = usage.prompt_tokens_details.cached_tokens;
         Self {
-            input: usage.prompt_tokens,
+            input: usage.prompt_tokens.saturating_sub(cache_read),
             output: usage.completion_tokens,
+            cache_read,
+            cache_write: 0,
         }
     }
 }

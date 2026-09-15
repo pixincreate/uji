@@ -6,8 +6,22 @@ use crate::session::model::{Message, ToolCall};
 
 const MAX_TOKENS: &str = "MAX_TOKENS";
 
+#[derive(Debug, Clone, Serialize)]
+pub struct GenerationConfig {
+    #[serde(rename = "thinkingConfig")]
+    pub thinking_config: ThinkingConfig,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ThinkingConfig {
+    #[serde(rename = "thinkingBudget")]
+    pub thinking_budget: u32,
+}
+
 #[derive(Serialize)]
 pub struct GeminiRequest {
+    #[serde(rename = "generationConfig", skip_serializing_if = "Option::is_none")]
+    pub generation_config: Option<GenerationConfig>,
     #[serde(rename = "systemInstruction", skip_serializing_if = "Option::is_none")]
     pub system_instruction: Option<GeminiInstruction>,
     pub contents: Vec<GeminiContent>,
@@ -135,7 +149,13 @@ impl From<&LlmRequest> for GeminiRequest {
                 }],
             })
             .collect();
+        let (_, budget) = crate::llm::fit_thinking(request.effort, request.max_output);
         Self {
+            generation_config: (budget > 0).then_some(GenerationConfig {
+                thinking_config: ThinkingConfig {
+                    thinking_budget: budget,
+                },
+            }),
             system_instruction,
             contents,
             tools,
@@ -162,19 +182,22 @@ pub struct GeminiCandidate {
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct GeminiUsage {
-    #[serde(default)]
-    pub prompt_token_count: u64,
-    #[serde(default)]
-    pub candidates_token_count: u64,
+    #[serde(default, rename = "promptTokenCount")]
+    pub prompt: u64,
+    #[serde(default, rename = "candidatesTokenCount")]
+    pub candidates: u64,
+    #[serde(default, rename = "cachedContentTokenCount")]
+    pub cached: u64,
 }
 
 impl From<GeminiUsage> for crate::llm::Usage {
     fn from(usage: GeminiUsage) -> Self {
         Self {
-            input: usage.prompt_token_count,
-            output: usage.candidates_token_count,
+            input: usage.prompt.saturating_sub(usage.cached),
+            output: usage.candidates,
+            cache_read: usage.cached,
+            cache_write: 0,
         }
     }
 }

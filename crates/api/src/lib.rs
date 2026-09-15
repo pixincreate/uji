@@ -21,7 +21,7 @@ pub mod tools;
 pub mod window;
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::rc::Rc;
 
@@ -46,7 +46,7 @@ pub struct Api {
     scheduled: Scheduled,
     handlers: RefCell<Handlers>,
     commands: RefCell<HashMap<String, command::LuaCommand>>,
-    tools: RefCell<HashMap<String, LuaTool>>,
+    tools: RefCell<BTreeMap<String, LuaTool>>,
     providers: RefCell<Catalog>,
     keymap: RefCell<Keymap>,
     packs: RefCell<Vec<PathBuf>>,
@@ -102,7 +102,7 @@ impl Api {
         &self.commands
     }
 
-    pub fn lua_tools(&self) -> &RefCell<HashMap<String, LuaTool>> {
+    pub fn lua_tools(&self) -> &RefCell<BTreeMap<String, LuaTool>> {
         &self.tools
     }
 
@@ -245,6 +245,8 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     let status = lua.create_table()?;
     status.set("provider", status::provider(lua, api)?)?;
     status.set("model", status::model(lua, api)?)?;
+    status.set("effort", status::effort(lua, api)?)?;
+    status.set("context", status::context(lua, api)?)?;
     status.set("state", status::state(lua, api)?)?;
     status.set("elapsed", status::elapsed(lua, api)?)?;
     status.set("loader_frame", status::loader_frame(lua, api)?)?;

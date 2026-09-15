@@ -4,6 +4,7 @@ mod commands;
 mod compact;
 mod drains;
 mod input;
+mod model;
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
