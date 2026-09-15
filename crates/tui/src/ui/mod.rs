@@ -167,16 +167,20 @@ fn blit(surface: &mut Surface<'_>, window: &WindowSpec, palette: style::Palette)
         .as_ref()
         .map_or(surface.area(), |block| block.inner(surface.area()));
     let width = usize::from(inner.width);
-    let mut lines: Vec<TLine<'static>> = Vec::new();
-    for line in &window.buffer {
-        if window.opts.wrap {
-            for wrapped in buffer::wrap_line(line, width) {
-                lines.push(buffer::line_to_ratatui(&wrapped, width));
+    let lines: Vec<TLine<'static>> = window
+        .buffer
+        .iter()
+        .flat_map(|line| {
+            if window.opts.wrap {
+                buffer::wrap_line(line, width)
+                    .into_iter()
+                    .map(|wrapped| buffer::line_to_ratatui(&wrapped, width))
+                    .collect::<Vec<_>>()
+            } else {
+                vec![buffer::line_to_ratatui(line, width)]
             }
-        } else {
-            lines.push(buffer::line_to_ratatui(line, width));
-        }
-    }
+        })
+        .collect();
     let paragraph = Paragraph::new(lines);
     match block {
         Some(block) => surface.render_widget(paragraph.block(block)),

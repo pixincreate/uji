@@ -14,6 +14,7 @@ pub(crate) struct Select<'a> {
     pub(crate) items: &'a [String],
     pub(crate) query: &'a str,
     pub(crate) cursor: usize,
+    pub(crate) matches: &'a [usize],
 }
 
 impl Render for Select<'_> {
@@ -28,7 +29,11 @@ impl Render for Select<'_> {
             .or_else(|| ctx.state.current_provider())
             .unwrap_or_default();
 
-        let matches = crate::app::filter_items(self.items, self.query);
+        let matches: Vec<&String> = self
+            .matches
+            .iter()
+            .filter_map(|at| self.items.get(*at))
+            .collect();
         let visible = matches
             .len()
             .min(MAX_ROWS)

@@ -1,0 +1,9 @@
+id: prefer-iterator
+language: rust
+severity: error
+message: Build collections with iterator chains (`map`/`filter`/`collect`) rather than pushing in a `for` loop.
+rule:
+  pattern: |
+    for $X in $ITER {
+      $OUT.push($VALUE);
+    }

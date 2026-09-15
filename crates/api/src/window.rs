@@ -39,10 +39,10 @@ pub fn close_win(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 pub fn set_lines(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     let state = api.state();
     lua.create_function(move |_, (id, values): (u32, Table)| {
-        let mut lines = Vec::new();
-        for value in values.sequence_values::<LuaValue>() {
-            lines.push(line_from_lua(value?)?);
-        }
+        let lines = values
+            .sequence_values::<LuaValue>()
+            .map(|value| line_from_lua(value?))
+            .collect::<mlua::Result<Vec<_>>>()?;
         state.borrow_mut().set_window_lines(id, lines);
         Ok(())
     })
@@ -130,20 +130,19 @@ pub fn lines_from_lua(value: LuaValue) -> mlua::Result<Vec<Line>> {
             "a renderer must return a list of lines",
         ));
     };
-    let mut lines = Vec::new();
-    for item in table.sequence_values::<LuaValue>() {
-        lines.push(line_from_lua(item?)?);
-    }
-    Ok(lines)
+    table
+        .sequence_values::<LuaValue>()
+        .map(|item| line_from_lua(item?))
+        .collect()
 }
 
 fn line_from_lua(value: LuaValue) -> mlua::Result<Line> {
     match &value {
         LuaValue::Table(table) if !table.contains_key("text")? => {
-            let mut spans = Vec::new();
-            for item in table.sequence_values::<LuaValue>() {
-                spans.push(span_from_lua(item?)?);
-            }
+            let spans = table
+                .sequence_values::<LuaValue>()
+                .map(|item| span_from_lua(item?))
+                .collect::<mlua::Result<Vec<_>>>()?;
             Ok(Line { spans })
         }
         _ => Ok(Line::single(span_from_lua(value)?)),

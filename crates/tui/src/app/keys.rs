@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
-use super::action::{Action, KeyAction, default_action, filter_items};
+use super::action::{Action, KeyAction, default_action, rank_items};
 use super::{App, Mode, sent};
 use std::rc::Rc;
 
@@ -48,6 +48,7 @@ impl App {
                     query.push(c);
                     *cursor = 0;
                 }
+                self.rerank();
                 KeyAction::None
             }
             KeyCode::Backspace => {
@@ -55,6 +56,7 @@ impl App {
                     query.pop();
                     *cursor = 0;
                 }
+                self.rerank();
                 KeyAction::None
             }
             _ => KeyAction::None,
@@ -296,9 +298,24 @@ impl App {
         }
     }
 
+    fn rerank(&mut self) {
+        let Mode::Select {
+            items,
+            query,
+            matches,
+            ..
+        } = &mut self.mode
+        else {
+            return;
+        };
+        *matches = rank_items(items, query);
+    }
+
     fn select_matches(&self) -> Vec<&String> {
         match &self.mode {
-            Mode::Select { items, query, .. } => filter_items(items, query),
+            Mode::Select { items, matches, .. } => {
+                matches.iter().filter_map(|at| items.get(*at)).collect()
+            }
             _ => Vec::new(),
         }
     }

@@ -1,17 +1,6 @@
 use ratatui::layout::Rect;
 use uji_screen::model::{Size, Split, WindowSpec};
 
-pub(crate) fn centered_rect(area: Rect, width: u16, height: u16) -> Rect {
-    let x = area.x + area.width.saturating_sub(width) / 2;
-    let y = area.y + area.height.saturating_sub(height) / 2;
-    Rect {
-        x,
-        y,
-        width: width.min(area.width),
-        height: height.min(area.height),
-    }
-}
-
 fn is_vertical(split: Split) -> bool {
     matches!(split, Split::Top | Split::Bottom)
 }

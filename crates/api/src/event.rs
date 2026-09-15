@@ -7,7 +7,7 @@ use crate::handlers::DEFAULT_PRIORITY;
 use super::Api;
 
 pub fn on(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = api.clone();
+    let api = Rc::clone(api);
     lua.create_function(
         move |_, (event, handler, opts): (String, Function, Option<Table>)| {
             let priority = opts
@@ -22,7 +22,7 @@ pub fn on(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 }
 
 pub fn emit(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = api.clone();
+    let api = Rc::clone(api);
     lua.create_function(move |_, (event, ctx): (String, Table)| {
         api.dispatch(&event, &ctx);
         Ok(())
@@ -30,7 +30,7 @@ pub fn emit(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 }
 
 pub fn notify(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = api.clone();
+    let api = Rc::clone(api);
     lua.create_function(move |_, message: String| {
         api.notify(message);
         Ok(())

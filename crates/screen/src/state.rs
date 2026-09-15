@@ -146,7 +146,6 @@ impl UiState {
             (&mut theme.cursor, config.cursor.as_deref()),
             (&mut theme.error, config.error.as_deref()),
             (&mut theme.notice, config.notice.as_deref()),
-            (&mut theme.border, config.border.as_deref()),
         ] {
             if let Some(color) = parse_color(value, &mut self.notices) {
                 *slot = color;

@@ -3,13 +3,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use mlua::Value as LuaValue;
-use uji_api::modal::ModalKind;
+use uji_api::modal::{Answer, ModalKind};
 use uji_core::llm::{CancelToken, StreamEvent};
 use uji_screen::model::RunState;
 
 use uji_tui::app::Echo;
 
-use super::{Control, LoopData};
+use super::{Control, LoopData, ModalInput};
 use crate::cmd::LuaAction;
 use crate::runtime::events;
 use crate::runtime::job::JobEvent;
@@ -39,6 +39,7 @@ impl LoopData {
         self.drain_jobs();
         self.drain_exec();
         self.drain_modal();
+        self.drain_answers();
         self.drain_diagnostics();
 
         for callback in self.inner.api.scheduled().take() {
@@ -155,11 +156,22 @@ impl LoopData {
         }
     }
 
+    fn drain_answers(&mut self) {
+        for answer in self.inner.api.take_answers() {
+            let input = match answer {
+                Answer::Select(Some(item)) => ModalInput::Select(item),
+                Answer::Prompt(Some(value)) => ModalInput::Prompt(value),
+                Answer::Select(None) | Answer::Prompt(None) => ModalInput::Cancel,
+            };
+            self.on_modal_answer(input);
+        }
+    }
+
     fn drain_modal(&mut self) {
         let Some(request) = self.inner.api.take_modal() else {
             return;
         };
-        self.active = Some(Box::new(LuaAction::new(request.on_done)));
+        self.modal = Some(LuaAction::new(request.on_done));
         match request.kind {
             ModalKind::Select { items } => self.app.open_select(request.title, items),
             ModalKind::Prompt { value, hidden } => {

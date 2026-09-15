@@ -13,6 +13,7 @@ pub struct JobRequest {
 }
 
 #[derive(Default)]
+#[allow(clippy::struct_field_names)]
 pub struct JobHandlers {
     pub on_stdout: Option<Function>,
     pub on_stderr: Option<Function>,

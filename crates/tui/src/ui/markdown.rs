@@ -233,12 +233,11 @@ impl Renderer {
             Event::Start(tag) => self.start(tag),
             Event::End(tag) => self.end(tag),
             Event::Text(text) if self.in_code => {
-                for raw in text.lines() {
-                    self.lines.push(Line::from(Span::styled(
-                        format!("  {raw}"),
-                        Style::default().fg(self.palette.code),
-                    )));
-                }
+                let code = Style::default().fg(self.palette.code);
+                self.lines.extend(
+                    text.lines()
+                        .map(|raw| Line::from(Span::styled(format!("  {raw}"), code))),
+                );
             }
             Event::Text(text) => {
                 self.open();

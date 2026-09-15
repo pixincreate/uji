@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+nucleo-matcher = "0.3"
 uji-core = { path = "../core" }
 uji-screen = { path = "../screen" }
 ratatui = "0.30"

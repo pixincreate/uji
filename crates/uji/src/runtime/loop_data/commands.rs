@@ -1,11 +1,13 @@
+use std::rc::Rc;
 use std::sync::Arc;
 
+use uji_api::modal::Answer;
 use uji_core::credential;
 use uji_core::llm::Provider;
 use uji_tui::app::{Echo, SuggestItem};
 
 use super::{Control, LoopData, ModalInput};
-use crate::cmd::{Args, Context};
+use crate::cmd::{Action, Args, Context};
 use crate::runtime::builtin::{self, BUILTINS};
 use crate::runtime::events;
 
@@ -38,6 +40,17 @@ impl LoopData {
     }
 
     pub(super) fn on_modal(&mut self, input: ModalInput) {
+        let Some(mut modal) = self.modal.take() else {
+            return;
+        };
+        match input {
+            ModalInput::Select(item) => modal.on_select(self, item),
+            ModalInput::Prompt(value) => modal.on_prompt(self, value),
+            ModalInput::Cancel => modal.on_cancel(self),
+        }
+    }
+
+    pub(super) fn on_modal_answer(&mut self, input: ModalInput) {
         let mut active = self.active.take();
         if let Some(action) = active.as_mut() {
             self.action_done = false;
@@ -55,13 +68,53 @@ impl LoopData {
     }
 }
 
+impl LoopData {
+    fn ask_ui(
+        &self,
+        component: &'static str,
+        build: impl FnOnce(&mlua::Lua) -> mlua::Result<mlua::Table>,
+    ) -> mlua::Result<()> {
+        let lua = &self.inner.lua;
+        let opts = build(lua)?;
+        let api = Rc::clone(&self.inner.api);
+        let done = lua.create_function(move |_, choice: Option<String>| {
+            api.queue_answer(match component {
+                "prompt" => Answer::Prompt(choice),
+                _ => Answer::Select(choice),
+            });
+            Ok(())
+        })?;
+        uji_api::modal::ask_ui(lua, component, opts, done)
+    }
+}
+
 impl Context for LoopData {
     fn open_select(&mut self, title: String, items: Vec<String>) {
-        self.app.open_select(title, items);
+        let built = self.ask_ui("select", |lua| {
+            let opts = lua.create_table()?;
+            opts.set("title", title.clone())?;
+            opts.set("items", items.clone())?;
+            Ok(opts)
+        });
+        if let Err(err) = built {
+            self.inner.report(format!("uji.ui.select: {err}"));
+            self.app.open_select(title, items);
+        }
     }
 
     fn open_prompt(&mut self, title: String, value: String, echo: Echo) {
-        self.app.open_prompt(title, value, echo);
+        let hidden = echo == Echo::Hidden;
+        let built = self.ask_ui("prompt", |lua| {
+            let opts = lua.create_table()?;
+            opts.set("title", title.clone())?;
+            opts.set("value", value.clone())?;
+            opts.set("hidden", hidden)?;
+            Ok(opts)
+        });
+        if let Err(err) = built {
+            self.inner.report(format!("uji.ui.prompt: {err}"));
+            self.app.open_prompt(title, value, echo);
+        }
     }
 
     fn set_setting(&mut self, key: &str, value: &str) {

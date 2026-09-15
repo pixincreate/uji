@@ -6,7 +6,7 @@ pub mod renderer;
 pub mod scroll;
 pub mod stream;
 
-pub use action::{Action, KeyAction, filter_items};
+pub use action::{Action, KeyAction, rank_items};
 pub use composer::Composer;
 pub use mode::{Echo, Mode, SuggestItem};
 pub use scroll::Scroll;
@@ -166,11 +166,13 @@ impl App {
     }
 
     pub fn open_select(&mut self, title: String, items: Vec<String>) {
+        let matches = (0..items.len()).collect();
         self.mode = Mode::Select {
             title,
             items,
             query: String::new(),
             cursor: 0,
+            matches,
         };
     }
 

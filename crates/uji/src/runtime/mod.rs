@@ -52,7 +52,7 @@ impl Runtime {
         let state = Rc::new(RefCell::new(UiState::new()));
         let conversation = Conversation::shared();
         let client = Arc::new(reqwest::Client::new());
-        let inner = Inner::boot(state, conversation.clone(), client, config_dir.clone());
+        let inner = Inner::boot(state, Rc::clone(&conversation), client, config_dir.clone());
 
         let event_loop = EventLoop::try_new()?;
         let loop_handle = event_loop.handle();
@@ -119,6 +119,7 @@ impl Runtime {
             control: Control::Run,
             signals,
             active: None,
+            modal: None,
             action_done: false,
             pending_tool: None,
             queued: VecDeque::new(),

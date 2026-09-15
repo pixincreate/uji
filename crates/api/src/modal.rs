@@ -15,6 +15,11 @@ pub struct ModalRequest {
     pub on_done: Function,
 }
 
+pub enum Answer {
+    Select(Option<String>),
+    Prompt(Option<String>),
+}
+
 pub fn select(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     let api = Rc::clone(api);
     lua.create_function(move |_, (opts, on_done): (Table, Function)| {
@@ -46,4 +51,11 @@ pub fn prompt(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 
 fn title_of(opts: &Table) -> mlua::Result<String> {
     Ok(opts.get::<Option<String>>("title")?.unwrap_or_default())
+}
+
+pub fn ask_ui(lua: &Lua, component: &str, opts: Table, on_done: Function) -> mlua::Result<()> {
+    let uji: Table = lua.globals().get("uji")?;
+    let ui: Table = uji.get("ui")?;
+    let handler: Function = ui.get(component)?;
+    handler.call::<()>((opts, on_done))
 }

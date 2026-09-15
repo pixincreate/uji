@@ -57,6 +57,7 @@ pub struct Api {
     session_state: SessionState,
     exec: RefCell<Vec<Vec<String>>>,
     modal: RefCell<Option<modal::ModalRequest>>,
+    answers: RefCell<Vec<modal::Answer>>,
     tool_roots: RefCell<Vec<PathBuf>>,
     segments: Registry,
     agent_context: Registry,
@@ -81,6 +82,7 @@ impl Api {
             session_state: SessionState::new(conversation),
             exec: RefCell::default(),
             modal: RefCell::default(),
+            answers: RefCell::default(),
             tool_roots: RefCell::default(),
             segments: Registry::default(),
             agent_context: Registry::default(),
@@ -89,7 +91,7 @@ impl Api {
     }
 
     pub fn state(&self) -> Rc<RefCell<UiState>> {
-        self.state.clone()
+        Rc::clone(&self.state)
     }
 
     pub fn scheduled(&self) -> &Scheduled {
@@ -134,6 +136,14 @@ impl Api {
 
     pub fn take_modal(&self) -> Option<modal::ModalRequest> {
         self.modal.borrow_mut().take()
+    }
+
+    pub fn queue_answer(&self, answer: modal::Answer) {
+        self.answers.borrow_mut().push(answer);
+    }
+
+    pub fn take_answers(&self) -> Vec<modal::Answer> {
+        std::mem::take(&mut *self.answers.borrow_mut())
     }
 
     pub fn queue_exec(&self, command: Vec<String>) {

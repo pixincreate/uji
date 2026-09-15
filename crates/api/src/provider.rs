@@ -6,7 +6,7 @@ use uji_core::llm::Provider;
 use super::Api;
 
 pub fn add(lua: &Lua, api: &Rc<Api>) -> mlua::Result<mlua::Function> {
-    let api = api.clone();
+    let api = Rc::clone(api);
     lua.create_function(move |lua, table: Table| {
         let provider: Provider = lua.from_value(LuaValue::Table(table))?;
         api.providers().borrow_mut().add(provider);
@@ -15,7 +15,7 @@ pub fn add(lua: &Lua, api: &Rc<Api>) -> mlua::Result<mlua::Function> {
 }
 
 pub fn remove(lua: &Lua, api: &Rc<Api>) -> mlua::Result<mlua::Function> {
-    let api = api.clone();
+    let api = Rc::clone(api);
     lua.create_function(move |_, id: String| {
         api.providers().borrow_mut().remove(&id);
         Ok(())
@@ -23,7 +23,7 @@ pub fn remove(lua: &Lua, api: &Rc<Api>) -> mlua::Result<mlua::Function> {
 }
 
 pub fn list(lua: &Lua, api: &Rc<Api>) -> mlua::Result<mlua::Function> {
-    let api = api.clone();
+    let api = Rc::clone(api);
     lua.create_function(move |lua, ()| {
         let catalog = api.providers();
         let catalog = catalog.borrow();

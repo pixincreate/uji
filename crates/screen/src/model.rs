@@ -221,7 +221,6 @@ pub struct Theme {
     pub cursor: Color,
     pub error: Color,
     pub notice: Color,
-    pub border: Color,
 }
 
 impl Default for Theme {
@@ -236,7 +235,6 @@ impl Default for Theme {
             cursor: Color::White,
             error: Color::Red,
             notice: Color::Red,
-            border: Color::Rgb(0x50, 0x50, 0x53),
         }
     }
 }
@@ -276,7 +274,6 @@ pub struct ThemeConfig {
     pub cursor: Option<String>,
     pub error: Option<String>,
     pub notice: Option<String>,
-    pub border: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -31,12 +31,11 @@ pub(crate) fn wrap_line(line: &Line, width: usize) -> Vec<Line> {
     if width == 0 || line.spans.is_empty() {
         return vec![line.clone()];
     }
-    let mut chars: Vec<(char, Style)> = Vec::new();
-    for span in &line.spans {
-        for ch in span.text.chars() {
-            chars.push((ch, span.style));
-        }
-    }
+    let chars: Vec<(char, Style)> = line
+        .spans
+        .iter()
+        .flat_map(|span| span.text.chars().map(|ch| (ch, span.style)))
+        .collect();
     let mut lines = Vec::new();
     let mut current: Vec<(char, Style)> = Vec::new();
     for (ch, style) in chars {

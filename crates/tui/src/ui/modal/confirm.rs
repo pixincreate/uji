@@ -44,13 +44,17 @@ pub(crate) fn lines(
 
     let inner = usize::from(width).saturating_sub(2).max(1);
     let mut lines: Vec<Line<'static>> = vec![Line::from("")];
-    for chunk in wrap(title, inner) {
-        lines.push(Line::from(Span::styled(format!("  {chunk}"), title_style)));
-    }
+    lines.extend(
+        wrap(title, inner)
+            .into_iter()
+            .map(|chunk| Line::from(Span::styled(format!("  {chunk}"), title_style))),
+    );
     lines.push(Line::from(""));
-    for chunk in wrap(body, inner) {
-        lines.push(Line::from(Span::styled(format!("  {chunk}"), body_style)));
-    }
+    lines.extend(
+        wrap(body, inner)
+            .into_iter()
+            .map(|chunk| Line::from(Span::styled(format!("  {chunk}"), body_style))),
+    );
     lines.push(Line::from(""));
     lines.push(option_line(
         1,

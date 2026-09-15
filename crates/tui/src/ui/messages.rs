@@ -114,11 +114,11 @@ fn push_builtin(lines: &mut Vec<Line<'static>>, block: Block<'_>, width: usize, 
 }
 
 fn push_custom(lines: &mut Vec<Line<'static>>, custom: &[uji_screen::model::Line], width: usize) {
-    for line in custom {
-        for wrapped in crate::ui::buffer::wrap_line(line, width) {
-            lines.push(crate::ui::buffer::line_to_ratatui(&wrapped, width));
-        }
-    }
+    lines.extend(custom.iter().flat_map(|line| {
+        crate::ui::buffer::wrap_line(line, width)
+            .into_iter()
+            .map(|wrapped| crate::ui::buffer::line_to_ratatui(&wrapped, width))
+    }));
 }
 
 pub(crate) fn push_message(
@@ -265,12 +265,12 @@ fn push_tool_header(
                 .add_modifier(Modifier::BOLD),
         ),
     ]));
-    for chunk in chunks {
-        lines.push(Line::from(Span::styled(
+    lines.extend(chunks.map(|chunk| {
+        Line::from(Span::styled(
             format!("   {chunk}"),
             Style::default().fg(palette.text),
-        )));
-    }
+        ))
+    }));
 }
 
 fn push_tool_output(lines: &mut Vec<Line<'static>>, content: &str, width: usize, palette: Palette) {

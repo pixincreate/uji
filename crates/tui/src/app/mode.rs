@@ -18,6 +18,7 @@ pub enum Mode {
         items: Vec<String>,
         query: String,
         cursor: usize,
+        matches: Vec<usize>,
     },
     Prompt {
         title: String,

@@ -38,6 +38,7 @@ fn main() {
         Command::Delete { id } => handle_delete(&id),
     };
 
+    #[allow(clippy::disallowed_methods)]
     if let Err(err) = result {
         eprintln!("uji: error: {err}");
         std::process::exit(1);

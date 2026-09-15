@@ -31,11 +31,13 @@ pub fn files_touched(messages: &[&Message]) -> Vec<String> {
 }
 
 pub fn merge_files(into: &mut Vec<String>, extra: &[String]) {
-    for path in extra {
-        if !into.iter().any(|seen| seen == path) {
-            into.push(path.clone());
-        }
-    }
+    let mut known: HashSet<String> = into.iter().cloned().collect();
+    let fresh: Vec<String> = extra
+        .iter()
+        .filter(|path| known.insert((*path).clone()))
+        .cloned()
+        .collect();
+    into.extend(fresh);
 }
 
 pub fn previous_summary(message: &Message) -> Option<&str> {

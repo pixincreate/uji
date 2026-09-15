@@ -14,7 +14,7 @@ use uji_core::llm::{CancelToken, StreamEvent, ToolDecision};
 use uji_core::session::store::SessionStorage;
 use uji_tui::app::App;
 
-use crate::cmd::Action;
+use crate::cmd::{Action, LuaAction};
 
 use super::Inner;
 use super::frontend::Frontend;
@@ -50,6 +50,7 @@ pub(crate) struct LoopData {
     pub(crate) signals: calloop::channel::Sender<Signal>,
     pub(crate) runtime: tokio::runtime::Runtime,
     pub(crate) active: Option<Box<dyn Action>>,
+    pub(crate) modal: Option<LuaAction>,
     pub(crate) action_done: bool,
     pub(crate) pending_tool: Option<(String, tokio::sync::oneshot::Sender<ToolDecision>)>,
     pub(crate) queued: VecDeque<String>,

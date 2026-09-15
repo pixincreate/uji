@@ -14,7 +14,7 @@ pub struct LuaTool {
 }
 
 pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = api.clone();
+    let api = Rc::clone(api);
     lua.create_function(move |_, (name, opts): (String, Table)| {
         let description = opts
             .get::<Option<String>>("description")?
@@ -36,7 +36,7 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 }
 
 pub fn unregister(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = api.clone();
+    let api = Rc::clone(api);
     lua.create_function(move |_, name: String| {
         api.lua_tools().borrow_mut().remove(&name);
         Ok(())

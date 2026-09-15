@@ -36,37 +36,28 @@ fn schema(props: &Value, required: &[&str]) -> Value {
     })
 }
 
-/// Extra directories the tools may reach, beyond the working directory.
-/// Reading a sibling repo is legitimate; reaching `~/.ssh` is not, so this is
-/// opt-in and empty by default.
 #[derive(Clone, Default)]
 pub struct Roots {
-    extra: Arc<Vec<PathBuf>>,
+    extra: Arc<[PathBuf]>,
 }
 
 impl Roots {
     pub fn new(extra: Vec<PathBuf>) -> Self {
         Self {
-            extra: Arc::new(extra),
+            extra: extra.into(),
         }
     }
 
-    /// The working directory first, then any configured extras.
     fn candidates<'a>(&'a self, cwd: &'a Path) -> impl Iterator<Item = &'a Path> {
         std::iter::once(cwd).chain(self.extra.iter().map(PathBuf::as_path))
     }
 }
 
-/// A path confined to one root. Every operation goes through `dir`, which
-/// cannot be escaped -- containment is the open itself, not a check performed
-/// beforehand, so there is no window in which a symlink can be swapped in.
 struct Confined {
     dir: Dir,
     rel: PathBuf,
 }
 
-/// Whether a relative path stays inside its root. Only used to pick a root and
-/// to produce a message the model can act on; `Dir` is what enforces.
 fn stays_within(path: &Path) -> bool {
     let mut depth = 0i32;
     for part in path.components() {
@@ -82,7 +73,6 @@ fn stays_within(path: &Path) -> bool {
     true
 }
 
-/// Where `path` sits inside `root`, or `None` if it is not under it.
 fn relative_to(root: &Path, path: &Path) -> Option<PathBuf> {
     let rel = if path.is_absolute() {
         path.strip_prefix(root).ok()?.to_path_buf()
@@ -116,8 +106,6 @@ fn resolve(cwd: &Path, path: &str, roots: &Roots) -> Result<Confined, String> {
     Ok(Confined { dir, rel })
 }
 
-/// Translate a refusal by `Dir` into something the model can act on. Without
-/// this a blocked symlink reads as a mysterious permission error.
 fn fs_error(action: &str, path: &str, cwd: &Path, err: &std::io::Error) -> String {
     if err.kind() == std::io::ErrorKind::PermissionDenied {
         outside(path, cwd)
@@ -548,8 +536,6 @@ fn grep_file(dir: &Dir, rel: &Path, label: &str, regex: &regex::Regex, out: &mut
     }
 }
 
-/// Recurses through `Dir` handles rather than reopening by path, so a
-/// symlinked directory cannot walk the search out of the working directory.
 fn walk_grep(dir: &Dir, prefix: &Path, regex: &regex::Regex, depth: usize, out: &mut Vec<String>) {
     if depth > MAX_GREP_DEPTH || out.len() >= MAX_GREP_MATCHES {
         return;

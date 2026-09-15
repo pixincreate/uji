@@ -14,7 +14,6 @@ pub struct Palette {
     pub cursor: TColor,
     pub error: TColor,
     pub notice: TColor,
-    pub border: TColor,
 }
 
 impl Default for Palette {
@@ -35,7 +34,6 @@ impl Palette {
             cursor: color_of(theme.cursor),
             error: color_of(theme.error),
             notice: color_of(theme.notice),
-            border: color_of(theme.border),
         }
     }
 
@@ -90,31 +88,6 @@ pub(crate) fn span_style(style: &ApiStyle) -> Style {
 
 pub(crate) fn span_background(style: &ApiStyle) -> Option<TColor> {
     style.bg.map(color_of)
-}
-
-const FADE_SCALE: u32 = 1000;
-
-pub(crate) fn border_fade(palette: Palette, d: u16) -> Style {
-    let factor = match d {
-        0 => 325,
-        1 => 550,
-        2 => 775,
-        _ => FADE_SCALE,
-    };
-    Style::default().fg(dim(palette.border, factor))
-}
-
-fn dim(color: TColor, factor: u32) -> TColor {
-    let TColor::Rgb(r, g, b) = color else {
-        return color;
-    };
-    let scale = |channel: u8| {
-        let value = u32::from(channel)
-            .saturating_mul(factor)
-            .saturating_div(FADE_SCALE);
-        u8::try_from(value).unwrap_or(u8::MAX)
-    };
-    TColor::Rgb(scale(r), scale(g), scale(b))
 }
 
 pub(crate) fn vertical_chrome(win: &WindowSpec) -> u16 {

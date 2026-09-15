@@ -49,7 +49,7 @@ impl Render for Suggest<'_> {
                     Style::default()
                 };
                 let name = Span::styled(
-                    format!(" {:<12}", item.name),
+                    format!("  {:<12}", item.name),
                     if selected {
                         Style::default().fg(ctx.palette.accent)
                     } else {
