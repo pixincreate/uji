@@ -3,31 +3,106 @@ use std::collections::HashSet;
 use crate::session::model::{Message, StoredMessage};
 
 const SUMMARY_HEADER: &str = "Summary of the earlier part of this conversation:";
+const FILES_HEADER: &str = "Files touched so far:";
+const PATH_TOOLS: &[&str] = &["read_file", "edit_file", "write_file"];
+
+pub fn files_touched(messages: &[&Message]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for message in messages {
+        let Message::Assistant { tool_calls, .. } = message else {
+            continue;
+        };
+        for call in tool_calls {
+            if !PATH_TOOLS.contains(&call.name.as_str()) {
+                continue;
+            }
+            let Ok(args) = serde_json::from_str::<serde_json::Value>(&call.arguments) else {
+                continue;
+            };
+            let Some(path) = args.get("path").and_then(serde_json::Value::as_str) else {
+                continue;
+            };
+            if !out.iter().any(|seen| seen == path) {
+                out.push(path.to_string());
+            }
+        }
+    }
+    out
+}
+
+pub fn merge_files(into: &mut Vec<String>, extra: &[String]) {
+    for path in extra {
+        if !into.iter().any(|seen| seen == path) {
+            into.push(path.clone());
+        }
+    }
+}
+
+pub fn previous_summary(message: &Message) -> Option<&str> {
+    let Message::System { text } = message else {
+        return None;
+    };
+    let body = text.strip_prefix(SUMMARY_HEADER)?;
+    Some(
+        body.rsplit_once(FILES_HEADER)
+            .map_or(body, |(head, _)| head)
+            .trim(),
+    )
+}
+
+pub fn previous_files(message: &Message) -> Vec<String> {
+    let Message::System { text } = message else {
+        return Vec::new();
+    };
+    let Some((_, listed)) = text.rsplit_once(FILES_HEADER) else {
+        return Vec::new();
+    };
+    listed
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+pub fn summary_message(summary: &str, files: &[String]) -> Message {
+    let mut text = format!("{SUMMARY_HEADER}\n\n{summary}");
+    if !files.is_empty() {
+        text.push_str("\n\n");
+        text.push_str(FILES_HEADER);
+        text.push(' ');
+        text.push_str(&files.join(", "));
+    }
+    Message::System { text }
+}
 
 pub fn build(stored: &[StoredMessage]) -> Vec<Message> {
-    let (summary, rest) = split_at_compaction(stored);
+    let (checkpoint, rest) = split_at_compaction(stored);
     let mut out = Vec::with_capacity(rest.len() + 1);
-    if let Some(summary) = summary {
-        out.push(Message::System {
-            text: format!("{SUMMARY_HEADER}\n\n{summary}"),
-        });
+    if let Some((summary, files)) = checkpoint {
+        out.push(summary_message(summary, files));
     }
     out.extend(sanitize(rest));
     out
 }
 
-fn split_at_compaction(stored: &[StoredMessage]) -> (Option<&str>, &[StoredMessage]) {
+type Checkpoint<'a> = (Option<(&'a str, &'a [String])>, &'a [StoredMessage]);
+
+fn split_at_compaction(stored: &[StoredMessage]) -> Checkpoint<'_> {
     let found = stored
         .iter()
         .rposition(|entry| matches!(entry.message, Message::Compaction { .. }));
     let Some(at) = found else {
         return (None, stored);
     };
-    let summary = match &stored[at].message {
-        Message::Compaction { summary, .. } => Some(summary.as_str()),
+    let checkpoint = match &stored[at].message {
+        Message::Compaction { summary, files, .. } => Some((summary.as_str(), files.as_slice())),
         _ => None,
     };
-    (summary, &stored[at.saturating_add(1)..])
+    (checkpoint, &stored[at.saturating_add(1)..])
 }
 
 pub fn sanitize(stored: &[StoredMessage]) -> Vec<Message> {
@@ -82,11 +157,34 @@ fn estimate(text: &str) -> u64 {
     u64::try_from(text.chars().count() / CHARS_PER_TOKEN).unwrap_or(u64::MAX)
 }
 
+fn weigh(message: &Message) -> u64 {
+    let mut chars = message.text().chars().count();
+    if let Message::Assistant { tool_calls, .. } = message {
+        for call in tool_calls {
+            chars = chars.saturating_add(call.name.chars().count());
+            chars = chars.saturating_add(call.arguments.chars().count());
+        }
+    }
+    u64::try_from(chars / CHARS_PER_TOKEN).unwrap_or(u64::MAX)
+}
+
+pub fn estimate_messages(messages: &[Message]) -> u64 {
+    messages.iter().map(weigh).fold(0, u64::saturating_add)
+}
+
+pub fn estimate_after(stored: &[StoredMessage], seq: i64) -> u64 {
+    stored
+        .iter()
+        .filter(|entry| entry.seq > seq)
+        .map(|entry| weigh(&entry.message))
+        .fold(0, u64::saturating_add)
+}
+
 pub fn estimate_tokens(stored: &[StoredMessage]) -> u64 {
-    let (summary, rest) = split_at_compaction(stored);
-    let carried = summary.map_or(0, estimate);
+    let (checkpoint, rest) = split_at_compaction(stored);
+    let carried = checkpoint.map_or(0, |(summary, _)| estimate(summary));
     rest.iter()
-        .map(|entry| estimate(entry.message.text()))
+        .map(|entry| weigh(&entry.message))
         .fold(carried, u64::saturating_add)
 }
 
@@ -103,30 +201,45 @@ impl Cut {
     }
 }
 
+fn is_cut_point(message: &Message) -> bool {
+    !matches!(message, Message::Tool { .. })
+}
+
+pub fn cut_index(messages: &[&Message], keep_recent: u64) -> Option<usize> {
+    let points: Vec<usize> = messages
+        .iter()
+        .enumerate()
+        .filter(|(_, message)| is_cut_point(message))
+        .map(|(at, _)| at)
+        .collect();
+    let mut cut = *points.first()?;
+
+    let mut kept = 0u64;
+    for at in (0..messages.len()).rev() {
+        kept = kept.saturating_add(weigh(messages[at]));
+        if kept >= keep_recent {
+            let found = points
+                .iter()
+                .copied()
+                .find(|point| *point >= at)
+                .or_else(|| points.last().copied());
+            if let Some(found) = found {
+                cut = found;
+            }
+            break;
+        }
+    }
+    (cut > 0).then_some(cut)
+}
+
 pub fn find_cut(stored: &[StoredMessage], keep_recent: u64) -> Option<Cut> {
     let marker = stored
         .iter()
         .rposition(|entry| matches!(entry.message, Message::Compaction { .. }));
     let offset = marker.map_or(0, |at| at.saturating_add(1));
     let start = &stored[offset..];
-
-    let mut budget = keep_recent;
-    let mut first_kept = None;
-    for (at, entry) in start.iter().enumerate().rev() {
-        let size = estimate(entry.message.text());
-        budget = budget.saturating_sub(size);
-        if matches!(entry.message, Message::User { .. }) {
-            first_kept = Some(at);
-            if budget == 0 {
-                break;
-            }
-        }
-    }
-
-    let first_kept = first_kept?;
-    if first_kept == 0 {
-        return None;
-    }
+    let messages: Vec<&Message> = start.iter().map(|entry| &entry.message).collect();
+    let first_kept = cut_index(&messages, keep_recent)?;
     Some(Cut {
         from: marker.unwrap_or(0),
         through: start[first_kept.saturating_sub(1)].seq,

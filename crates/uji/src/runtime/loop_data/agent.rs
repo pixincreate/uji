@@ -55,6 +55,8 @@ impl LoopData {
         let sender = self.signals.clone();
         let cancel = CancelToken::new();
         self.cancel = Some(cancel.clone());
+        let budget = self.budget();
+        let keep_recent = self.keep_recent();
         {
             let state_rc = self.inner.state();
             let mut state = state_rc.borrow_mut();
@@ -73,6 +75,8 @@ impl LoopData {
                 lua_tools: &lua_tools,
                 cwd: std::path::Path::new(&cwd),
                 cancel,
+                budget,
+                keep_recent,
             };
             let mut on_event = |event: StreamEvent| {
                 let _ = sender.send(Signal::Llm(event));
@@ -102,6 +106,16 @@ impl LoopData {
     pub(super) fn apply_llm_event(&mut self, event: StreamEvent) {
         match event {
             StreamEvent::Delta(delta) => self.app.append_pending(&delta),
+            StreamEvent::Compacted { summary, usage } => {
+                let _ = summary;
+                if let Some(usage) = usage {
+                    self.app.conversation().borrow_mut().add_cost(usage);
+                }
+                self.inner.report(String::from(
+                    "context filled up mid-turn; compacted to continue",
+                ));
+                self.dirty = true;
+            }
             StreamEvent::Restarted { attempt, of, wait } => {
                 self.app.take_pending();
                 self.inner.report(format!(

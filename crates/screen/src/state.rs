@@ -157,6 +157,15 @@ impl UiState {
 
     pub fn apply_config(&mut self, config: &UiConfig) {
         self.apply_theme(&config.theme);
+        if let Some(enabled) = config.compaction.enabled {
+            self.opts.compaction.enabled = enabled;
+        }
+        if let Some(reserve) = config.compaction.reserve {
+            self.opts.compaction.reserve = Some(reserve);
+        }
+        if let Some(keep_recent) = config.compaction.keep_recent {
+            self.opts.compaction.keep_recent = keep_recent;
+        }
         if let Some(cursor_blink) = config.input.cursor_blink {
             self.set_cursor_blink(cursor_blink);
         }

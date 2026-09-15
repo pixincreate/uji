@@ -1,18 +1,43 @@
-use std::sync::Arc;
-
 use super::{Llm, LlmRequest, Usage};
-use crate::session::model::{Message, StoredMessage};
+use crate::session::model::Message;
 
-const PROMPT: &str = "You compact coding sessions. You are given the earlier part of a \
-conversation between a user and a coding agent. Write a summary that lets the agent keep \
-working without the original transcript.\n\n\
-Cover, in this order and only where they apply:\n\
-- What the user asked for, including constraints and preferences they stated.\n\
-- Decisions taken and the reasoning behind them.\n\
-- Files created, edited, or investigated, with their paths.\n\
-- What is done, what is verified, and what is still outstanding.\n\n\
-Be specific: keep identifiers, paths, commands, and error strings verbatim. Do not invent \
-anything that is not in the transcript. Reply with the summary alone, no preamble.";
+const FORMAT: &str = "## Goal\n\
+[What the user is trying to accomplish. Multiple items if the session covers several tasks.]\n\n\
+## Constraints & Preferences\n\
+- [Constraints, preferences or requirements the user stated, or \"(none)\"]\n\n\
+## Progress\n\
+### Done\n\
+- [x] [Completed work]\n\
+### In Progress\n\
+- [ ] [Current work]\n\
+### Blocked\n\
+- [What is preventing progress, or \"(none)\"]\n\n\
+## Key Decisions\n\
+- **[Decision]**: [Brief rationale]\n\n\
+## Next Steps\n\
+1. [Ordered list of what should happen next]\n\n\
+## Critical Context\n\
+- [Data, examples or references needed to continue, or \"(none)\"]\n\n\
+Keep each section concise. Preserve exact file paths, function names, commands and error \
+strings verbatim.";
+
+const PROMPT: &str = "You compact coding sessions. The messages above are a conversation to \
+summarise. Write a structured checkpoint that another agent will use to continue the work \
+without the original transcript. Do not invent anything that is not in the transcript. \
+Reply with the summary alone, no preamble.\n\n\
+Use this EXACT format:\n\n";
+
+const UPDATE_PROMPT: &str = "You maintain a rolling checkpoint of a coding session. The \
+existing checkpoint is in <previous-summary> tags; the messages after it are NEW activity \
+to fold in.\n\n\
+RULES:\n\
+- PRESERVE every fact from the previous checkpoint unless it became wrong.\n\
+- MOVE items from \"In Progress\" to \"Done\" as they complete.\n\
+- UPDATE \"Next Steps\" to reflect the current state.\n\
+- PRESERVE exact file paths, function names, commands and error strings.\n\
+- Drop items only when they are no longer relevant.\n\n\
+Reply with the updated checkpoint alone, no preamble.\n\n\
+Use this EXACT format:\n\n";
 
 const MAX_INPUT: usize = 200_000;
 
@@ -23,18 +48,26 @@ pub struct Summarized {
 
 pub async fn generate(
     client: &reqwest::Client,
-    provider: Arc<dyn Llm>,
+    provider: &dyn Llm,
     model: String,
-    stored: &[StoredMessage],
+    messages: &[&Message],
+    previous: Option<&str>,
 ) -> Option<Summarized> {
-    let transcript = transcript(stored);
+    let transcript = transcript(messages);
     if transcript.trim().is_empty() {
         return None;
     }
+    let (instructions, text) = match previous {
+        Some(previous) => (
+            UPDATE_PROMPT,
+            format!("<previous-summary>\n{previous}\n</previous-summary>\n\n{transcript}"),
+        ),
+        None => (PROMPT, transcript),
+    };
     let request = LlmRequest {
         model,
-        system: Some(PROMPT.to_string()),
-        messages: vec![Message::User { text: transcript }],
+        system: Some(format!("{instructions}{FORMAT}")),
+        messages: vec![Message::User { text }],
         tools: Vec::new(),
     };
     let response = provider.send_request(client, &request).await.ok()?;
@@ -48,11 +81,11 @@ pub async fn generate(
     })
 }
 
-fn transcript(stored: &[StoredMessage]) -> String {
+fn transcript(messages: &[&Message]) -> String {
     let mut chunks: Vec<String> = Vec::new();
     let mut budget = MAX_INPUT;
-    for entry in stored.iter().rev() {
-        let label = match &entry.message {
+    for message in messages.iter().rev() {
+        let label = match message {
             Message::User { .. } => "user",
             Message::Assistant { .. } => "assistant",
             Message::Tool { name, .. } => name.as_str(),
@@ -60,7 +93,7 @@ fn transcript(stored: &[StoredMessage]) -> String {
             Message::Error { .. } => "error",
             Message::Compaction { .. } => "earlier summary",
         };
-        let text = entry.message.text();
+        let text = message.text();
         if text.trim().is_empty() {
             continue;
         }

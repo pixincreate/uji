@@ -3,16 +3,19 @@ use std::time::Instant;
 
 use uji_core::llm::{Budget, context};
 use uji_core::session::model::Message;
-use uji_screen::model::RunState;
+use uji_screen::model::{CompactionOpts, RunState};
 
 use super::LoopData;
 use crate::runtime::background::{self, CompactEvent};
 use crate::runtime::events;
 
-const KEEP_FRACTION: u64 = 4;
+const KEEP_CEILING_FRACTION: u64 = 4;
 
 impl LoopData {
     pub(super) fn compact_if_needed(&mut self) -> bool {
+        if !self.compaction_opts().enabled {
+            return false;
+        }
         let Some(budget) = self.budget() else {
             return false;
         };
@@ -33,7 +36,14 @@ impl LoopData {
         let room = self
             .budget()
             .map_or_else(|| self.used_tokens(), Budget::usable);
-        room / KEEP_FRACTION
+        self.compaction_opts()
+            .keep_recent
+            .min(room / KEEP_CEILING_FRACTION)
+            .max(1)
+    }
+
+    fn compaction_opts(&self) -> CompactionOpts {
+        self.inner.state().borrow().opts().compaction
     }
 
     pub(super) fn run_compaction(&mut self, keep_recent: u64) -> bool {
@@ -43,9 +53,15 @@ impl LoopData {
         let Some(cut) = self.cut(keep_recent) else {
             return false;
         };
-        let earlier = {
+        let (previous, carried, earlier) = {
             let conversation = self.app.messages();
-            conversation.messages()[cut.from..cut.compacted].to_vec()
+            let span = &conversation.messages()[cut.from..cut.compacted];
+            match span.first().map(|entry| &entry.message) {
+                Some(Message::Compaction { summary, files, .. }) => {
+                    (Some(summary.clone()), files.clone(), span[1..].to_vec())
+                }
+                _ => (None, Vec::new(), span.to_vec()),
+            }
         };
         {
             let state_rc = self.inner.state();
@@ -56,11 +72,15 @@ impl LoopData {
         self.inner.emit(events::STATUS_CHANGED, &[]);
         background::compact(
             &self.runtime,
-            Arc::clone(&self.inner.client),
-            self.inner.llm.borrow().clone(),
-            self.inner.llm_model.borrow().clone(),
-            earlier,
-            cut,
+            background::CompactRequest {
+                client: Arc::clone(&self.inner.client),
+                provider: self.inner.llm.borrow().clone(),
+                model: self.inner.llm_model.borrow().clone(),
+                earlier,
+                previous,
+                carried,
+                cut,
+            },
             self.signals.clone(),
         );
         true
@@ -70,6 +90,7 @@ impl LoopData {
         match event {
             CompactEvent::Ready {
                 summary,
+                files,
                 cut,
                 usage,
             } => {
@@ -79,6 +100,7 @@ impl LoopData {
                 self.append(Message::Compaction {
                     summary,
                     through: cut.through,
+                    files,
                 });
                 self.inner
                     .report(format!("compacted {} earlier messages", cut.span()));
@@ -102,21 +124,26 @@ impl LoopData {
 
     fn used_tokens(&self) -> u64 {
         let conversation = self.app.messages();
-        let reported = conversation.last_input();
-        if reported > 0 {
-            reported
-        } else {
-            context::estimate_tokens(conversation.messages())
+        let messages = conversation.messages();
+        match conversation.reported_input() {
+            Some((reported, seq)) => {
+                reported.saturating_add(context::estimate_after(messages, seq))
+            }
+            None => context::estimate_tokens(messages),
         }
     }
 
-    fn budget(&self) -> Option<Budget> {
+    pub(super) fn budget(&self) -> Option<Budget> {
         let model = self.inner.llm_model.borrow().clone();
         let id = self.inner.llm_provider.borrow().clone();
         let catalog = self.inner.api.providers();
         let catalog = catalog.borrow();
-        catalog
+        let mut budget = catalog
             .get(&id)
-            .and_then(|provider| provider.budget(&model))
+            .and_then(|provider| provider.budget(&model))?;
+        if let Some(reserve) = self.compaction_opts().reserve {
+            budget.reserve = reserve.min(budget.window);
+        }
+        Some(budget)
     }
 }

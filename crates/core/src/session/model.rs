@@ -60,7 +60,12 @@ pub enum Message {
     #[serde(rename = "error")]
     Error { text: String },
     #[serde(rename = "compaction")]
-    Compaction { summary: String, through: i64 },
+    Compaction {
+        summary: String,
+        through: i64,
+        #[serde(default)]
+        files: Vec<String>,
+    },
 }
 
 impl Message {

@@ -1,34 +1,53 @@
 use std::sync::Arc;
 
-use uji_core::llm::context::Cut;
+use uji_core::llm::context::{self, Cut};
 use uji_core::llm::{Llm, Usage, summary, title};
-use uji_core::session::model::StoredMessage;
+use uji_core::session::model::{Message, StoredMessage};
 
 use super::signal::Signal;
 
 pub(crate) enum CompactEvent {
     Ready {
         summary: String,
+        files: Vec<String>,
         cut: Cut,
         usage: Option<Usage>,
     },
     Failed,
 }
 
+pub(crate) struct CompactRequest {
+    pub(crate) client: Arc<reqwest::Client>,
+    pub(crate) provider: Arc<dyn Llm>,
+    pub(crate) model: String,
+    pub(crate) earlier: Vec<StoredMessage>,
+    pub(crate) previous: Option<String>,
+    pub(crate) carried: Vec<String>,
+    pub(crate) cut: Cut,
+}
+
 pub(crate) fn compact(
     runtime: &tokio::runtime::Runtime,
-    client: Arc<reqwest::Client>,
-    provider: Arc<dyn Llm>,
-    model: String,
-    earlier: Vec<StoredMessage>,
-    cut: Cut,
+    request: CompactRequest,
     sender: calloop::channel::Sender<Signal>,
 ) {
     runtime.spawn(async move {
-        let event = match summary::generate(&client, provider, model, &earlier).await {
+        let refs: Vec<&Message> = request.earlier.iter().map(|entry| &entry.message).collect();
+        let mut files = context::files_touched(&refs);
+        context::merge_files(&mut files, &request.carried);
+        let done = summary::generate(
+            &request.client,
+            request.provider.as_ref(),
+            request.model,
+            &refs,
+            request.previous.as_deref(),
+        )
+        .await;
+        let event = match done {
             Some(done) => CompactEvent::Ready {
                 summary: done.summary,
-                cut,
+                files,
+                cut: request.cut,
                 usage: done.usage,
             },
             None => CompactEvent::Failed,

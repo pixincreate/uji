@@ -241,6 +241,30 @@ impl Default for Theme {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CompactionOpts {
+    pub enabled: bool,
+    pub reserve: Option<u64>,
+    pub keep_recent: u64,
+}
+
+impl Default for CompactionOpts {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            reserve: None,
+            keep_recent: 20_000,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct CompactionConfig {
+    pub enabled: Option<bool>,
+    pub reserve: Option<u64>,
+    pub keep_recent: Option<u64>,
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ThemeConfig {
     pub text: Option<String>,
@@ -266,6 +290,7 @@ pub struct GlobalOpts {
     pub agent_system_prompt: Option<String>,
     pub confirm: ConfirmOpts,
     pub theme: Theme,
+    pub compaction: CompactionOpts,
 }
 
 impl Default for GlobalOpts {
@@ -280,6 +305,7 @@ impl Default for GlobalOpts {
             agent_system_prompt: None,
             confirm: ConfirmOpts::default(),
             theme: Theme::default(),
+            compaction: CompactionOpts::default(),
         }
     }
 }
@@ -313,6 +339,7 @@ impl Default for ConfirmOpts {
 #[serde(default)]
 pub struct UiConfig {
     pub theme: ThemeConfig,
+    pub compaction: CompactionConfig,
     pub input: InputConfig,
     pub suggest: SuggestConfig,
     pub waiting: WaitingConfig,

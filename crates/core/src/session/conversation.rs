@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use crate::llm::Usage;
 
-use super::model::{Session, StoredMessage};
+use super::model::{Message, Session, StoredMessage};
 
 pub type Shared = Rc<RefCell<Conversation>>;
 
@@ -35,7 +35,8 @@ pub struct Conversation {
     info: Info,
     messages: Vec<StoredMessage>,
     tally: Tally,
-    last_input: u64,
+    reported_input: u64,
+    reported_seq: i64,
 }
 
 impl Conversation {
@@ -46,6 +47,7 @@ impl Conversation {
     pub fn attach(&mut self, session: &Session, messages: Vec<StoredMessage>) {
         self.info = Info::from(session);
         self.messages = messages;
+        self.forget_reported_input();
     }
 
     pub fn info(&self) -> &Info {
@@ -61,11 +63,19 @@ impl Conversation {
     }
 
     pub fn push(&mut self, message: StoredMessage) {
+        if matches!(message.message, Message::Compaction { .. }) {
+            self.forget_reported_input();
+        }
         self.messages.push(message);
     }
 
-    pub fn last_input(&self) -> u64 {
-        self.last_input
+    pub fn reported_input(&self) -> Option<(u64, i64)> {
+        (self.reported_input > 0).then_some((self.reported_input, self.reported_seq))
+    }
+
+    fn forget_reported_input(&mut self) {
+        self.reported_input = 0;
+        self.reported_seq = 0;
     }
 
     pub fn add_cost(&mut self, usage: Usage) {
@@ -74,7 +84,8 @@ impl Conversation {
 
     pub fn add_usage(&mut self, usage: Usage) {
         if usage.input > 0 {
-            self.last_input = usage.input;
+            self.reported_input = usage.input;
+            self.reported_seq = self.messages.last().map_or(0, |stored| stored.seq);
         }
         self.tally.usage.add(usage);
         self.tally.turns = self.tally.turns.saturating_add(1);

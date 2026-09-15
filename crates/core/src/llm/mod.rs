@@ -511,6 +511,10 @@ pub enum ToolDecision {
 
 pub enum StreamEvent {
     Delta(String),
+    Compacted {
+        summary: String,
+        usage: Option<Usage>,
+    },
     Restarted {
         attempt: u32,
         of: u32,
@@ -600,6 +604,8 @@ pub struct AgentConfig<'a> {
     pub lua_tools: &'a [LuaToolSpec],
     pub cwd: &'a Path,
     pub cancel: CancelToken,
+    pub budget: Option<Budget>,
+    pub keep_recent: u64,
 }
 
 #[derive(Clone)]
@@ -652,6 +658,47 @@ async fn generate(
     }
 }
 
+async fn compact_turn(
+    config: &AgentConfig<'_>,
+    messages: &mut Vec<Message>,
+) -> Option<(String, Option<Usage>)> {
+    let budget = config.budget?;
+    if !budget.overflows(context::estimate_messages(messages)) {
+        return None;
+    }
+    let at = {
+        let refs: Vec<&Message> = messages.iter().collect();
+        context::cut_index(&refs, config.keep_recent)?
+    };
+    let carried = messages
+        .first()
+        .map_or_else(Vec::new, context::previous_files);
+    let previous = messages
+        .first()
+        .and_then(|message| context::previous_summary(message))
+        .map(str::to_string);
+    let skip = usize::from(previous.is_some());
+    let head: Vec<Message> = messages[skip..at].to_vec();
+    let mut files = context::files_touched(&head.iter().collect::<Vec<_>>());
+    context::merge_files(&mut files, &carried);
+    let summarised = {
+        let refs: Vec<&Message> = head.iter().collect();
+        summary::generate(
+            config.client,
+            config.provider,
+            config.model.clone(),
+            &refs,
+            previous.as_deref(),
+        )
+        .await?
+    };
+    let tail = messages.split_off(at);
+    messages.clear();
+    messages.push(context::summary_message(&summarised.summary, &files));
+    messages.extend(tail);
+    Some((summarised.summary, summarised.usage))
+}
+
 pub async fn run_agent(
     config: &AgentConfig<'_>,
     mut messages: Vec<Message>,
@@ -664,6 +711,9 @@ pub async fn run_agent(
         if config.cancel.is_cancelled() {
             on_event(StreamEvent::Cancelled);
             return;
+        }
+        if let Some((summary, usage)) = compact_turn(config, &mut messages).await {
+            on_event(StreamEvent::Compacted { summary, usage });
         }
         let request = LlmRequest {
             model: config.model.clone(),
