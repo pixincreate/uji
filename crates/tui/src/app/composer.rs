@@ -3,6 +3,7 @@ pub struct Composer {
     text: String,
     cursor: usize,
     recall: Recall,
+    pastes: crate::app::paste::Pastes,
 }
 
 #[derive(Debug, Default)]
@@ -36,7 +37,22 @@ impl Composer {
         });
     }
 
+    pub fn paste(&mut self, text: &str) {
+        let cleaned = crate::app::paste::clean(text);
+        if cleaned.is_empty() {
+            return;
+        }
+        let inserted = self.pastes.stash(&cleaned);
+        self.edit(move |text, cursor| {
+            text.insert_str(*cursor, &inserted);
+            *cursor = cursor.saturating_add(inserted.len());
+        });
+    }
+
     pub fn backspace(&mut self) {
+        if self.drop_marker() {
+            return;
+        }
         self.edit(|text, cursor| {
             if *cursor > 0 {
                 let prev = prev_boundary(text, *cursor);
@@ -46,7 +62,25 @@ impl Composer {
         });
     }
 
+    fn drop_marker(&mut self) -> bool {
+        let Some((id, width)) = self
+            .text
+            .get(..self.cursor)
+            .and_then(|before| self.pastes.marker_ending_at(before))
+        else {
+            return false;
+        };
+        self.pastes.forget(id);
+        self.edit(move |text, cursor| {
+            let from = cursor.saturating_sub(width);
+            text.replace_range(from..*cursor, "");
+            *cursor = from;
+        });
+        true
+    }
+
     pub fn clear(&mut self) {
+        self.pastes.clear();
         self.edit(|text, cursor| {
             text.clear();
             *cursor = 0;
@@ -66,7 +100,9 @@ impl Composer {
             taken = std::mem::take(text);
             *cursor = 0;
         });
-        taken
+        let expanded = self.pastes.expand(&taken);
+        self.pastes.clear();
+        expanded
     }
 
     pub fn left(&mut self) {

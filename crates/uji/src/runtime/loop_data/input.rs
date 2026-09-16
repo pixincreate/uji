@@ -9,6 +9,10 @@ impl LoopData {
         match event {
             TermEvent::Key(key) => self.on_key(*key),
             TermEvent::Mouse(mouse) => self.on_mouse(*mouse),
+            TermEvent::Paste(text) => {
+                self.app.paste(text);
+                self.dirty = true;
+            }
             TermEvent::Resize(..) => self.dirty = true,
             _ => {}
         }

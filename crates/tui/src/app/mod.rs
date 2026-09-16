@@ -3,6 +3,7 @@ pub mod composer;
 pub mod keys;
 pub mod mode;
 pub mod overlay;
+pub mod paste;
 pub mod renderer;
 pub mod scroll;
 pub mod selection;
@@ -92,6 +93,11 @@ impl App {
 
     pub fn cursor_offset(&self) -> usize {
         self.composer.cursor()
+    }
+
+    pub fn paste(&mut self, text: &str) {
+        self.composer.paste(text);
+        self.mode = Mode::Normal;
     }
 
     pub fn set_input(&mut self, text: String) {
