@@ -1,0 +1,25 @@
+id: no-loose-fn-in-mod
+language: rust
+severity: error
+message: >-
+  Loose function in a module that owns a type. Before adding a helper, look in
+  the file that owns the concern for one that already does this, then put it
+  there or in an `impl`. The modules listed under `ignores` in this rule exist
+  to hold free functions; add yours to one of those, or add the file if it is a
+  new function module.
+files:
+  - "crates/**/mod.rs"
+ignores:
+  - "crates/agent/src/llm/mod.rs"
+  - "crates/agent/src/tools/mod.rs"
+  - "crates/ui/src/render/mod.rs"
+  - "crates/ui/src/render/modal/mod.rs"
+  - "crates/uji/src/api/mod.rs"
+  - "crates/uji/src/cmd/mod.rs"
+  - "crates/uji/src/list/mod.rs"
+  - "crates/uji/src/pack/mod.rs"
+  - "crates/uji/src/runtime/mod.rs"
+rule:
+  kind: function_item
+  inside:
+    kind: source_file

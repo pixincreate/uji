@@ -26,8 +26,6 @@ impl Composer {
         self.cursor
     }
 
-    /// Bumped on every edit, so a cache of the laid-out input knows when it
-    /// has gone stale without comparing the text itself.
     pub fn revision(&self) -> u64 {
         self.revision
     }

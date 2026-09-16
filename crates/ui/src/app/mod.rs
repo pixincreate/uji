@@ -22,7 +22,7 @@ use crate::keymap;
 use crate::state::UiState;
 
 use uji_agent::session::conversation::{Conversation, Shared};
-use uji_agent::session::model::{Message, Session};
+use uji_agent::session::model::Session;
 
 pub struct App {
     session: Session,
@@ -116,8 +116,23 @@ impl App {
     }
 
     pub fn paste(&mut self, text: &str) {
-        self.composer.paste(text);
-        self.mode = Mode::Normal;
+        match &mut self.mode {
+            Mode::Prompt { value, .. } => {
+                value.push_str(&paste::single_line(text));
+                return;
+            }
+            Mode::Select { query, cursor, .. } | Mode::Pick { query, cursor, .. } => {
+                query.push_str(&paste::single_line(text));
+                *cursor = 0;
+            }
+            Mode::Confirm { .. } => return,
+            Mode::Normal | Mode::Suggest { .. } => {
+                self.composer.paste(text);
+                self.after_input_change();
+                return;
+            }
+        }
+        self.rerank();
     }
 
     pub fn set_input(&mut self, text: String) {
@@ -330,17 +345,4 @@ impl App {
             .collect();
         self.mode = Mode::Suggest { items, cursor: 0 };
     }
-}
-
-fn sent(conversation: &Conversation, back: usize) -> Option<String> {
-    conversation
-        .messages()
-        .iter()
-        .rev()
-        .filter_map(|stored| match &stored.message {
-            Message::User { text } => Some(text),
-            _ => None,
-        })
-        .nth(back)
-        .cloned()
 }

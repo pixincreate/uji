@@ -42,17 +42,11 @@ enum ModalInput {
     Cancel,
 }
 
-/// What a Lua tool produced: the answer, or a promise to call `done` later.
 pub(super) enum ToolOutcome {
     Done(String),
     Pending,
 }
 
-/// The one reply the agent is blocked on.
-///
-/// Tool calls run strictly one at a time, so waiting for approval and waiting
-/// for a deferred result are two points in the same tool's life and never
-/// overlap.
 pub(crate) enum Awaiting {
     Approval {
         arguments: String,

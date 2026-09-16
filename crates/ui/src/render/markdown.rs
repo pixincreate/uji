@@ -274,10 +274,6 @@ impl Renderer {
     }
 }
 
-/// Whether `source` defines a link reference.
-///
-/// A definition applies to the whole document and may appear after the uses it
-/// resolves, so a text containing one cannot be rendered a piece at a time.
 pub(crate) fn defines_reference(source: &str) -> bool {
     source.lines().any(|line| {
         let line = line.trim_start();
@@ -285,12 +281,6 @@ pub(crate) fn defines_reference(source: &str) -> bool {
     })
 }
 
-/// How much of `source` is finished markdown.
-///
-/// A block is only final once another block has started after it: until then
-/// more text can still join it, as a lazy paragraph continuation or a setext
-/// underline would. Everything before the returned offset renders the same
-/// whatever is appended next, so it never needs rendering twice.
 pub(crate) fn settled(source: &str) -> usize {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
@@ -321,12 +311,6 @@ pub(crate) fn settled(source: &str) -> usize {
     settled
 }
 
-/// Render `source`, optionally as a continuation of output already produced.
-///
-/// A block is separated from the one before it by a blank line, and the blank
-/// is suppressed at the start of a render and trimmed at the end. Continuing
-/// seeds that blank so a chunk joins onto earlier lines exactly as it would
-/// have if the whole text had been rendered at once.
 pub(crate) fn render_from(
     source: &str,
     width: usize,

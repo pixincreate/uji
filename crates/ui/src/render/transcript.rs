@@ -29,12 +29,6 @@ fn opens_tool_group(stored: &StoredMessage) -> bool {
     }
 }
 
-/// The message still streaming in.
-///
-/// Its text only ever grows, so the markdown before the last finished block
-/// renders once and is kept; each frame re-renders only the block still being
-/// written. Rendering the whole thing every frame instead costs O(length²)
-/// over a response, since every newline crossed re-parses everything so far.
 #[derive(Default)]
 struct Streamed {
     key: String,
@@ -55,9 +49,6 @@ impl Streamed {
         self.open.clear();
     }
 
-    /// Watch for a link reference definition, which forces whole-text renders
-    /// from then on. Only the tail is scanned, from the start of the line that
-    /// was still incomplete last frame.
     fn scan(&mut self, text: &str) {
         if self.whole {
             return;
@@ -69,10 +60,6 @@ impl Streamed {
         self.scanned = text.rfind('\n').map_or(0, |at| at.saturating_add(1));
     }
 
-    /// Re-render whatever changed since the last frame.
-    ///
-    /// `split` is false when a plugin overrides block rendering, since an
-    /// override has to be handed the message whole.
     fn update(
         &mut self,
         text: &str,

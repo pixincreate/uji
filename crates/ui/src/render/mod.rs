@@ -56,10 +56,6 @@ pub trait Render {
     fn render(&self, ctx: &Context<'_>, surface: &mut Surface<'_>);
 }
 
-/// Write already-wrapped lines into `area`, one per row.
-///
-/// Used instead of a `Paragraph`, which re-walks every grapheme of every line
-/// to re-truncate what is already the right width.
 pub(crate) fn write_lines<'a>(
     surface: &mut Surface<'_>,
     area: Rect,

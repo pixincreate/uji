@@ -37,14 +37,10 @@ pub struct LuaTool {
     pub description: String,
     pub parameters: LuaValue,
     pub subject: Option<String>,
-    /// Whether `run` answers later through `done` instead of returning.
     pub defer: bool,
     pub run: Function,
 }
 
-/// The `done` a deferred tool is handed, to answer with once it has something.
-///
-/// It only posts the result; the loop matches it to the tool that is waiting.
 pub(crate) fn completion(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(lua, api, move |api, _, text: String| {
         api.request(crate::api::request::Request::ToolResult(text));

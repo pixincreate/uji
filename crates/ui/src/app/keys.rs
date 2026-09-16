@@ -3,7 +3,10 @@ use crate::keymap::{Chord, Key};
 use crate::model::Builtin;
 
 use super::action::{Action, KeyAction, default_action, rank_items};
-use super::{App, Mode, sent};
+use uji_agent::session::conversation::Conversation;
+use uji_agent::session::model::Message;
+
+use super::{App, Mode};
 use std::rc::Rc;
 
 const SELECT_PAGE: isize = 10;
@@ -307,7 +310,7 @@ impl App {
         }
     }
 
-    fn rerank(&mut self) {
+    pub(super) fn rerank(&mut self) {
         let (Mode::Select {
             items,
             query,
@@ -382,4 +385,17 @@ fn list_key(code: Key) -> Option<Action> {
         Key::Down => Some(Action::ModalDown),
         _ => None,
     }
+}
+
+fn sent(conversation: &Conversation, back: usize) -> Option<String> {
+    conversation
+        .messages()
+        .iter()
+        .rev()
+        .filter_map(|stored| match &stored.message {
+            Message::User { text } => Some(text),
+            _ => None,
+        })
+        .nth(back)
+        .cloned()
 }

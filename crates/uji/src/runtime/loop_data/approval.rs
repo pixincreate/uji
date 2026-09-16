@@ -141,7 +141,6 @@ impl LoopData {
         }
     }
 
-    /// Hand a deferred tool's answer to whatever is waiting for it.
     pub(super) fn finish_lua_tool(&mut self, text: String) {
         let waiting = self
             .awaiting

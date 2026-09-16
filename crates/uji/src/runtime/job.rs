@@ -28,7 +28,6 @@ where
     lines.next_line().await.ok().flatten()
 }
 
-/// What to put on a job's stdin. `None` closes it, so the child sees EOF.
 pub(crate) type Write = Option<String>;
 
 pub(crate) async fn run(
@@ -44,8 +43,6 @@ pub(crate) async fn run(
         return;
     };
     let mut builder = tokio::process::Command::new(program);
-    // stdin is piped even when nothing writes to it: inheriting it would let a
-    // child read the keys meant for uji.
     builder
         .args(args)
         .stdin(Stdio::piped())
@@ -92,7 +89,6 @@ pub(crate) async fn run(
                             stdin = None;
                         }
                     }
-                    // the sender is gone, or asked for EOF
                     _ => stdin = None,
                 }
             }

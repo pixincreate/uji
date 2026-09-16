@@ -17,18 +17,12 @@ pub struct JobHandlers {
     pub on_exit: Option<Function>,
 }
 
-/// A job a plugin started: the callbacks it gave, and the token that stops it
-/// once the loop has actually spawned it.
 struct Job {
     handlers: JobHandlers,
     cancel: Option<CancelToken>,
     stdin: Option<tokio::sync::mpsc::UnboundedSender<Option<String>>>,
 }
 
-/// Every job a plugin has running, in one place.
-///
-/// The callbacks and the cancel token used to live either side of the Lua
-/// boundary, keyed by the same id, so ending a job meant finishing it twice.
 #[derive(Default)]
 pub struct Jobs {
     live: HashMap<u64, Job>,
@@ -40,7 +34,6 @@ impl Jobs {
         self.live.get(&id).map(|job| &job.handlers)
     }
 
-    /// Record a job Lua asked for. It is not running until the loop spawns it.
     fn open(&mut self, handlers: JobHandlers) -> u64 {
         self.next = self.next.saturating_add(1);
         self.live.insert(
@@ -54,8 +47,6 @@ impl Jobs {
         self.next
     }
 
-    /// Hand a spawned job the ways to reach it: the token that stops it, and
-    /// the channel that feeds its stdin.
     pub fn attach(
         &mut self,
         id: u64,
@@ -68,14 +59,12 @@ impl Jobs {
         }
     }
 
-    /// Put `data` on a job's stdin, or close it when `data` is `None`.
     pub fn write(&self, id: u64, data: Option<String>) {
         if let Some(stdin) = self.live.get(&id).and_then(|job| job.stdin.as_ref()) {
             let _ = stdin.send(data);
         }
     }
 
-    /// Ask a job to stop. Its callbacks stay until it reports that it exited.
     pub fn stop(&self, id: u64) {
         if let Some(cancel) = self.live.get(&id).and_then(|job| job.cancel.as_ref()) {
             cancel.cancel();
@@ -132,8 +121,6 @@ pub(crate) fn stop(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     })
 }
 
-/// Write to a job's stdin. A newline is added unless the data already ends in
-/// one, since the protocols this carries are line-delimited.
 pub(crate) fn send(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(lua, api, move |api, _, (id, data): (u64, String)| {
         let data = if data.ends_with('\n') {
@@ -149,7 +136,6 @@ pub(crate) fn send(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     })
 }
 
-/// Close a job's stdin, so the child sees EOF.
 pub(crate) fn close(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(lua, api, move |api, _, id: u64| {
         api.request(Request::JobWrite { id, data: None });

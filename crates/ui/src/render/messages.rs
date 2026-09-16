@@ -102,9 +102,6 @@ impl Render for Messages<'_> {
             .app
             .resolve_scroll(total.saturating_sub(body_height), body_height);
         let end = start.saturating_add(body_height).min(total);
-        // Written straight into the buffer rather than through a `Paragraph`:
-        // these lines are already wrapped to `width`, and a paragraph re-walks
-        // every grapheme of every one of them to re-truncate it.
         if let Some(block) = block {
             surface.render_widget(block);
         }

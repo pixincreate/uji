@@ -21,10 +21,6 @@ struct State {
     running: bool,
 }
 
-/// Full-screen picker for resuming a session, drawn before the app starts.
-///
-/// Owns its own terminal and event loop: at this point there is no `App` to
-/// drive, only a list to choose from.
 pub fn pick(
     sessions: &[Session],
     current_dir: &str,

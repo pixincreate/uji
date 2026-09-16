@@ -14,12 +14,6 @@ use crate::render::wrap;
 
 const CURSOR: char = '█';
 
-/// The input, laid out into rows.
-///
-/// Both the measuring pass and the draw pass need this, and neither changes it,
-/// so it is computed once per edit rather than twice per frame. Without it a
-/// large paste is split into `char`s and wrapped twice on every frame, whether
-/// or not anything was typed.
 #[derive(Default)]
 pub struct Layout {
     key: (u64, usize, usize, bool),

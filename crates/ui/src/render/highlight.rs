@@ -11,8 +11,6 @@ pub fn overlay(buf: &mut Buffer, app: &App) {
     }
     let mut screen = app.overlay().screen().borrow_mut();
     {
-        // Walked by row rather than cell by cell: the buffer is row-major, so
-        // indexing every cell only re-derives an offset already known.
         let rows = screen.rows(usize::from(buf.area.height));
         for (row, cells) in rows.iter_mut().zip(buf.content.chunks_exact(width)) {
             row.clear();

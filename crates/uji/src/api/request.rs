@@ -14,7 +14,6 @@ pub enum Request {
     Interrupt,
     Modal(Box<modal::ModalRequest>),
     Answer(modal::Answer),
-    /// What a deferred tool finally produced, from its `done` callback.
     ToolResult(String),
     JobStart {
         id: u64,
@@ -22,7 +21,6 @@ pub enum Request {
         cwd: Option<PathBuf>,
     },
     JobStop(u64),
-    /// Data for a job's stdin; `None` closes it.
     JobWrite {
         id: u64,
         data: Option<String>,

@@ -11,10 +11,6 @@ use crate::keymap::{Chord, Key};
 
 const POLL: Duration = Duration::from_millis(100);
 
-/// Something the user did, in uji's own terms.
-///
-/// The terminal library stops here: everything above this layer works in
-/// [`Chord`]s and [`Point`]s, not in whatever crossterm happens to call them.
 pub enum Input {
     Key(Chord),
     Paste(String),
@@ -85,7 +81,6 @@ fn translate(event: TermEvent) -> Option<Input> {
     }
 }
 
-/// Reads the terminal on its own thread and posts [`Input`] to the loop.
 pub struct Reader {
     running: Arc<AtomicBool>,
     paused: Arc<AtomicBool>,

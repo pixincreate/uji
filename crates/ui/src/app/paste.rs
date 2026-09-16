@@ -69,3 +69,7 @@ pub fn clean(text: &str) -> String {
         .filter(|ch| *ch == '\n' || !ch.is_control())
         .collect()
 }
+
+pub fn single_line(text: &str) -> String {
+    clean(text).trim().replace('\n', " ")
+}
