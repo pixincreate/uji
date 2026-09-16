@@ -1,3 +1,4 @@
+use strum::VariantArray;
 use uji_core::llm::Effort;
 
 use super::{Action, Args, Context};
@@ -9,8 +10,9 @@ pub struct EffortPick;
 impl Action for EffortPick {
     fn start(&mut self, ctx: &mut dyn Context, _args: &Args) {
         let current = ctx.get_setting(&Setting::Effort).unwrap_or_default();
-        let items = Effort::ALL
-            .into_iter()
+        let items = Effort::VARIANTS
+            .iter()
+            .copied()
             .map(|effort| {
                 if effort.name() == current {
                     format!("{effort} (current)")

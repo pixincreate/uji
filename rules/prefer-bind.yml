@@ -1,0 +1,11 @@
+id: prefer-bind
+language: rust
+severity: error
+message: Use `bind(lua, api, ...)` from `crate::bind` instead of cloning the Api and calling `lua.create_function` by hand.
+files:
+  - "crates/api/src/**"
+ignores:
+  - "crates/api/src/bind.rs"
+rule:
+  pattern: |
+    let $ALIAS = Rc::clone(api);

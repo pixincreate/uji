@@ -5,6 +5,7 @@ use std::rc::Rc;
 use mlua::{Function, Lua, Table};
 
 use crate::Api;
+use crate::bind::bind;
 
 #[derive(Default)]
 pub struct Actions {
@@ -37,39 +38,36 @@ impl Actions {
 pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     let action = lua.create_table()?;
 
-    let set_api = Rc::clone(api);
     action.set(
         "set",
-        lua.create_function(move |_, (name, handler): (String, Function)| {
-            if set_api.actions().is_reserved(&name) {
-                return Err(mlua::Error::runtime(format!(
-                    "action {name} is built in and cannot be replaced"
-                )));
-            }
-            set_api
-                .actions()
-                .registered
-                .borrow_mut()
-                .insert(name, handler);
-            Ok(())
-        })?,
+        bind(
+            lua,
+            api,
+            move |api, _, (name, handler): (String, Function)| {
+                if api.actions().is_reserved(&name) {
+                    return Err(mlua::Error::runtime(format!(
+                        "action {name} is built in and cannot be replaced"
+                    )));
+                }
+                api.actions().registered.borrow_mut().insert(name, handler);
+                Ok(())
+            },
+        )?,
     )?;
 
-    let del_api = Rc::clone(api);
     action.set(
         "del",
-        lua.create_function(move |_, name: String| {
-            del_api.actions().registered.borrow_mut().remove(&name);
+        bind(lua, api, move |api, _, name: String| {
+            api.actions().registered.borrow_mut().remove(&name);
             Ok(())
         })?,
     )?;
 
-    let list_api = Rc::clone(api);
     action.set(
         "list",
-        lua.create_function(move |lua, ()| {
+        bind(lua, api, move |api, lua, ()| {
             let out = lua.create_table()?;
-            for name in list_api.actions().names() {
+            for name in api.actions().names() {
                 out.push(name)?;
             }
             Ok(out)

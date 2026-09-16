@@ -7,6 +7,7 @@ use uji_screen::model::{Builtin, Color, Line, Size, Span, Style, WinOpts};
 
 use super::Api;
 use super::convert::FromLuaValue;
+use crate::bind::bind;
 
 pub fn open_win(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     let state = api.state();
@@ -75,8 +76,7 @@ pub fn set_title(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 }
 
 pub fn exec(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, opts: Table| {
+    bind(lua, api, move |api, _, opts: Table| {
         let command = match opts.get::<LuaValue>("cmd")? {
             LuaValue::String(text) => vec![
                 String::from("sh"),

@@ -4,6 +4,7 @@ use std::rc::Rc;
 use mlua::{Function, Lua, Table, Value as LuaValue};
 
 use super::Api;
+use crate::bind::bind;
 
 #[derive(Debug, Clone)]
 pub struct LuaTool {
@@ -14,8 +15,7 @@ pub struct LuaTool {
 }
 
 pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, (name, opts): (String, Table)| {
+    bind(lua, api, move |api, _, (name, opts): (String, Table)| {
         let description = opts
             .get::<Option<String>>("description")?
             .unwrap_or_default();
@@ -36,16 +36,14 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 }
 
 pub fn unregister(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, name: String| {
+    bind(lua, api, move |api, _, name: String| {
         api.lua_tools().borrow_mut().remove(&name);
         Ok(())
     })
 }
 
 pub fn roots(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, paths: Vec<String>| {
+    bind(lua, api, move |api, _, paths: Vec<String>| {
         let expanded = paths
             .iter()
             .map(|path| PathBuf::from(expand(path)))
@@ -56,8 +54,7 @@ pub fn roots(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 }
 
 pub fn list_roots(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |lua, ()| {
+    bind(lua, api, move |api, lua, ()| {
         let out = lua.create_table()?;
         for (at, root) in api.tool_roots().borrow().iter().enumerate() {
             out.set(at + 1, root.display().to_string())?;
@@ -67,8 +64,7 @@ pub fn list_roots(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 }
 
 pub fn confine(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, enabled: Option<bool>| {
+    bind(lua, api, move |api, _, enabled: Option<bool>| {
         api.set_tool_confined(enabled.unwrap_or(true));
         Ok(api.tool_confined())
     })

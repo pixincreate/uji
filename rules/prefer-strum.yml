@@ -1,0 +1,11 @@
+id: prefer-strum
+language: rust
+severity: error
+message: Derive `Display`/`EnumString`/`IntoStaticStr` from strum instead of hand-writing `name()`-style Display impls.
+rule:
+  pattern: |
+    impl std::fmt::Display for $T {
+      fn fmt(&self, $F: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        $F.write_str(self.name())
+      }
+    }

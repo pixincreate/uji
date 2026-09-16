@@ -5,6 +5,7 @@ use std::rc::Rc;
 use mlua::{Function, Lua, Table, Value};
 
 use crate::Api;
+use crate::bind::bind;
 
 pub struct JobRequest {
     pub id: u64,
@@ -70,8 +71,7 @@ fn command_from(value: &Value) -> mlua::Result<Vec<String>> {
 }
 
 pub(crate) fn start(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, opts: Table| {
+    bind(lua, api, move |api, _, opts: Table| {
         let command = command_from(&opts.get::<Value>("cmd")?)?;
         let cwd = opts.get::<Option<String>>("cwd")?.map(PathBuf::from);
         let handlers = JobHandlers {
@@ -90,8 +90,7 @@ pub(crate) fn start(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 }
 
 pub(crate) fn stop(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, id: u64| {
+    bind(lua, api, move |api, _, id: u64| {
         api.jobs().borrow_mut().stops.push(id);
         Ok(())
     })

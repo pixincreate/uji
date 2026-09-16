@@ -5,11 +5,13 @@ use mlua::{Function, Lua, Table};
 use crate::handlers::DEFAULT_PRIORITY;
 
 use super::Api;
+use crate::bind::bind;
 
 pub fn on(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(
-        move |_, (event, handler, opts): (String, Function, Option<Table>)| {
+    bind(
+        lua,
+        api,
+        move |api, _, (event, handler, opts): (String, Function, Option<Table>)| {
             let priority = opts
                 .map(|opts| opts.get::<Option<i64>>("priority"))
                 .transpose()?
@@ -22,16 +24,14 @@ pub fn on(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 }
 
 pub fn emit(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, (event, ctx): (String, Table)| {
+    bind(lua, api, move |api, _, (event, ctx): (String, Table)| {
         api.dispatch(&event, &ctx);
         Ok(())
     })
 }
 
 pub fn notify(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, message: String| {
+    bind(lua, api, move |api, _, message: String| {
         api.notify(message);
         Ok(())
     })

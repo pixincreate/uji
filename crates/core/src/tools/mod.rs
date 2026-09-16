@@ -1,5 +1,6 @@
 pub mod builtin;
 pub mod policy;
+pub mod progress;
 pub mod prompt;
 
 use std::collections::BTreeMap;
@@ -9,13 +10,32 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::Value;
 
+use crate::llm::CancelToken;
 use crate::llm::ToolSpec;
+use crate::tools::progress::Progress;
+
+/// Everything a tool is handed for one invocation.
+pub struct Invocation<'a> {
+    pub cwd: &'a Path,
+    pub cancel: &'a CancelToken,
+    pub progress: &'a Progress,
+}
+
+impl<'a> Invocation<'a> {
+    pub fn new(cwd: &'a Path, cancel: &'a CancelToken, progress: &'a Progress) -> Self {
+        Self {
+            cwd,
+            cancel,
+            progress,
+        }
+    }
+}
 
 #[async_trait]
 pub trait Tool: Send + Sync {
     fn spec(&self) -> ToolSpec;
     fn subject(&self, args: &Value) -> String;
-    async fn run(&self, args: &Value, cwd: &Path) -> Result<String, String>;
+    async fn run(&self, args: &Value, call: &Invocation<'_>) -> Result<String, String>;
 }
 
 #[derive(Default)]

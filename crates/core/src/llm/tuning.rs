@@ -1,4 +1,11 @@
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+use std::str::FromStr;
+
+use strum::{Display, EnumString, IntoStaticStr, VariantArray};
+
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Display, EnumString, IntoStaticStr, VariantArray,
+)]
+#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 pub enum Effort {
     #[default]
     Off,
@@ -12,14 +19,6 @@ pub const MIN_ANSWER_TOKENS: u32 = 1024;
 pub const DEFAULT_MAX_OUTPUT: u32 = 8192;
 
 impl Effort {
-    pub const ALL: [Self; 5] = [
-        Self::Off,
-        Self::Minimal,
-        Self::Low,
-        Self::Medium,
-        Self::High,
-    ];
-
     pub fn budget(self) -> u32 {
         match self {
             Self::Off => 0,
@@ -35,29 +34,18 @@ impl Effort {
     }
 
     pub fn parse(name: &str) -> Option<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|effort| effort.name() == name.to_lowercase())
+        Self::from_str(name).ok()
     }
 
     pub fn name(self) -> &'static str {
-        match self {
-            Self::Off => "off",
-            Self::Minimal => "minimal",
-            Self::Low => "low",
-            Self::Medium => "medium",
-            Self::High => "high",
-        }
+        self.into()
     }
 }
 
-impl std::fmt::Display for Effort {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.name())
-    }
-}
-
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Display, EnumString, IntoStaticStr, VariantArray,
+)]
+#[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 pub enum Retention {
     Off,
     #[default]
@@ -66,8 +54,6 @@ pub enum Retention {
 }
 
 impl Retention {
-    pub const ALL: [Self; 3] = [Self::Off, Self::Short, Self::Long];
-
     pub fn enabled(self) -> bool {
         self != Self::Off
     }
@@ -80,23 +66,11 @@ impl Retention {
     }
 
     pub fn parse(name: &str) -> Option<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|retention| retention.name() == name.to_lowercase())
+        Self::from_str(name).ok()
     }
 
     pub fn name(self) -> &'static str {
-        match self {
-            Self::Off => "off",
-            Self::Short => "short",
-            Self::Long => "long",
-        }
-    }
-}
-
-impl std::fmt::Display for Retention {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.name())
+        self.into()
     }
 }
 

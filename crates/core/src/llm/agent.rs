@@ -6,7 +6,8 @@ use serde_json::Value;
 use tokio::sync::oneshot;
 
 use crate::session::model::{Message, ToolCall};
-use crate::tools::{Tool, ToolRegistry};
+use crate::tools::progress::Progress;
+use crate::tools::{Invocation, Tool, ToolRegistry};
 
 use super::cancel::CancelToken;
 use super::catalog::Budget;
@@ -325,14 +326,53 @@ async fn execute_tool<P: Protocol + ?Sized>(
         ToolDecision::Allow { arguments } => {
             let args = parse_arguments(&arguments).unwrap_or(args);
             match target {
-                Target::Native(tool) => match tool.run(&args, config.cwd).await {
-                    Ok(text) => text,
-                    Err(err) => format!("error: {err}"),
-                },
+                Target::Native(tool) => {
+                    run_native_tool(config, tool.as_ref(), &args, tool_call, on_event).await
+                }
                 Target::Lua(tool) => run_lua_tool(&tool.name, &args, on_event).await,
             }
         }
     }
+}
+
+/// Run a native tool, forwarding whatever it reports while it works.
+async fn run_native_tool<P: Protocol + ?Sized>(
+    config: &AgentConfig<'_, P>,
+    tool: &dyn Tool,
+    args: &Value,
+    tool_call: &ToolCall,
+    on_event: &mut (dyn FnMut(StreamEvent) + Send),
+) -> String {
+    let (sink, mut updates) = tokio::sync::mpsc::unbounded_channel();
+    let progress = Progress::new(sink);
+    let call = Invocation::new(config.cwd, &config.cancel, &progress);
+    let mut running = std::pin::pin!(tool.run(args, &call));
+    loop {
+        tokio::select! {
+            outcome = &mut running => {
+                while let Ok(chunk) = updates.try_recv() {
+                    emit_progress(tool_call, chunk, on_event);
+                }
+                return match outcome {
+                    Ok(text) => text,
+                    Err(err) => format!("error: {err}"),
+                };
+            }
+            Some(chunk) = updates.recv() => emit_progress(tool_call, chunk, on_event),
+        }
+    }
+}
+
+fn emit_progress(
+    tool_call: &ToolCall,
+    chunk: String,
+    on_event: &mut (dyn FnMut(StreamEvent) + Send),
+) {
+    on_event(StreamEvent::ToolProgress {
+        tool_call_id: tool_call.id.clone(),
+        name: tool_call.name.clone(),
+        chunk,
+    });
 }
 
 async fn run_lua_tool(

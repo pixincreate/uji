@@ -3,6 +3,7 @@ use std::rc::Rc;
 use mlua::{Function, Lua, Table};
 
 use crate::Api;
+use crate::bind::bind;
 
 pub enum ModalKind {
     Select { items: Vec<String> },
@@ -21,32 +22,38 @@ pub enum Answer {
 }
 
 pub fn select(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, (opts, on_done): (Table, Function)| {
-        let items = opts
-            .get::<Option<Vec<String>>>("items")?
-            .unwrap_or_default();
-        api.queue_modal(ModalRequest {
-            title: title_of(&opts)?,
-            kind: ModalKind::Select { items },
-            on_done,
-        });
-        Ok(())
-    })
+    bind(
+        lua,
+        api,
+        move |api, _, (opts, on_done): (Table, Function)| {
+            let items = opts
+                .get::<Option<Vec<String>>>("items")?
+                .unwrap_or_default();
+            api.queue_modal(ModalRequest {
+                title: title_of(&opts)?,
+                kind: ModalKind::Select { items },
+                on_done,
+            });
+            Ok(())
+        },
+    )
 }
 
 pub fn prompt(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, (opts, on_done): (Table, Function)| {
-        let value = opts.get::<Option<String>>("value")?.unwrap_or_default();
-        let hidden = opts.get::<Option<bool>>("hidden")?.unwrap_or(false);
-        api.queue_modal(ModalRequest {
-            title: title_of(&opts)?,
-            kind: ModalKind::Prompt { value, hidden },
-            on_done,
-        });
-        Ok(())
-    })
+    bind(
+        lua,
+        api,
+        move |api, _, (opts, on_done): (Table, Function)| {
+            let value = opts.get::<Option<String>>("value")?.unwrap_or_default();
+            let hidden = opts.get::<Option<bool>>("hidden")?.unwrap_or(false);
+            api.queue_modal(ModalRequest {
+                title: title_of(&opts)?,
+                kind: ModalKind::Prompt { value, hidden },
+                on_done,
+            });
+            Ok(())
+        },
+    )
 }
 
 fn title_of(opts: &Table) -> mlua::Result<String> {

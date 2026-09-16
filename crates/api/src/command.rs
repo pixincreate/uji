@@ -3,6 +3,7 @@ use std::rc::Rc;
 use mlua::{Function, Lua, Value};
 
 use super::Api;
+use crate::bind::bind;
 
 #[derive(Clone)]
 pub struct LuaCommand {
@@ -12,8 +13,7 @@ pub struct LuaCommand {
 }
 
 pub fn command(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, (name, spec): (String, Value)| {
+    bind(lua, api, move |api, _, (name, spec): (String, Value)| {
         let command = parse(spec)?;
         api.commands().borrow_mut().insert(name, command);
         Ok(())

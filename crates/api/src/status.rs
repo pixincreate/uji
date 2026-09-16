@@ -3,13 +3,15 @@ use std::rc::Rc;
 use mlua::{Function, Lua, Table, Value};
 
 use crate::Api;
+use crate::bind::bind;
 use crate::registry::Entry;
 use uji_screen::model::RunState;
 
 pub fn add(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(
-        move |_, (name, render, opts): (String, Function, Option<Table>)| {
+    bind(
+        lua,
+        api,
+        move |api, _, (name, render, opts): (String, Function, Option<Table>)| {
             let priority = opts
                 .map(|opts| opts.get::<Option<i64>>("priority"))
                 .transpose()?
@@ -26,8 +28,7 @@ pub fn add(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 }
 
 pub fn remove(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, name: String| {
+    bind(lua, api, move |api, _, name: String| {
         api.segments().remove(&name);
         Ok(())
     })
@@ -35,8 +36,7 @@ pub fn remove(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 
 /// Calls every registered segment and returns the ones that produced something.
 pub fn segments(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |lua, ()| {
+    bind(lua, api, move |api, lua, ()| {
         let out = lua.create_table()?;
         for (name, render) in api.segments().calls() {
             match render.call::<Value>(()) {
@@ -78,8 +78,7 @@ pub fn queue(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 }
 
 pub fn context(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |lua, ()| {
+    bind(lua, api, move |api, lua, ()| {
         let out = lua.create_table()?;
         out.set("used", api.session().conversation().borrow().used_tokens())?;
         if let Some(window) = api.state().borrow().context_window() {

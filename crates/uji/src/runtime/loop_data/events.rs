@@ -63,11 +63,16 @@ impl LoopData {
                 self.app.take_pending();
                 self.persist_assistant_step(text, tool_calls, reasoning_content);
             }
+            StreamEvent::ToolProgress { name, chunk, .. } => {
+                self.app.overlay_mut().set_running(Some((name, chunk)));
+                self.dirty = true;
+            }
             StreamEvent::ToolResult {
                 tool_call_id,
                 name,
                 content,
             } => {
+                self.app.overlay_mut().set_running(None);
                 self.persist_tool_result(tool_call_id, name, content);
             }
             StreamEvent::ToolDecisionRequest {

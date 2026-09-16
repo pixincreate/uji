@@ -6,6 +6,7 @@ use uji_core::llm::Usage;
 use uji_core::session::conversation::Shared;
 
 use crate::Api;
+use crate::bind::bind;
 
 pub struct SessionState {
     conversation: Shared,
@@ -51,11 +52,10 @@ impl SessionState {
 pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     let session = lua.create_table()?;
 
-    let info_api = Rc::clone(api);
     session.set(
         "info",
-        lua.create_function(move |lua, ()| {
-            let conversation = info_api.session().conversation().borrow();
+        bind(lua, api, move |api, lua, ()| {
+            let conversation = api.session().conversation().borrow();
             let info = conversation.info();
             let out = lua.create_table()?;
             out.set("id", info.id.clone())?;
@@ -65,12 +65,11 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
         })?,
     )?;
 
-    let messages_api = Rc::clone(api);
     session.set(
         "messages",
-        lua.create_function(move |lua, ()| {
+        bind(lua, api, move |api, lua, ()| {
             let out = lua.create_table()?;
-            let conversation = messages_api.session().conversation().borrow();
+            let conversation = api.session().conversation().borrow();
             for stored in conversation.messages() {
                 let row = lua.create_table()?;
                 row.set("type", stored.message.type_name())?;
@@ -84,11 +83,10 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
         })?,
     )?;
 
-    let usage_api = Rc::clone(api);
     session.set(
         "usage",
-        lua.create_function(move |lua, ()| {
-            let tally = usage_api.session().conversation().borrow().tally();
+        bind(lua, api, move |api, lua, ()| {
+            let tally = api.session().conversation().borrow().tally();
             let out = lua.create_table()?;
             out.set("input", tally.usage.input)?;
             out.set("output", tally.usage.output)?;
@@ -100,36 +98,33 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
         })?,
     )?;
 
-    let title_api = Rc::clone(api);
     session.set(
         "set_title",
-        lua.create_function(move |_, title: String| {
+        bind(lua, api, move |api, _, title: String| {
             let title = title.trim().to_string();
             if title.is_empty() {
                 return Err(mlua::Error::runtime("set_title needs non-empty text"));
             }
-            title_api.session().set_title(title);
+            api.session().set_title(title);
             Ok(())
         })?,
     )?;
 
-    let submit_api = Rc::clone(api);
     session.set(
         "submit",
-        lua.create_function(move |_, text: String| {
+        bind(lua, api, move |api, _, text: String| {
             if text.trim().is_empty() {
                 return Err(mlua::Error::runtime("submit needs non-empty text"));
             }
-            submit_api.session().queue_submit(text);
+            api.session().queue_submit(text);
             Ok(())
         })?,
     )?;
 
-    let interrupt_api = Rc::clone(api);
     session.set(
         "interrupt",
-        lua.create_function(move |_, ()| {
-            interrupt_api.queue_interrupt();
+        bind(lua, api, move |api, _, ()| {
+            api.queue_interrupt();
             Ok(())
         })?,
     )?;

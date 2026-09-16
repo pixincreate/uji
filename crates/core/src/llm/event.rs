@@ -30,6 +30,11 @@ pub enum StreamEvent {
         tool_calls: Vec<ToolCall>,
         reasoning_content: Option<String>,
     },
+    ToolProgress {
+        tool_call_id: String,
+        name: String,
+        chunk: String,
+    },
     ToolResult {
         tool_call_id: String,
         name: String,

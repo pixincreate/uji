@@ -2,6 +2,8 @@ mod ui;
 
 use std::error::Error;
 
+use uji_tui::ui::style::Palette;
+
 use crate::runtime::{Runtime, events};
 use uji_core::session::model::Session;
 use uji_core::session::store::SessionStorage;
@@ -18,12 +20,19 @@ pub fn run(mut storage: Box<dyn SessionStorage>) -> Result<(), Box<dyn Error>> {
         .filter(|session| session.directory == current_dir)
         .collect();
 
-    let Some(index) = ui::pick(&sessions, &current_dir)? else {
+    // Boot before picking so the picker is drawn with the user's theme.
+    let runtime = Runtime::boot()?;
+    let palette = {
+        let state = runtime.state();
+        let state = state.borrow();
+        Palette::of(&state.opts().theme)
+    };
+
+    let Some(index) = ui::pick(&sessions, &current_dir, palette)? else {
         return Ok(());
     };
 
     let session = sessions[index].clone();
-    let runtime = Runtime::boot()?;
     runtime.emit(
         events::SESSION_RESUMED,
         &[("session_id", session.id.to_string())],

@@ -4,6 +4,7 @@ use std::rc::Rc;
 use mlua::{Function, Lua, Table};
 
 use crate::Api;
+use crate::bind::bind;
 
 #[derive(Default)]
 pub struct Capture {
@@ -60,26 +61,23 @@ impl Composer {
 pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     let input = lua.create_table()?;
 
-    let get_api = Rc::clone(api);
     input.set(
         "get",
-        lua.create_function(move |_, ()| Ok(get_api.composer().text()))?,
+        bind(lua, api, move |api, _, ()| Ok(api.composer().text()))?,
     )?;
 
-    let set_api = Rc::clone(api);
     input.set(
         "set",
-        lua.create_function(move |_, text: String| {
-            set_api.composer().set(text);
+        bind(lua, api, move |api, _, text: String| {
+            api.composer().set(text);
             Ok(())
         })?,
     )?;
 
-    let append_api = Rc::clone(api);
     input.set(
         "append",
-        lua.create_function(move |_, text: String| {
-            let composer = append_api.composer();
+        bind(lua, api, move |api, _, text: String| {
+            let composer = api.composer();
             let mut next = composer.text();
             next.push_str(&text);
             composer.set(next);
@@ -87,29 +85,26 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
         })?,
     )?;
 
-    let clear_api = Rc::clone(api);
     input.set(
         "clear",
-        lua.create_function(move |_, ()| {
-            clear_api.composer().set(String::new());
+        bind(lua, api, move |api, _, ()| {
+            api.composer().set(String::new());
             Ok(())
         })?,
     )?;
 
-    let capture_api = Rc::clone(api);
     input.set(
         "capture",
-        lua.create_function(move |_, handler: Function| {
-            capture_api.capture().set(handler);
+        bind(lua, api, move |api, _, handler: Function| {
+            api.capture().set(handler);
             Ok(())
         })?,
     )?;
 
-    let release_api = Rc::clone(api);
     input.set(
         "release",
-        lua.create_function(move |_, ()| {
-            release_api.capture().clear();
+        bind(lua, api, move |api, _, ()| {
+            api.capture().clear();
             Ok(())
         })?,
     )?;

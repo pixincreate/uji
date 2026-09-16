@@ -5,7 +5,7 @@ use chrono_humanize::HumanTime;
 use crossterm::event;
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::layout::{Constraint, Layout};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table};
 
@@ -20,7 +20,11 @@ pub(super) struct State {
     running: bool,
 }
 
-pub(super) fn pick(sessions: &[Session], current_dir: &str) -> io::Result<Option<usize>> {
+pub(super) fn pick(
+    sessions: &[Session],
+    current_dir: &str,
+    palette: Palette,
+) -> io::Result<Option<usize>> {
     let mut terminal = terminal::open()?;
     let mut state = State {
         cursor: 0,
@@ -28,7 +32,7 @@ pub(super) fn pick(sessions: &[Session], current_dir: &str) -> io::Result<Option
         running: true,
     };
 
-    let result = run_loop(&mut terminal, sessions, current_dir, &mut state);
+    let result = run_loop(&mut terminal, sessions, current_dir, palette, &mut state);
     let restore = terminal::restore(&mut terminal);
 
     match (result, restore) {
@@ -41,9 +45,10 @@ fn run_loop(
     terminal: &mut Term,
     sessions: &[Session],
     current_dir: &str,
+    palette: Palette,
     state: &mut State,
 ) -> io::Result<()> {
-    draw(terminal, sessions, current_dir, state)?;
+    draw(terminal, sessions, current_dir, palette, state)?;
     while state.running {
         if let Event::Key(key) = event::read()? {
             handle_key(key, sessions.len(), state);
@@ -51,7 +56,7 @@ fn run_loop(
                 break;
             }
         }
-        draw(terminal, sessions, current_dir, state)?;
+        draw(terminal, sessions, current_dir, palette, state)?;
     }
     Ok(())
 }
@@ -109,9 +114,9 @@ fn draw(
     terminal: &mut Term,
     sessions: &[Session],
     current_dir: &str,
+    palette: Palette,
     state: &State,
 ) -> io::Result<()> {
-    let palette = Palette::default();
     terminal.draw(|frame| {
         let [list_area, footer_area] =
             Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(frame.area());
@@ -119,7 +124,7 @@ fn draw(
         let title = format!(" Sessions in {current_dir} ");
         let block = Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan))
+            .border_style(Style::default().fg(palette.accent))
             .title(title);
         let inner = block.inner(list_area);
         let available = usize::from(inner.height).saturating_sub(1);
@@ -178,16 +183,16 @@ fn draw(
 
         let hint = if sessions.is_empty() {
             Line::from(vec![
-                Span::styled("esc", Style::default().fg(Color::Cyan)),
+                Span::styled("esc", Style::default().fg(palette.accent)),
                 Span::styled(" quit", Style::default().fg(palette.muted)),
             ])
         } else {
             Line::from(vec![
-                Span::styled("↑/↓", Style::default().fg(Color::Cyan)),
+                Span::styled("↑/↓", Style::default().fg(palette.accent)),
                 Span::styled(" navigate   ", Style::default().fg(palette.muted)),
-                Span::styled("enter", Style::default().fg(Color::Cyan)),
+                Span::styled("enter", Style::default().fg(palette.accent)),
                 Span::styled(" resume   ", Style::default().fg(palette.muted)),
-                Span::styled("esc", Style::default().fg(Color::Cyan)),
+                Span::styled("esc", Style::default().fg(palette.accent)),
                 Span::styled(" quit", Style::default().fg(palette.muted)),
             ])
         };

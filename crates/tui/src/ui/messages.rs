@@ -74,6 +74,19 @@ impl Render for Messages<'_> {
         }
 
         let mut queued = Vec::new();
+        if let Some((name, output)) = ctx.app.overlay().running() {
+            queued.push(Line::from(""));
+            push_wrapped(
+                &mut queued,
+                &format!("{name}  {output}"),
+                width,
+                Style::default()
+                    .fg(palette.muted)
+                    .add_modifier(Modifier::DIM),
+                " ⋯ ",
+                Fill::Line,
+            );
+        }
         if !parts.queued.is_empty() {
             queued.push(Line::from(""));
             queued.extend(parts.queued.iter().cloned());

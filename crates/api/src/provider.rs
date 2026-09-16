@@ -4,10 +4,10 @@ use mlua::{Lua, LuaSerdeExt, Table, Value as LuaValue};
 use uji_core::llm::Provider;
 
 use super::Api;
+use crate::bind::bind;
 
 pub fn add(lua: &Lua, api: &Rc<Api>) -> mlua::Result<mlua::Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |lua, table: Table| {
+    bind(lua, api, move |api, lua, table: Table| {
         let provider: Provider = lua.from_value(LuaValue::Table(table))?;
         api.providers().borrow_mut().add(provider);
         Ok(())
@@ -15,16 +15,14 @@ pub fn add(lua: &Lua, api: &Rc<Api>) -> mlua::Result<mlua::Function> {
 }
 
 pub fn remove(lua: &Lua, api: &Rc<Api>) -> mlua::Result<mlua::Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, id: String| {
+    bind(lua, api, move |api, _, id: String| {
         api.providers().borrow_mut().remove(&id);
         Ok(())
     })
 }
 
 pub fn list(lua: &Lua, api: &Rc<Api>) -> mlua::Result<mlua::Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |lua, ()| {
+    bind(lua, api, move |api, lua, ()| {
         let catalog = api.providers();
         let catalog = catalog.borrow();
         let out = lua.create_table()?;

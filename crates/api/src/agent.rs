@@ -3,12 +3,14 @@ use std::rc::Rc;
 use mlua::{Function, Lua, Table, Value};
 
 use crate::Api;
+use crate::bind::bind;
 use crate::registry::Entry;
 
 pub(crate) fn context(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(
-        move |_, (name, call, opts): (String, Function, Option<Table>)| {
+    bind(
+        lua,
+        api,
+        move |api, _, (name, call, opts): (String, Function, Option<Table>)| {
             let priority = opts
                 .map(|opts| opts.get::<Option<i64>>("priority"))
                 .transpose()?
@@ -25,16 +27,14 @@ pub(crate) fn context(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 }
 
 pub(crate) fn clear_context(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, name: String| {
+    bind(lua, api, move |api, _, name: String| {
         api.agent_context().remove(&name);
         Ok(())
     })
 }
 
 pub(crate) fn contexts(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |lua, ()| {
+    bind(lua, api, move |api, lua, ()| {
         let out = lua.create_table()?;
         for (name, call) in api.agent_context().calls() {
             match call.call::<Value>(()) {

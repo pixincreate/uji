@@ -4,6 +4,7 @@ use mlua::{Function, Lua, Table, Value};
 use uji_screen::keymap::{Binding, Chord, Mode, describe};
 
 use crate::Api;
+use crate::bind::bind;
 
 fn binding_from_lua(value: &Value) -> Option<Binding> {
     match value {
@@ -31,20 +32,24 @@ fn target(mode: &str, key: &str) -> mlua::Result<(Mode, Chord)> {
 }
 
 pub(crate) fn set(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, (mode, key, binding): (String, String, Value)| {
-        let (mode, chord) = target(&mode, &key)?;
-        let binding = binding_from_lua(&binding).ok_or_else(|| {
-            mlua::Error::runtime("binding must be an action name, { command = \"...\" }, or nil")
-        })?;
-        api.keymap().borrow_mut().set(mode, chord, binding);
-        Ok(())
-    })
+    bind(
+        lua,
+        api,
+        move |api, _, (mode, key, binding): (String, String, Value)| {
+            let (mode, chord) = target(&mode, &key)?;
+            let binding = binding_from_lua(&binding).ok_or_else(|| {
+                mlua::Error::runtime(
+                    "binding must be an action name, { command = \"...\" }, or nil",
+                )
+            })?;
+            api.keymap().borrow_mut().set(mode, chord, binding);
+            Ok(())
+        },
+    )
 }
 
 pub(crate) fn del(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, (mode, key): (String, String)| {
+    bind(lua, api, move |api, _, (mode, key): (String, String)| {
         let (mode, chord) = target(&mode, &key)?;
         api.keymap().borrow_mut().set(mode, chord, Binding::Unbound);
         Ok(())
@@ -52,16 +57,14 @@ pub(crate) fn del(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 }
 
 pub(crate) fn reset(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, ()| {
+    bind(lua, api, move |api, _, ()| {
         api.keymap().borrow_mut().reset();
         Ok(())
     })
 }
 
 pub(crate) fn list(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |lua, ()| {
+    bind(lua, api, move |api, lua, ()| {
         let out = lua.create_table()?;
         for ((mode, chord), binding) in api.keymap().borrow().entries() {
             let row = lua.create_table()?;

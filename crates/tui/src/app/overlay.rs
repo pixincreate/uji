@@ -7,9 +7,21 @@ pub struct Overlay {
     notices: Vec<String>,
     queued: Vec<String>,
     screen: RefCell<Screen>,
+    running: Option<(String, String)>,
 }
 
 impl Overlay {
+    /// The tool currently running, with whatever it has reported so far.
+    pub fn running(&self) -> Option<(&str, &str)> {
+        self.running
+            .as_ref()
+            .map(|(name, output)| (name.as_str(), output.as_str()))
+    }
+
+    pub fn set_running(&mut self, running: Option<(String, String)>) {
+        self.running = running;
+    }
+
     pub fn notices(&self) -> &[String] {
         &self.notices
     }

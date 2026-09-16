@@ -1,5 +1,6 @@
 pub mod action;
 pub mod agent;
+mod bind;
 pub mod command;
 mod convert;
 pub mod event;
