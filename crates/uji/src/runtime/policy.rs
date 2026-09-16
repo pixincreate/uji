@@ -3,7 +3,7 @@ use mlua::{Lua, Table, Value as LuaValue};
 use regex::Regex;
 
 use strum::VariantArray;
-use uji_core::tools::policy::{Action, Matcher, Rule, ToolPolicy, ToolRules};
+use uji_engine::tools::policy::{Action, Matcher, Rule, ToolPolicy, ToolRules};
 
 const PRECEDENCE: [Action; Action::VARIANTS.len()] = [Action::Deny, Action::Allow, Action::Ask];
 

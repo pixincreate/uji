@@ -1,5 +1,5 @@
 [package]
-name = "uji-core"
+name = "uji-engine"
 version.workspace = true
 edition.workspace = true
 

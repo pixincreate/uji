@@ -2,12 +2,13 @@ use std::rc::Rc;
 
 use mlua::{Function, Lua, LuaSerdeExt, Table, Value as LuaValue};
 
-use uji_screen::config::UiConfig;
-use uji_screen::model::{Builtin, Color, Line, Size, Span, Style, WinOpts};
+use uji_ui::config::UiConfig;
+use uji_ui::model::{Builtin, Color, Line, Size, Span, Style, WinOpts};
 
 use super::Api;
 use super::convert::FromLuaValue;
-use crate::bind::bind;
+use crate::api::bind::bind;
+use crate::api::request::Request;
 
 pub fn open_win(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     let state = api.state();
@@ -91,7 +92,7 @@ pub fn exec(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
         if command.is_empty() {
             return Err(mlua::Error::runtime("cmd must not be empty"));
         }
-        api.queue_exec(command);
+        api.request(Request::Exec(command));
         Ok(())
     })
 }
@@ -155,7 +156,7 @@ fn parse_color(value: Option<String>) -> mlua::Result<Option<Color>> {
         Some(s) => s
             .parse::<Color>()
             .map(Some)
-            .map_err(|err: uji_screen::model::ParseError| mlua::Error::runtime(err.to_string())),
+            .map_err(|err: uji_ui::model::ParseError| mlua::Error::runtime(err.to_string())),
         None => Ok(None),
     }
 }

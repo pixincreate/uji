@@ -1,6 +1,6 @@
 use mlua::Value as LuaValue;
-use uji_core::session::id::{MessageId, now_millis};
-use uji_core::session::model::{Message, StoredMessage, ToolCall};
+use uji_engine::session::id::{MessageId, now_millis};
+use uji_engine::session::model::{Message, StoredMessage, ToolCall};
 
 use super::LoopData;
 use crate::runtime::events;

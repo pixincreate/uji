@@ -27,13 +27,13 @@ use std::sync::Arc;
 
 use calloop::{EventLoop, LoopHandle};
 use crossterm::event::Event as TermEvent;
-use uji_screen::state::UiState;
+use uji_ui::state::UiState;
 
 use signal::Signal;
-use uji_core::session::conversation::{Conversation, Shared};
-use uji_core::session::model::Session;
-use uji_core::session::store::SessionStorage;
-use uji_tui::app::App;
+use uji_engine::session::conversation::{Conversation, Shared};
+use uji_engine::session::model::Session;
+use uji_engine::session::store::SessionStorage;
+use uji_ui::app::App;
 
 pub struct Runtime {
     inner: Rc<Inner>,

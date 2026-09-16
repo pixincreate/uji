@@ -2,14 +2,15 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use crate::api::modal::{Answer, ModalKind, ModalRequest};
 use mlua::Value as LuaValue;
-use uji_api::modal::{Answer, ModalKind};
-use uji_core::llm::{CancelToken, StreamEvent};
-use uji_screen::model::RunState;
+use uji_engine::llm::{CancelToken, StreamEvent};
+use uji_ui::model::RunState;
 
-use uji_tui::app::Echo;
+use uji_ui::app::Echo;
 
 use super::{Control, LoopData, ModalInput};
+use crate::api::request::Request;
 use crate::cmd::LuaAction;
 use crate::runtime::events;
 use crate::runtime::job::JobEvent;
@@ -34,13 +35,8 @@ impl LoopData {
         handle: &calloop::LoopHandle<'static, Self>,
     ) -> std::io::Result<()> {
         self.apply_composer();
-        self.drain_submits();
-        self.drain_titles();
+        self.drain_requests();
         self.drain_jobs();
-        self.drain_exec();
-        self.drain_interrupt();
-        self.drain_modal();
-        self.drain_answers();
         self.drain_diagnostics();
 
         for callback in self.inner.api.scheduled().take() {
@@ -134,44 +130,51 @@ impl LoopData {
         }
     }
 
-    fn apply_composer(&mut self) {
-        let composer = self.inner.api.composer();
-        if let Some(text) = composer.take_written() {
-            self.app.set_input(text);
-            self.dirty = true;
-        } else {
-            composer.observe(self.app.input());
+    /// Carry out what plugins asked for, in the order they asked.
+    fn drain_requests(&mut self) {
+        for request in self.inner.api.take_requests() {
+            match request {
+                Request::Submit(text) => self.submit(&text),
+                Request::SetTitle(title) => self.set_title(title),
+                Request::Interrupt => {
+                    self.interrupt();
+                }
+                Request::Answer(answer) => {
+                    let input = match answer {
+                        Answer::Select(Some(item)) => ModalInput::Select(item),
+                        Answer::Prompt(Some(value)) => ModalInput::Prompt(value),
+                        Answer::Select(None) | Answer::Prompt(None) => ModalInput::Cancel,
+                    };
+                    self.on_modal_answer(input);
+                }
+                Request::Modal(request) => self.open_modal(*request),
+                Request::Exec(command) => self.exec(&command),
+            }
         }
     }
 
-    fn drain_titles(&mut self) {
-        let Some(title) = self.inner.api.session().take_titles().pop() else {
+    fn exec(&mut self, command: &[String]) {
+        let Some((program, args)) = command.split_first() else {
             return;
         };
-        self.set_title(title);
-    }
-
-    fn drain_submits(&mut self) {
-        for text in self.inner.api.session().take_submits() {
-            self.submit(&text);
+        if let Err(err) = self.frontend.suspend() {
+            self.inner.report(format!("suspend terminal: {err}"));
         }
-    }
-
-    fn drain_answers(&mut self) {
-        for answer in self.inner.api.take_answers() {
-            let input = match answer {
-                Answer::Select(Some(item)) => ModalInput::Select(item),
-                Answer::Prompt(Some(value)) => ModalInput::Prompt(value),
-                Answer::Select(None) | Answer::Prompt(None) => ModalInput::Cancel,
-            };
-            self.on_modal_answer(input);
+        let status = std::process::Command::new(program).args(args).status();
+        if let Err(err) = self.frontend.resume() {
+            self.inner.report(format!("resume terminal: {err}"));
         }
+        match status {
+            Ok(status) if !status.success() => {
+                self.inner.report(format!("{program} exited with {status}"));
+            }
+            Err(err) => self.inner.report(format!("run {program}: {err}")),
+            Ok(_) => {}
+        }
+        self.dirty = true;
     }
 
-    fn drain_modal(&mut self) {
-        let Some(request) = self.inner.api.take_modal() else {
-            return;
-        };
+    fn open_modal(&mut self, request: ModalRequest) {
         self.modal = Some(LuaAction::new(request.on_done));
         match request.kind {
             ModalKind::Select { items } => self.app.open_select(request.title, items),
@@ -183,32 +186,13 @@ impl LoopData {
         self.dirty = true;
     }
 
-    fn drain_interrupt(&mut self) {
-        if self.inner.api.take_interrupt() {
-            self.interrupt();
-        }
-    }
-
-    fn drain_exec(&mut self) {
-        for command in self.inner.api.take_exec() {
-            let Some((program, args)) = command.split_first() else {
-                continue;
-            };
-            if let Err(err) = self.frontend.suspend() {
-                self.inner.report(format!("suspend terminal: {err}"));
-            }
-            let status = std::process::Command::new(program).args(args).status();
-            if let Err(err) = self.frontend.resume() {
-                self.inner.report(format!("resume terminal: {err}"));
-            }
-            match status {
-                Ok(status) if !status.success() => {
-                    self.inner.report(format!("{program} exited with {status}"));
-                }
-                Err(err) => self.inner.report(format!("run {program}: {err}")),
-                Ok(_) => {}
-            }
+    fn apply_composer(&mut self) {
+        let composer = self.inner.api.composer();
+        if let Some(text) = composer.take_written() {
+            self.app.set_input(text);
             self.dirty = true;
+        } else {
+            composer.observe(self.app.input());
         }
     }
 

@@ -2,7 +2,7 @@ use pulldown_cmark::{CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, T
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
-use crate::ui::style::Palette;
+use crate::render::style::Palette;
 
 const BULLETS: &[&str] = &["•", "◦", "▪"];
 

@@ -1,15 +1,15 @@
+use crate::model::WindowSpec;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use uji_screen::model::WindowSpec;
 
 use crate::app::Mode;
-use crate::ui::Context;
-use crate::ui::Render;
-use crate::ui::Surface;
-use crate::ui::modal::confirm;
-use crate::ui::style::{block_for, color_of};
-use crate::ui::wrap;
+use crate::render::Context;
+use crate::render::Render;
+use crate::render::Surface;
+use crate::render::modal::confirm;
+use crate::render::style::{block_for, color_of};
+use crate::render::wrap;
 
 const CURSOR: char = '█';
 

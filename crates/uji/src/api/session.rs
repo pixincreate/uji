@@ -1,26 +1,20 @@
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use mlua::{Lua, Table};
-use uji_core::llm::Usage;
-use uji_core::session::conversation::Shared;
+use uji_engine::llm::Usage;
+use uji_engine::session::conversation::Shared;
 
-use crate::Api;
-use crate::bind::bind;
+use crate::api::Api;
+use crate::api::bind::bind;
+use crate::api::request::Request;
 
 pub struct SessionState {
     conversation: Shared,
-    submits: RefCell<Vec<String>>,
-    titles: RefCell<Vec<String>>,
 }
 
 impl SessionState {
     pub fn new(conversation: Shared) -> Self {
-        Self {
-            conversation,
-            submits: RefCell::default(),
-            titles: RefCell::default(),
-        }
+        Self { conversation }
     }
 
     pub fn conversation(&self) -> &Shared {
@@ -28,24 +22,11 @@ impl SessionState {
     }
 
     pub fn set_title(&self, title: String) {
-        self.conversation.borrow_mut().set_title(title.clone());
-        self.titles.borrow_mut().push(title);
-    }
-
-    pub fn take_titles(&self) -> Vec<String> {
-        std::mem::take(&mut *self.titles.borrow_mut())
-    }
-
-    pub fn queue_submit(&self, text: String) {
-        self.submits.borrow_mut().push(text);
+        self.conversation.borrow_mut().set_title(title);
     }
 
     pub fn add_usage(&self, usage: Usage) {
         self.conversation.borrow_mut().add_usage(usage);
-    }
-
-    pub fn take_submits(&self) -> Vec<String> {
-        std::mem::take(&mut *self.submits.borrow_mut())
     }
 }
 
@@ -74,7 +55,7 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
                 let row = lua.create_table()?;
                 row.set("type", stored.message.type_name())?;
                 row.set("text", stored.message.text())?;
-                if let uji_core::session::model::Message::Tool { name, .. } = &stored.message {
+                if let uji_engine::session::model::Message::Tool { name, .. } = &stored.message {
                     row.set("name", name.clone())?;
                 }
                 out.push(row)?;
@@ -116,7 +97,7 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
             if text.trim().is_empty() {
                 return Err(mlua::Error::runtime("submit needs non-empty text"));
             }
-            api.session().queue_submit(text);
+            api.request(Request::Submit(text));
             Ok(())
         })?,
     )?;
@@ -124,7 +105,7 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     session.set(
         "interrupt",
         bind(lua, api, move |api, _, ()| {
-            api.queue_interrupt();
+            api.request(Request::Interrupt);
             Ok(())
         })?,
     )?;

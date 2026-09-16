@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use uji_core::llm::{self, Provider};
+use uji_engine::llm::{self, Provider};
 
 use super::{Action, Args, Context};
-use uji_core::session::store::Setting;
+use uji_engine::session::store::Setting;
 
 #[derive(Default)]
 pub struct Models {

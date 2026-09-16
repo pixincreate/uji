@@ -2,10 +2,10 @@ use std::rc::Rc;
 
 use mlua::{Function, Lua, Table};
 
-use crate::handlers::DEFAULT_PRIORITY;
+use crate::api::handlers::DEFAULT_PRIORITY;
 
 use super::Api;
-use crate::bind::bind;
+use crate::api::bind::bind;
 
 pub fn on(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(

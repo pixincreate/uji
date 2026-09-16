@@ -9,10 +9,10 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table};
 
-use uji_core::session::id::now_millis;
-use uji_core::session::model::Session;
-use uji_tui::terminal::{self, Term};
-use uji_tui::ui::style::Palette;
+use uji_engine::session::id::now_millis;
+use uji_engine::session::model::Session;
+use uji_ui::render::style::Palette;
+use uji_ui::terminal::{self, Term};
 
 pub(super) struct State {
     cursor: usize,

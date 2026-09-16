@@ -1,6 +1,6 @@
 use super::{Action, Args, Context};
-use uji_core::session::store::Setting;
-use uji_tui::app::Echo;
+use uji_engine::session::store::Setting;
+use uji_ui::app::Echo;
 
 const SUBSCRIPTION: &str = "Subscription (sign in with browser)";
 const API_KEY: &str = "API key";

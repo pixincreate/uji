@@ -3,7 +3,7 @@ use std::rc::Rc;
 use mlua::{Function, Lua, Value};
 
 use super::Api;
-use crate::bind::bind;
+use crate::api::bind::bind;
 
 #[derive(Clone)]
 pub struct LuaCommand {

@@ -1,10 +1,10 @@
 use std::rc::Rc;
 
 use mlua::{Function, Lua, Table, Value};
-use uji_screen::keymap::{Binding, Chord, Mode, describe};
+use uji_ui::keymap::{Binding, Chord, Mode, describe};
 
-use crate::Api;
-use crate::bind::bind;
+use crate::api::Api;
+use crate::api::bind::bind;
 
 fn binding_from_lua(value: &Value) -> Option<Binding> {
     match value {

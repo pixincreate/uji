@@ -4,9 +4,9 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
 use crate::app::SuggestItem;
-use crate::ui::Context;
-use crate::ui::Render;
-use crate::ui::Surface;
+use crate::render::Context;
+use crate::render::Render;
+use crate::render::Surface;
 
 pub(crate) struct Suggest<'a> {
     pub(crate) items: &'a [SuggestItem],

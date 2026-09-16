@@ -2,10 +2,10 @@ use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use crate::api::Api;
 use mlua::{Function, Integer, Lua, MultiValue, Table, Value};
-use uji_api::Api;
 
-use uji_core::config::MODULE_DIR;
+use uji_engine::config::MODULE_DIR;
 
 const INSERT_AFTER_PRELOAD: Integer = 2;
 

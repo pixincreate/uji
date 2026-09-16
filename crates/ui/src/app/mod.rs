@@ -18,11 +18,11 @@ pub use stream::Stream;
 use std::cell::{Ref, RefCell, RefMut};
 use std::rc::Rc;
 
-use uji_screen::keymap;
-use uji_screen::state::UiState;
+use crate::keymap;
+use crate::state::UiState;
 
-use uji_core::session::conversation::{Conversation, Shared};
-use uji_core::session::model::{Message, Session};
+use uji_engine::session::conversation::{Conversation, Shared};
+use uji_engine::session::model::{Message, Session};
 
 pub struct App {
     session: Session,
@@ -34,7 +34,7 @@ pub struct App {
     mode: Mode,
     suggest_pool: Vec<SuggestItem>,
     overlay: overlay::Overlay,
-    transcript: RefCell<crate::ui::transcript::Transcript>,
+    transcript: RefCell<crate::render::transcript::Transcript>,
     renderer: Option<Rc<dyn renderer::BlockRenderer>>,
 }
 
@@ -71,7 +71,7 @@ impl App {
         self.conversation.borrow()
     }
 
-    pub fn transcript(&self) -> RefMut<'_, crate::ui::transcript::Transcript> {
+    pub fn transcript(&self) -> RefMut<'_, crate::render::transcript::Transcript> {
         self.transcript.borrow_mut()
     }
 

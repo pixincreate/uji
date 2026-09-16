@@ -1,4 +1,4 @@
-use uji_core::llm::{Budget, Provider};
+use uji_engine::llm::{Budget, Provider};
 
 use super::LoopData;
 
@@ -19,7 +19,7 @@ impl LoopData {
                 .and_then(|output| u32::try_from(output).ok())
         })
         .flatten()
-        .unwrap_or(uji_core::llm::DEFAULT_MAX_OUTPUT)
+        .unwrap_or(uji_engine::llm::DEFAULT_MAX_OUTPUT)
     }
 
     pub(super) fn budget(&self) -> Option<Budget> {

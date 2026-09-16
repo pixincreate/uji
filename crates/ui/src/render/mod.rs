@@ -1,10 +1,10 @@
+use crate::model::{Builtin, Size, WindowSpec};
+use crate::state::UiState;
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::text::Line as TLine;
 use ratatui::widgets::{Paragraph, Widget};
-use uji_screen::model::{Builtin, Size, WindowSpec};
-use uji_screen::state::UiState;
 
 use crate::app::App;
 
@@ -125,7 +125,7 @@ fn fits(area: Rect, app: &App, state: &UiState) -> Vec<(u32, u16)> {
         }
         let chrome = style::vertical_chrome(window);
         let content = match window.opts.border {
-            uji_screen::model::Border::Plain | uji_screen::model::Border::Rounded => {
+            crate::model::Border::Plain | crate::model::Border::Rounded => {
                 rect.width.saturating_sub(2)
             }
             _ => rect.width,

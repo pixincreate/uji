@@ -1,16 +1,17 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use uji_api::modal::Answer;
-use uji_core::credential;
-use uji_core::llm::Provider;
-use uji_tui::app::{Echo, SuggestItem};
+use crate::api::modal::Answer;
+use uji_engine::credential;
+use uji_engine::llm::Provider;
+use uji_ui::app::{Echo, SuggestItem};
 
 use super::{Control, LoopData, ModalInput};
+use crate::api::request::Request;
 use crate::cmd::{Action, Args, Context};
 use crate::runtime::builtin::{self, BUILTINS};
 use crate::runtime::events;
-use uji_core::session::store::Setting;
+use uji_engine::session::store::Setting;
 
 impl LoopData {
     pub(crate) fn refresh_suggestions(&mut self) {
@@ -79,13 +80,13 @@ impl LoopData {
         let opts = build(lua)?;
         let api = Rc::clone(&self.inner.api);
         let done = lua.create_function(move |_, choice: Option<String>| {
-            api.queue_answer(match component {
+            api.request(Request::Answer(match component {
                 "prompt" => Answer::Prompt(choice),
                 _ => Answer::Select(choice),
-            });
+            }));
             Ok(())
         })?;
-        uji_api::modal::ask_ui(lua, component, opts, done)
+        crate::api::modal::ask_ui(lua, component, opts, done)
     }
 }
 

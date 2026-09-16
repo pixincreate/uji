@@ -2,5 +2,7 @@ id: no-eprintln
 language: rust
 severity: error
 message: Do not use `eprintln!`; the alternate screen swallows stderr. Report a notice instead.
+ignores:
+  - "**/main.rs"
 rule:
   pattern: eprintln!($$$ARGS)

@@ -3,9 +3,9 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Clear, Paragraph};
 
-use crate::ui::Context;
-use crate::ui::Render;
-use crate::ui::Surface;
+use crate::render::Context;
+use crate::render::Render;
+use crate::render::Surface;
 
 pub(crate) const MAX_ROWS: usize = 12;
 

@@ -30,9 +30,9 @@ impl Args {
         Self { raw, tokens }
     }
 }
-use uji_core::llm::Provider;
-use uji_core::session::store::Setting;
-use uji_tui::app::Echo;
+use uji_engine::llm::Provider;
+use uji_engine::session::store::Setting;
+use uji_ui::app::Echo;
 
 pub trait Context {
     fn open_select(&mut self, title: String, items: Vec<String>);

@@ -1,10 +1,10 @@
+use crate::model::Color;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use uji_screen::model::Color;
 
-use crate::ui::Context;
-use crate::ui::style::{Palette, color_of};
-use crate::ui::wrap::text as wrap;
+use crate::render::Context;
+use crate::render::style::{Palette, color_of};
+use crate::render::wrap::text as wrap;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Choice {

@@ -4,7 +4,7 @@ use std::rc::Rc;
 use mlua::{Function, Lua, Table, Value as LuaValue};
 
 use super::Api;
-use crate::bind::bind;
+use crate::api::bind::bind;
 
 #[derive(Debug, Clone)]
 pub struct LuaTool {

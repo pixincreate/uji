@@ -1,5 +1,5 @@
+use crate::model::{Size, Split, WindowSpec};
 use ratatui::layout::Rect;
-use uji_screen::model::{Size, Split, WindowSpec};
 
 fn is_vertical(split: Split) -> bool {
     matches!(split, Split::Top | Split::Bottom)

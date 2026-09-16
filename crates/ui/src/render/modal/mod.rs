@@ -1,7 +1,7 @@
 use crate::app::Mode;
-use crate::ui::Context;
-use crate::ui::Render;
-use crate::ui::Surface;
+use crate::render::Context;
+use crate::render::Render;
+use crate::render::Surface;
 
 pub(crate) mod confirm;
 mod prompt;

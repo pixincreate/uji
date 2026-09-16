@@ -4,10 +4,10 @@ pub(crate) mod lock;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use crate::api::Api;
 use mlua::{Function, Lua, Table, Value};
-use uji_api::Api;
 
-use uji_core::config;
+use uji_engine::config;
 
 use self::lock::{Entry, Lock};
 

@@ -11,6 +11,7 @@ pub mod keymap;
 pub mod llm;
 pub mod modal;
 pub mod provider;
+pub mod request;
 
 pub mod registry;
 pub mod schedule;
@@ -29,8 +30,8 @@ use std::rc::Rc;
 use mlua::{Lua, Table, Value};
 
 use self::action::Actions;
-use uji_core::session::conversation::Shared;
-use uji_screen::state::UiState;
+use uji_engine::session::conversation::Shared;
+use uji_ui::state::UiState;
 
 use self::handlers::Handlers;
 use self::input::{Capture, Composer};
@@ -39,8 +40,8 @@ use self::registry::Registry;
 use self::scheduled::Scheduled;
 use self::session::SessionState;
 use self::tools::LuaTool;
-use uji_core::llm::Catalog;
-use uji_screen::keymap::Keymap;
+use uji_engine::llm::Catalog;
+use uji_ui::keymap::Keymap;
 
 pub struct Api {
     state: Rc<RefCell<UiState>>,
@@ -56,10 +57,7 @@ pub struct Api {
     composer: Composer,
     capture: Capture,
     session_state: SessionState,
-    exec: RefCell<Vec<Vec<String>>>,
-    interrupt: Cell<bool>,
-    modal: RefCell<Option<modal::ModalRequest>>,
-    answers: RefCell<Vec<modal::Answer>>,
+    requests: RefCell<Vec<request::Request>>,
     tool_roots: RefCell<Vec<PathBuf>>,
     tool_confined: Cell<bool>,
     segments: Registry,
@@ -83,10 +81,7 @@ impl Api {
             composer: Composer::default(),
             capture: Capture::default(),
             session_state: SessionState::new(conversation),
-            exec: RefCell::default(),
-            interrupt: Cell::default(),
-            modal: RefCell::default(),
-            answers: RefCell::default(),
+            requests: RefCell::default(),
             tool_roots: RefCell::default(),
             tool_confined: Cell::new(false),
             segments: Registry::default(),
@@ -135,36 +130,13 @@ impl Api {
         &self.composer
     }
 
-    pub fn queue_modal(&self, request: modal::ModalRequest) {
-        *self.modal.borrow_mut() = Some(request);
+    /// Ask the runtime to act on the next tick.
+    pub fn request(&self, request: request::Request) {
+        self.requests.borrow_mut().push(request);
     }
 
-    pub fn take_modal(&self) -> Option<modal::ModalRequest> {
-        self.modal.borrow_mut().take()
-    }
-
-    pub fn queue_answer(&self, answer: modal::Answer) {
-        self.answers.borrow_mut().push(answer);
-    }
-
-    pub fn take_answers(&self) -> Vec<modal::Answer> {
-        std::mem::take(&mut *self.answers.borrow_mut())
-    }
-
-    pub fn queue_exec(&self, command: Vec<String>) {
-        self.exec.borrow_mut().push(command);
-    }
-
-    pub fn queue_interrupt(&self) {
-        self.interrupt.set(true);
-    }
-
-    pub fn take_interrupt(&self) -> bool {
-        self.interrupt.replace(false)
-    }
-
-    pub fn take_exec(&self) -> Vec<Vec<String>> {
-        std::mem::take(&mut *self.exec.borrow_mut())
+    pub fn take_requests(&self) -> Vec<request::Request> {
+        std::mem::take(&mut *self.requests.borrow_mut())
     }
 
     pub fn segments(&self) -> &Registry {

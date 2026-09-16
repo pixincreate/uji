@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
-use uji_core::session::model::Message;
-use uji_screen::model::Line;
-use uji_tui::app::renderer::{Block, BlockRenderer};
+use uji_engine::session::model::Message;
+use uji_ui::app::renderer::{Block, BlockRenderer};
+use uji_ui::model::Line;
 
 use super::events;
 use super::inner::Inner;
@@ -68,7 +68,7 @@ impl BlockRenderer for LuaRenderer {
         }
         let table = self.payload(block)?;
         let value = self.inner.api.ask(events::RENDER_MESSAGE, &table)?;
-        match uji_api::window::lines_from_lua(value) {
+        match crate::api::window::lines_from_lua(value) {
             Ok(lines) => Some(lines),
             Err(err) => {
                 self.inner.report(format!("render_message: {err}"));

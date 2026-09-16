@@ -2,9 +2,9 @@ use std::rc::Rc;
 
 use mlua::{Function, Lua, Table, Value};
 
-use crate::Api;
-use crate::bind::bind;
-use crate::registry::Entry;
+use crate::api::Api;
+use crate::api::bind::bind;
+use crate::api::registry::Entry;
 
 pub(crate) fn context(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(

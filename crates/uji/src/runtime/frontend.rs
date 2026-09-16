@@ -2,8 +2,8 @@ use std::io;
 
 use calloop::channel::Sender;
 use crossterm::event::Event as TermEvent;
-use uji_tui::app::App;
-use uji_tui::terminal;
+use uji_ui::app::App;
+use uji_ui::terminal;
 
 use super::input::Reader;
 

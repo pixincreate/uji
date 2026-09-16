@@ -1,9 +1,9 @@
 use ratatui::text::Line;
-use uji_core::session::conversation::Conversation;
-use uji_core::session::model::{Message, StoredMessage};
+use uji_engine::session::conversation::Conversation;
+use uji_engine::session::model::{Message, StoredMessage};
 
 use crate::app::renderer::Block;
-use crate::ui::style::Palette;
+use crate::render::style::Palette;
 
 #[derive(Debug, Default, Clone, Copy)]
 struct Grouping {

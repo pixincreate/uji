@@ -1,8 +1,8 @@
 use std::time::Instant;
 
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
-use uji_tui::app::selection::Point;
-use uji_tui::clipboard::{self, Copied};
+use uji_ui::app::selection::Point;
+use uji_ui::clipboard::{self, Copied};
 
 use super::LoopData;
 

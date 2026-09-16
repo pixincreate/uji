@@ -4,8 +4,8 @@ use std::rc::Rc;
 
 use mlua::{Function, Lua, Table, Value};
 
-use crate::Api;
-use crate::bind::bind;
+use crate::api::Api;
+use crate::api::bind::bind;
 
 pub struct JobRequest {
     pub id: u64,

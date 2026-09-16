@@ -3,18 +3,18 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
+use crate::api::Api;
 use mlua::Lua as LuaState;
-use uji_api::Api;
-use uji_core::session::conversation::Shared;
-use uji_screen::state::UiState;
+use uji_engine::session::conversation::Shared;
+use uji_ui::state::UiState;
 
 use super::events;
 use super::policy;
 use crate::pack;
-use uji_core::config::{self, DEFAULT_LUA};
-use uji_core::llm::{Llm, NotConfigured};
-use uji_core::session::store::SessionStorage;
-use uji_core::tools::policy::ToolPolicy;
+use uji_engine::config::{self, DEFAULT_LUA};
+use uji_engine::llm::{Llm, NotConfigured};
+use uji_engine::session::store::SessionStorage;
+use uji_engine::tools::policy::ToolPolicy;
 
 use super::loader;
 
@@ -24,8 +24,8 @@ pub(crate) struct Inner {
     pub(crate) llm: RefCell<Arc<Llm>>,
     pub(crate) llm_model: RefCell<String>,
     pub(crate) llm_provider: RefCell<String>,
-    pub(crate) llm_effort: RefCell<uji_core::llm::Effort>,
-    pub(crate) llm_cache: RefCell<uji_core::llm::Retention>,
+    pub(crate) llm_effort: RefCell<uji_engine::llm::Effort>,
+    pub(crate) llm_cache: RefCell<uji_engine::llm::Retention>,
     pub(crate) client: Arc<reqwest::Client>,
     pub(crate) policy: RefCell<ToolPolicy>,
 }
@@ -54,7 +54,7 @@ impl Inner {
             inner.api.packs().borrow_mut().push(dir);
         }
 
-        match uji_api::register(&inner.lua, &inner.api) {
+        match crate::api::register(&inner.lua, &inner.api) {
             Ok(uji) => {
                 match pack::register(&inner.lua, &inner.api) {
                     Ok(table) => {
@@ -77,7 +77,7 @@ impl Inner {
         inner
             .api
             .actions()
-            .reserve(uji_tui::app::Action::names().map(ToString::to_string));
+            .reserve(uji_ui::app::Action::names().map(ToString::to_string));
         inner.run_init();
         inner.source_plugins();
         inner.compile_policy();
@@ -164,7 +164,7 @@ impl Inner {
     pub(crate) fn resolve_llm(&self, storage: &mut dyn SessionStorage) {
         let selection = {
             let catalog = self.api.providers().borrow();
-            uji_core::llm::resolve_from_storage(storage, &catalog)
+            uji_engine::llm::resolve_from_storage(storage, &catalog)
         };
         *self.llm.borrow_mut() = selection.llm;
         self.llm_model.borrow_mut().clone_from(&selection.model);

@@ -2,8 +2,9 @@ use std::rc::Rc;
 
 use mlua::{Function, Lua, Table};
 
-use crate::Api;
-use crate::bind::bind;
+use crate::api::Api;
+use crate::api::bind::bind;
+use crate::api::request::Request;
 
 pub enum ModalKind {
     Select { items: Vec<String> },
@@ -29,11 +30,11 @@ pub fn select(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
             let items = opts
                 .get::<Option<Vec<String>>>("items")?
                 .unwrap_or_default();
-            api.queue_modal(ModalRequest {
+            api.request(Request::Modal(Box::new(ModalRequest {
                 title: title_of(&opts)?,
                 kind: ModalKind::Select { items },
                 on_done,
-            });
+            })));
             Ok(())
         },
     )
@@ -46,11 +47,11 @@ pub fn prompt(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
         move |api, _, (opts, on_done): (Table, Function)| {
             let value = opts.get::<Option<String>>("value")?.unwrap_or_default();
             let hidden = opts.get::<Option<bool>>("hidden")?.unwrap_or(false);
-            api.queue_modal(ModalRequest {
+            api.request(Request::Modal(Box::new(ModalRequest {
                 title: title_of(&opts)?,
                 kind: ModalKind::Prompt { value, hidden },
                 on_done,
-            });
+            })));
             Ok(())
         },
     )

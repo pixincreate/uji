@@ -2,10 +2,10 @@ use std::rc::Rc;
 
 use mlua::{Function, Lua, Table, Value};
 
-use crate::Api;
-use crate::bind::bind;
-use crate::registry::Entry;
-use uji_screen::model::RunState;
+use crate::api::Api;
+use crate::api::bind::bind;
+use crate::api::registry::Entry;
+use uji_ui::model::RunState;
 
 pub fn add(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(

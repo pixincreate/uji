@@ -4,12 +4,11 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-uji-api = { path = "../api" }
-uji-core = { path = "../core" }
-uji-screen = { path = "../screen" }
-uji-tui = { path = "../tui" }
+clap = { version = "4", features = ["derive"] }
+uji-engine = { path = "../engine" }
+uji-ui = { path = "../ui" }
 strum = { version = "0.28.0", features = ["derive"] }
-mlua = { version = "0.12", features = ["lua54", "vendored"] }
+mlua = { version = "0.12", features = ["lua54", "vendored", "serialize"] }
 ratatui = "0.30"
 crossterm = "0.29"
 calloop = "0.14.4"
@@ -25,3 +24,7 @@ chrono = { version = "0.4.45", default-features = false }
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "uji"
+path = "src/main.rs"

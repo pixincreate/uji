@@ -18,11 +18,11 @@ fmt-apply:
 # is its job.
 lint:
     cargo clippy --workspace --all-targets -- -D warnings
-    ast-grep scan crates/api/src crates/core/src crates/tui/src crates/uji/src crates/screen/src
+    ast-grep scan crates/engine/src crates/ui/src crates/uji/src
 
 # Structural rules only.
 scan:
-    ast-grep scan crates/api/src crates/core/src crates/tui/src crates/uji/src crates/screen/src
+    ast-grep scan crates/engine/src crates/ui/src crates/uji/src
 
 # Unit + integration tests.
 test:

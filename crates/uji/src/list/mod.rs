@@ -2,11 +2,11 @@ mod ui;
 
 use std::error::Error;
 
-use uji_tui::ui::style::Palette;
+use uji_ui::render::style::Palette;
 
 use crate::runtime::{Runtime, events};
-use uji_core::session::model::Session;
-use uji_core::session::store::SessionStorage;
+use uji_engine::session::model::Session;
+use uji_engine::session::store::SessionStorage;
 
 pub fn run(mut storage: Box<dyn SessionStorage>) -> Result<(), Box<dyn Error>> {
     let current_dir = std::env::current_dir().map_or_else(

@@ -1,6 +1,6 @@
 use crossterm::event::{Event as TermEvent, KeyCode, KeyEvent, KeyModifiers};
-use uji_screen::keymap::{Binding, Chord, Key, describe};
-use uji_tui::app::{Action, KeyAction};
+use uji_ui::app::{Action, KeyAction};
+use uji_ui::keymap::{Binding, Chord, Key, describe};
 
 use super::{Control, LoopData, ModalInput};
 

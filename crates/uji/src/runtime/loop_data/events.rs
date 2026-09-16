@@ -1,5 +1,5 @@
-use uji_core::llm::StreamEvent;
-use uji_core::session::model::Message;
+use uji_engine::llm::StreamEvent;
+use uji_engine::session::model::Message;
 
 use super::LoopData;
 use crate::runtime::events;

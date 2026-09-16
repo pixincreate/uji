@@ -1,7 +1,7 @@
+use crate::model::{Border, Color, Style as ApiStyle, Theme, WindowSpec};
 use ratatui::style::{Color as TColor, Modifier, Style};
 use ratatui::symbols;
 use ratatui::widgets::{Block, Borders, Padding};
-use uji_screen::model::{Border, Color, Style as ApiStyle, Theme, WindowSpec};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Palette {

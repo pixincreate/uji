@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use uji_core::llm::{Budget, context};
-use uji_core::session::model::Message;
-use uji_screen::model::{CompactionOpts, RunState};
+use uji_engine::llm::{Budget, context};
+use uji_engine::session::model::Message;
+use uji_ui::model::{CompactionOpts, RunState};
 
 use super::LoopData;
 use crate::runtime::background::{self, CompactEvent};

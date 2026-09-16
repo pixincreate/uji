@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use mlua::{FromLuaMulti, Function, IntoLuaMulti, Lua};
 
-use crate::Api;
+use crate::api::Api;
 
 /// Wrap a handler as a Lua function with the [`Api`] captured for it.
 ///

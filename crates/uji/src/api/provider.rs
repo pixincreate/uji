@@ -1,10 +1,10 @@
 use std::rc::Rc;
 
 use mlua::{Lua, LuaSerdeExt, Table, Value as LuaValue};
-use uji_core::llm::Provider;
+use uji_engine::llm::Provider;
 
 use super::Api;
-use crate::bind::bind;
+use crate::api::bind::bind;
 
 pub fn add(lua: &Lua, api: &Rc<Api>) -> mlua::Result<mlua::Function> {
     bind(lua, api, move |api, lua, table: Table| {

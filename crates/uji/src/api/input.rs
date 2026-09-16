@@ -3,8 +3,8 @@ use std::rc::Rc;
 
 use mlua::{Function, Lua, Table};
 
-use crate::Api;
-use crate::bind::bind;
+use crate::api::Api;
+use crate::api::bind::bind;
 
 #[derive(Default)]
 pub struct Capture {

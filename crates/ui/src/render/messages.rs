@@ -1,16 +1,16 @@
+use crate::model::WindowSpec;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use uji_screen::model::WindowSpec;
 
 use crate::app::renderer::Block;
-use crate::ui::Context;
-use crate::ui::Render;
-use crate::ui::Surface;
-use crate::ui::style::{Palette, block_for};
-use crate::ui::transcript;
-use crate::ui::wrap::text as wrap_text;
-use uji_core::session::model::{Message, StoredMessage};
+use crate::render::Context;
+use crate::render::Render;
+use crate::render::Surface;
+use crate::render::style::{Palette, block_for};
+use crate::render::transcript;
+use crate::render::wrap::text as wrap_text;
+use uji_engine::session::model::{Message, StoredMessage};
 
 pub(crate) struct Messages<'a> {
     pub(crate) window: &'a WindowSpec,
@@ -158,11 +158,11 @@ fn push_builtin(lines: &mut Vec<Line<'static>>, block: Block<'_>, width: usize, 
     }
 }
 
-fn push_custom(lines: &mut Vec<Line<'static>>, custom: &[uji_screen::model::Line], width: usize) {
+fn push_custom(lines: &mut Vec<Line<'static>>, custom: &[crate::model::Line], width: usize) {
     lines.extend(custom.iter().flat_map(|line| {
-        crate::ui::buffer::wrap_line(line, width)
+        crate::render::buffer::wrap_line(line, width)
             .into_iter()
-            .map(|wrapped| crate::ui::buffer::line_to_ratatui(&wrapped, width))
+            .map(|wrapped| crate::render::buffer::line_to_ratatui(&wrapped, width))
     }));
 }
 
@@ -353,7 +353,7 @@ fn split_committed(pending: &str) -> (&str, &str) {
 }
 
 fn push_markdown(lines: &mut Vec<Line<'static>>, text: &str, width: usize, palette: Palette) {
-    for mut line in crate::ui::markdown::render(text, width.saturating_sub(1), palette) {
+    for mut line in crate::render::markdown::render(text, width.saturating_sub(1), palette) {
         line.spans.insert(0, Span::raw(" "));
         lines.push(line);
     }

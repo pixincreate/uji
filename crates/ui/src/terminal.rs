@@ -8,7 +8,7 @@ use crossterm::{
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::app::App;
-use crate::ui;
+use crate::render;
 
 const ENABLE_MOUSE: &str = "\x1b[?1000h\x1b[?1002h\x1b[?1006h";
 const DISABLE_MOUSE: &str = "\x1b[?1006l\x1b[?1002l\x1b[?1000l";
@@ -43,5 +43,7 @@ pub fn resume(terminal: &mut Term) -> io::Result<()> {
 }
 
 pub fn draw(terminal: &mut Term, app: &App) -> io::Result<()> {
-    terminal.draw(|frame| ui::render(frame, app)).map(|_| ())
+    terminal
+        .draw(|frame| render::render(frame, app))
+        .map(|_| ())
 }
