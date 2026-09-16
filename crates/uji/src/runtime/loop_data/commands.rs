@@ -2,8 +2,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::api::modal::Answer;
-use uji_engine::credential;
-use uji_engine::llm::Provider;
+use uji_agent::credential;
+use uji_agent::llm::Provider;
 use uji_ui::app::{Echo, SuggestItem};
 
 use super::{Control, LoopData, ModalInput};
@@ -11,7 +11,7 @@ use crate::api::request::Request;
 use crate::cmd::{Action, Args, Context};
 use crate::runtime::builtin::{self, BUILTINS};
 use crate::runtime::events;
-use uji_engine::session::store::Setting;
+use uji_agent::session::store::Setting;
 
 impl LoopData {
     pub(crate) fn refresh_suggestions(&mut self) {

@@ -5,8 +5,8 @@ use std::error::Error;
 use uji_ui::render::style::Palette;
 
 use crate::runtime::{Runtime, events};
-use uji_engine::session::model::Session;
-use uji_engine::session::store::SessionStorage;
+use uji_agent::session::model::Session;
+use uji_agent::session::store::SessionStorage;
 
 pub fn run(mut storage: Box<dyn SessionStorage>) -> Result<(), Box<dyn Error>> {
     let current_dir = std::env::current_dir().map_or_else(

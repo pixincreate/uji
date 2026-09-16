@@ -21,8 +21,8 @@ use std::rc::Rc;
 use crate::keymap;
 use crate::state::UiState;
 
-use uji_engine::session::conversation::{Conversation, Shared};
-use uji_engine::session::model::{Message, Session};
+use uji_agent::session::conversation::{Conversation, Shared};
+use uji_agent::session::model::{Message, Session};
 
 pub struct App {
     session: Session,

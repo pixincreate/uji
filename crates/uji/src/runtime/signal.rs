@@ -1,4 +1,4 @@
-use uji_engine::llm::StreamEvent;
+use uji_agent::llm::StreamEvent;
 
 use super::auth::AuthEvent;
 use super::background::{CompactEvent, TitleEvent};

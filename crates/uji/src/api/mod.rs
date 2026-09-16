@@ -31,7 +31,7 @@ use std::rc::Rc;
 use mlua::{Lua, Table, Value};
 
 use self::action::Actions;
-use uji_engine::session::conversation::Shared;
+use uji_agent::session::conversation::Shared;
 use uji_ui::state::UiState;
 
 use self::handlers::Handlers;
@@ -41,7 +41,7 @@ use self::registry::Registry;
 use self::scheduled::Scheduled;
 use self::session::SessionState;
 use self::tools::LuaTool;
-use uji_engine::llm::Catalog;
+use uji_agent::llm::Catalog;
 use uji_ui::keymap::Keymap;
 
 pub struct Api {

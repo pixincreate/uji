@@ -1,8 +1,8 @@
 use mlua::{LuaSerdeExt, Value as LuaValue};
-use uji_engine::llm::ToolDecision;
-use uji_engine::llm::{LuaToolSpec, ToolSpec};
-use uji_engine::session::model::ToolCall;
-use uji_engine::tools::policy::Action;
+use uji_agent::llm::ToolDecision;
+use uji_agent::llm::{LuaToolSpec, ToolSpec};
+use uji_agent::session::model::ToolCall;
+use uji_agent::tools::policy::Action;
 
 use super::{LoopData, ToolApproval};
 use crate::runtime::events;
@@ -78,7 +78,7 @@ impl LoopData {
                 let _ = reply.send(ToolDecision::Deny { reason });
             }
             ToolApproval::Ask { title } => {
-                let prompt = uji_engine::tools::prompt::describe(&tool.name, &final_args);
+                let prompt = uji_agent::tools::prompt::describe(&tool.name, &final_args);
                 self.pending_tool = Some((final_args, reply));
                 self.app
                     .open_confirm(title.unwrap_or(prompt.question), prompt.detail);

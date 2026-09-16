@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-uji-engine = { path = "../engine" }
+uji-agent = { path = "../agent" }
 uji-ui = { path = "../ui" }
 strum = { version = "0.28.0", features = ["derive"] }
 mlua = { version = "0.12", features = ["lua54", "vendored", "serialize"] }

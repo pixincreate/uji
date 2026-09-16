@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use uji_engine::auth::{self, AuthError};
-use uji_engine::credential::{self, Credential};
-use uji_engine::llm::Provider;
+use uji_agent::auth::{self, AuthError};
+use uji_agent::credential::{self, Credential};
+use uji_agent::llm::Provider;
 
 use super::signal::Signal;
 

@@ -1,5 +1,5 @@
 use super::{Action, Args, Context};
-use uji_engine::session::store::Setting;
+use uji_agent::session::store::Setting;
 use uji_ui::app::Echo;
 
 const SUBSCRIPTION: &str = "Subscription (sign in with browser)";

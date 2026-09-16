@@ -1,8 +1,8 @@
 use strum::VariantArray;
-use uji_engine::llm::Effort;
+use uji_agent::llm::Effort;
 
 use super::{Action, Args, Context};
-use uji_engine::session::store::Setting;
+use uji_agent::session::store::Setting;
 
 #[derive(Default)]
 pub struct EffortPick;

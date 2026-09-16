@@ -1,6 +1,6 @@
 use ratatui::text::Line;
-use uji_engine::session::conversation::Conversation;
-use uji_engine::session::model::{Message, StoredMessage};
+use uji_agent::session::conversation::Conversation;
+use uji_agent::session::model::{Message, StoredMessage};
 
 use crate::app::renderer::Block;
 use crate::render::style::Palette;

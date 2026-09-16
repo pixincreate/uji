@@ -10,7 +10,7 @@ use crate::render::Surface;
 use crate::render::style::{Palette, block_for};
 use crate::render::transcript;
 use crate::render::wrap::text as wrap_text;
-use uji_engine::session::model::{Message, StoredMessage};
+use uji_agent::session::model::{Message, StoredMessage};
 
 pub(crate) struct Messages<'a> {
     pub(crate) window: &'a WindowSpec,

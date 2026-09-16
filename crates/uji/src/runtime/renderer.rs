@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use uji_engine::session::model::Message;
+use uji_agent::session::model::Message;
 use uji_ui::app::renderer::{Block, BlockRenderer};
 use uji_ui::model::Line;
 

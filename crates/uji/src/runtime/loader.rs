@@ -5,7 +5,7 @@ use std::rc::Rc;
 use crate::api::Api;
 use mlua::{Function, Integer, Lua, MultiValue, Table, Value};
 
-use uji_engine::config::MODULE_DIR;
+use uji_agent::config::MODULE_DIR;
 
 const INSERT_AFTER_PRELOAD: Integer = 2;
 

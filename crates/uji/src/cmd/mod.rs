@@ -30,8 +30,8 @@ impl Args {
         Self { raw, tokens }
     }
 }
-use uji_engine::llm::Provider;
-use uji_engine::session::store::Setting;
+use uji_agent::llm::Provider;
+use uji_agent::session::store::Setting;
 use uji_ui::app::Echo;
 
 pub trait Context {

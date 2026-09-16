@@ -5,16 +5,16 @@ use std::sync::Arc;
 
 use crate::api::Api;
 use mlua::Lua as LuaState;
-use uji_engine::session::conversation::Shared;
+use uji_agent::session::conversation::Shared;
 use uji_ui::state::UiState;
 
 use super::events;
 use super::policy;
 use crate::pack;
-use uji_engine::config::{self, DEFAULT_LUA};
-use uji_engine::llm::{Llm, NotConfigured};
-use uji_engine::session::store::SessionStorage;
-use uji_engine::tools::policy::ToolPolicy;
+use uji_agent::config::{self, DEFAULT_LUA};
+use uji_agent::llm::{Llm, NotConfigured};
+use uji_agent::session::store::SessionStorage;
+use uji_agent::tools::policy::ToolPolicy;
 
 use super::loader;
 
@@ -24,8 +24,8 @@ pub(crate) struct Inner {
     pub(crate) llm: RefCell<Arc<Llm>>,
     pub(crate) llm_model: RefCell<String>,
     pub(crate) llm_provider: RefCell<String>,
-    pub(crate) llm_effort: RefCell<uji_engine::llm::Effort>,
-    pub(crate) llm_cache: RefCell<uji_engine::llm::Retention>,
+    pub(crate) llm_effort: RefCell<uji_agent::llm::Effort>,
+    pub(crate) llm_cache: RefCell<uji_agent::llm::Retention>,
     pub(crate) client: Arc<reqwest::Client>,
     pub(crate) policy: RefCell<ToolPolicy>,
 }
@@ -164,7 +164,7 @@ impl Inner {
     pub(crate) fn resolve_llm(&self, storage: &mut dyn SessionStorage) {
         let selection = {
             let catalog = self.api.providers().borrow();
-            uji_engine::llm::resolve_from_storage(storage, &catalog)
+            uji_agent::llm::resolve_from_storage(storage, &catalog)
         };
         *self.llm.borrow_mut() = selection.llm;
         self.llm_model.borrow_mut().clone_from(&selection.model);

@@ -19,8 +19,8 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Instant;
 
-use uji_engine::llm::{CancelToken, StreamEvent, ToolDecision};
-use uji_engine::session::store::SessionStorage;
+use uji_agent::llm::{CancelToken, StreamEvent, ToolDecision};
+use uji_agent::session::store::SessionStorage;
 use uji_ui::app::App;
 
 use crate::cmd::{Action, LuaAction};

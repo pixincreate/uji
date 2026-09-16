@@ -8,7 +8,7 @@ serde = { version = "1", features = ["derive"] }
 base64 = "0.22"
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
 nucleo-matcher = "0.3"
-uji-engine = { path = "../engine" }
+uji-agent = { path = "../agent" }
 ratatui = "0.30"
 crossterm = "0.29"
 serde_json = "1"

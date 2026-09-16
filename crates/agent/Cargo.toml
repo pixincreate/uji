@@ -1,5 +1,5 @@
 [package]
-name = "uji-engine"
+name = "uji-agent"
 version.workspace = true
 edition.workspace = true
 

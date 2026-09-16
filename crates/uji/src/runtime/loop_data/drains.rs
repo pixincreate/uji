@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use crate::api::modal::{Answer, ModalKind, ModalRequest};
 use mlua::Value as LuaValue;
-use uji_engine::llm::{CancelToken, StreamEvent};
+use uji_agent::llm::{CancelToken, StreamEvent};
 use uji_ui::model::RunState;
 
 use uji_ui::app::Echo;

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use uji_engine::llm::context::{self, Cut};
-use uji_engine::llm::{Llm, Usage, summary, title};
-use uji_engine::session::model::{Message, StoredMessage};
+use uji_agent::llm::context::{self, Cut};
+use uji_agent::llm::{Llm, Usage, summary, title};
+use uji_agent::session::model::{Message, StoredMessage};
 
 use super::signal::Signal;
 

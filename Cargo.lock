@@ -3754,12 +3754,12 @@ dependencies = [
  "strum",
  "thiserror 2.0.20",
  "tokio",
- "uji-engine",
+ "uji-agent",
  "uji-ui",
 ]
 
 [[package]]
-name = "uji-engine"
+name = "uji-agent"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -3799,7 +3799,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum",
- "uji-engine",
+ "uji-agent",
 ]
 
 [[package]]

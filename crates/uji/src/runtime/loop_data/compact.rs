@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use uji_engine::llm::{Budget, context};
-use uji_engine::session::model::Message;
+use uji_agent::llm::{Budget, context};
+use uji_agent::session::model::Message;
 use uji_ui::model::{CompactionOpts, RunState};
 
 use super::LoopData;

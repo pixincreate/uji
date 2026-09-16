@@ -1,5 +1,5 @@
 use crate::model::Line;
-use uji_engine::session::model::StoredMessage;
+use uji_agent::session::model::StoredMessage;
 
 #[derive(Clone, Copy)]
 pub enum Block<'a> {

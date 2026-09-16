@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use mlua::{Lua, LuaSerdeExt, Table, Value as LuaValue};
-use uji_engine::llm::Provider;
+use uji_agent::llm::Provider;
 
 use super::Api;
 use crate::api::bind::bind;

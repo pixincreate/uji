@@ -16,13 +16,12 @@ fmt-apply:
 # Clippy with warnings denied, plus structural ast-grep rules.
 # The binary front-end (src/bin/) is excluded from the print rules — printing
 # is its job.
-lint:
+lint: scan
     cargo clippy --workspace --all-targets -- -D warnings
-    ast-grep scan crates/engine/src crates/ui/src crates/uji/src
 
 # Structural rules only.
 scan:
-    ast-grep scan crates/engine/src crates/ui/src crates/uji/src
+    ast-grep scan crates/agent/src crates/ui/src crates/uji/src
 
 # Unit + integration tests.
 test:

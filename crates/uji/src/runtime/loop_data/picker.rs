@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use uji_engine::tools::builtin::Roots;
+use uji_agent::tools::builtin::Roots;
 
 use super::LoopData;
 
@@ -111,7 +111,7 @@ impl LoopData {
         };
         let roots = self.tool_roots();
         let cwd = Path::new(&self.app.session().directory);
-        match uji_engine::tools::builtin::read_around(cwd, path, line, CONTEXT_LINES, &roots) {
+        match uji_agent::tools::builtin::read_around(cwd, path, line, CONTEXT_LINES, &roots) {
             Ok(lines) => lines,
             Err(err) => vec![err],
         }

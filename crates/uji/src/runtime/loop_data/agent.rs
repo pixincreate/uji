@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use uji_engine::llm::{AgentConfig, CancelToken, StreamEvent, run_agent};
-use uji_engine::session::model::Message;
+use uji_agent::llm::{AgentConfig, CancelToken, StreamEvent, run_agent};
+use uji_agent::session::model::Message;
 use uji_ui::model::RunState;
 
 use super::LoopData;
@@ -34,12 +34,12 @@ impl LoopData {
         let client = Arc::clone(&self.inner.client);
         let context = {
             let conversation = self.app.messages();
-            uji_engine::llm::context::build(conversation.messages())
+            uji_agent::llm::context::build(conversation.messages())
         };
         let system = {
             let state_rc = self.inner.state();
             let state = state_rc.borrow();
-            uji_engine::llm::system_prompt(
+            uji_agent::llm::system_prompt(
                 state.opts().agent_system_prompt.as_deref(),
                 &self.app.session().directory,
             )
@@ -50,9 +50,9 @@ impl LoopData {
             let access = self.inner.api.access().borrow();
             let extra = access.roots().to_vec();
             if access.confined() {
-                uji_engine::tools::builtin::Roots::confined(extra)
+                uji_agent::tools::builtin::Roots::confined(extra)
             } else {
-                uji_engine::tools::builtin::Roots::new(extra)
+                uji_agent::tools::builtin::Roots::new(extra)
             }
         };
         let cwd = self.app.session().directory.clone();
@@ -72,7 +72,7 @@ impl LoopData {
         }
         self.inner.emit(events::STATUS_CHANGED, &[]);
         self.runtime.spawn(async move {
-            let tools = uji_engine::tools::builtin_registry(roots);
+            let tools = uji_agent::tools::builtin_registry(roots);
             let config = AgentConfig {
                 client: &client,
                 provider: provider.as_ref(),

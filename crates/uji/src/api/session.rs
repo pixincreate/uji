@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use mlua::{Lua, Table};
-use uji_engine::llm::Usage;
-use uji_engine::session::conversation::Shared;
+use uji_agent::llm::Usage;
+use uji_agent::session::conversation::Shared;
 
 use crate::api::Api;
 use crate::api::bind::bind;
@@ -55,7 +55,7 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
                 let row = lua.create_table()?;
                 row.set("type", stored.message.type_name())?;
                 row.set("text", stored.message.text())?;
-                if let uji_engine::session::model::Message::Tool { name, .. } = &stored.message {
+                if let uji_agent::session::model::Message::Tool { name, .. } = &stored.message {
                     row.set("name", name.clone())?;
                 }
                 out.push(row)?;

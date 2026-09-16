@@ -7,7 +7,7 @@ use std::rc::Rc;
 use crate::api::Api;
 use mlua::{Function, Lua, Table, Value};
 
-use uji_engine::config;
+use uji_agent::config;
 
 use self::lock::{Entry, Lock};
 

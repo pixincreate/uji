@@ -30,9 +30,9 @@ use crossterm::event::Event as TermEvent;
 use uji_ui::state::UiState;
 
 use signal::Signal;
-use uji_engine::session::conversation::{Conversation, Shared};
-use uji_engine::session::model::Session;
-use uji_engine::session::store::SessionStorage;
+use uji_agent::session::conversation::{Conversation, Shared};
+use uji_agent::session::model::Session;
+use uji_agent::session::store::SessionStorage;
 use uji_ui::app::App;
 
 pub struct Runtime {
