@@ -37,7 +37,19 @@ pub struct LuaTool {
     pub description: String,
     pub parameters: LuaValue,
     pub subject: Option<String>,
+    /// Whether `run` answers later through `done` instead of returning.
+    pub defer: bool,
     pub run: Function,
+}
+
+/// The `done` a deferred tool is handed, to answer with once it has something.
+///
+/// It only posts the result; the loop matches it to the tool that is waiting.
+pub(crate) fn completion(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    bind(lua, api, move |api, _, text: String| {
+        api.request(crate::api::request::Request::ToolResult(text));
+        Ok(())
+    })
 }
 
 pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
@@ -47,6 +59,7 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
             .unwrap_or_default();
         let parameters = opts.get::<LuaValue>("parameters")?;
         let subject = opts.get::<Option<String>>("subject")?;
+        let defer = opts.get::<Option<bool>>("defer")?.unwrap_or(false);
         let run: Function = opts.get("run")?;
         api.lua_tools().borrow_mut().insert(
             name,
@@ -54,6 +67,7 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
                 description,
                 parameters,
                 subject,
+                defer,
                 run,
             },
         );

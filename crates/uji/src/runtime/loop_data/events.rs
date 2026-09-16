@@ -1,7 +1,7 @@
 use uji_agent::llm::StreamEvent;
 use uji_agent::session::model::Message;
 
-use super::LoopData;
+use super::{Awaiting, LoopData, ToolOutcome};
 use crate::runtime::events;
 
 impl LoopData {
@@ -87,8 +87,12 @@ impl LoopData {
                 arguments,
                 reply,
             } => {
-                let result = self.run_lua_tool(&name, &arguments);
-                let _ = reply.send(result);
+                match self.run_lua_tool(&name, &arguments) {
+                    ToolOutcome::Done(result) => {
+                        let _ = reply.send(result);
+                    }
+                    ToolOutcome::Pending => self.awaiting = Some(Awaiting::Result(reply)),
+                }
                 self.dirty = true;
             }
             StreamEvent::Done {

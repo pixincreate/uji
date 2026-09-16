@@ -5,7 +5,6 @@ mod error;
 pub mod events;
 pub mod frontend;
 mod inner;
-mod input;
 mod job;
 mod loader;
 mod loop_data;
@@ -26,7 +25,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use calloop::{EventLoop, LoopHandle};
-use crossterm::event::Event as TermEvent;
+use uji_ui::input::Input;
 use uji_ui::state::UiState;
 
 use signal::Signal;
@@ -105,7 +104,7 @@ impl Runtime {
         let mut app = App::new(session, conversation, inner.state());
         app.set_renderer(Rc::new(renderer::LuaRenderer::new(Rc::clone(&inner))));
 
-        let (keys, key_channel) = calloop::channel::channel::<TermEvent>();
+        let (keys, key_channel) = calloop::channel::channel::<Input>();
         let (signals, signal_channel) = calloop::channel::channel::<Signal>();
         let mut frontend: Box<dyn Frontend> = Box::new(frontend);
         frontend.start(keys)?;
@@ -121,7 +120,7 @@ impl Runtime {
             active: None,
             modal: None,
             action_done: false,
-            pending_tool: None,
+            awaiting: None,
             queued: VecDeque::new(),
             live_query: loop_data::LiveQuery::default(),
             cancel: None,
@@ -160,12 +159,12 @@ impl Runtime {
 
 fn install_sources(
     handle: &LoopHandle<'static, LoopData>,
-    keys: calloop::channel::Channel<TermEvent>,
+    keys: calloop::channel::Channel<Input>,
     signals: calloop::channel::Channel<Signal>,
 ) -> io::Result<()> {
     handle
         .insert_source(keys, |event, _meta, data: &mut LoopData| match event {
-            calloop::channel::Event::Msg(event) => data.on_term_event(&event),
+            calloop::channel::Event::Msg(event) => data.on_input(&event),
             calloop::channel::Event::Closed => data.control = Control::Quit,
         })
         .map_err(|err| io::Error::other(format!("register input source: {err}")))?;

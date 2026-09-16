@@ -149,8 +149,10 @@ impl LoopData {
                 }
                 Request::Modal(request) => self.open_modal(*request),
                 Request::Exec(command) => self.exec(&command),
+                Request::ToolResult(text) => self.finish_lua_tool(text),
                 Request::JobStart { id, command, cwd } => self.start_job(id, command, cwd),
                 Request::JobStop(id) => self.inner.api.jobs().borrow().stop(id),
+                Request::JobWrite { id, data } => self.inner.api.jobs().borrow().write(id, data),
                 Request::PickItems { items, token } => {
                     // Drop results whose query has already been superseded.
                     if token == self.inner.api.pick().borrow().token() {
@@ -208,14 +210,15 @@ impl LoopData {
 
     fn start_job(&mut self, id: u64, command: Vec<String>, cwd: Option<PathBuf>) {
         let cancel = CancelToken::new();
+        let (stdin, writes) = tokio::sync::mpsc::unbounded_channel();
         self.inner
             .api
             .jobs()
             .borrow_mut()
-            .attach(id, cancel.clone());
+            .attach(id, cancel.clone(), stdin);
         let sender = self.signals.clone();
         self.runtime
-            .spawn(job::run(id, command, cwd, cancel, move |event| {
+            .spawn(job::run(id, command, cwd, cancel, writes, move |event| {
                 let _ = sender.send(Signal::Job(event));
             }));
     }

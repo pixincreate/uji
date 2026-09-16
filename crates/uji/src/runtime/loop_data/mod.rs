@@ -42,6 +42,25 @@ enum ModalInput {
     Cancel,
 }
 
+/// What a Lua tool produced: the answer, or a promise to call `done` later.
+pub(super) enum ToolOutcome {
+    Done(String),
+    Pending,
+}
+
+/// The one reply the agent is blocked on.
+///
+/// Tool calls run strictly one at a time, so waiting for approval and waiting
+/// for a deferred result are two points in the same tool's life and never
+/// overlap.
+pub(crate) enum Awaiting {
+    Approval {
+        arguments: String,
+        reply: tokio::sync::oneshot::Sender<ToolDecision>,
+    },
+    Result(tokio::sync::oneshot::Sender<String>),
+}
+
 enum ToolApproval {
     Allow,
     Deny { reason: String },
@@ -60,7 +79,7 @@ pub(crate) struct LoopData {
     pub(crate) active: Option<Box<dyn Action>>,
     pub(crate) modal: Option<LuaAction>,
     pub(crate) action_done: bool,
-    pub(crate) pending_tool: Option<(String, tokio::sync::oneshot::Sender<ToolDecision>)>,
+    pub(crate) awaiting: Option<Awaiting>,
     pub(crate) queued: VecDeque<String>,
     pub(crate) live_query: LiveQuery,
     pub(crate) cancel: Option<CancelToken>,

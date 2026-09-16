@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent};
+use crate::keymap::{Chord, Key};
 
 use crate::model::Builtin;
 
@@ -11,7 +11,7 @@ const SELECT_PAGE: isize = 10;
 impl App {
     /// Keys go to the focused window; the modal window then picks the handler
     /// for whatever it is showing.
-    pub fn handle_key(&mut self, key: KeyEvent) -> KeyAction {
+    pub fn handle_key(&mut self, key: Chord) -> KeyAction {
         if self.focus() == Builtin::Input {
             return self.handle_normal_key(key);
         }
@@ -24,11 +24,11 @@ impl App {
         }
     }
 
-    fn handle_normal_key(&mut self, key: KeyEvent) -> KeyAction {
-        match key.code {
-            KeyCode::Esc if self.input().is_empty() => KeyAction::Interrupt,
-            KeyCode::Esc => self.apply(Action::ClearInput),
-            KeyCode::Char(c) => self.insert_char(c),
+    fn handle_normal_key(&mut self, key: Chord) -> KeyAction {
+        match key.key {
+            Key::Escape if self.input().is_empty() => KeyAction::Interrupt,
+            Key::Escape => self.apply(Action::ClearInput),
+            Key::Char(c) => self.insert_char(c),
             code => match default_action(code) {
                 Some(action) => self.apply(action),
                 None => KeyAction::None,
@@ -36,20 +36,20 @@ impl App {
         }
     }
 
-    fn handle_select_key(&mut self, key: KeyEvent) -> KeyAction {
-        if let Some(action) = modal_key(key.code).or_else(|| list_key(key.code)) {
+    fn handle_select_key(&mut self, key: Chord) -> KeyAction {
+        if let Some(action) = modal_key(key.key).or_else(|| list_key(key.key)) {
             return self.apply(action);
         }
-        match key.code {
-            KeyCode::PageUp => {
+        match key.key {
+            Key::PageUp => {
                 self.select_move(-SELECT_PAGE);
                 KeyAction::None
             }
-            KeyCode::PageDown => {
+            Key::PageDown => {
                 self.select_move(SELECT_PAGE);
                 KeyAction::None
             }
-            KeyCode::Char(c) => {
+            Key::Char(c) => {
                 if let Mode::Select { query, cursor, .. } | Mode::Pick { query, cursor, .. } =
                     &mut self.mode
                 {
@@ -59,7 +59,7 @@ impl App {
                 self.rerank();
                 KeyAction::None
             }
-            KeyCode::Backspace => {
+            Key::Backspace => {
                 if let Mode::Select { query, cursor, .. } | Mode::Pick { query, cursor, .. } =
                     &mut self.mode
                 {
@@ -73,18 +73,18 @@ impl App {
         }
     }
 
-    fn handle_prompt_key(&mut self, key: KeyEvent) -> KeyAction {
-        if let Some(action) = modal_key(key.code) {
+    fn handle_prompt_key(&mut self, key: Chord) -> KeyAction {
+        if let Some(action) = modal_key(key.key) {
             return self.apply(action);
         }
-        match key.code {
-            KeyCode::Backspace => {
+        match key.key {
+            Key::Backspace => {
                 if let Mode::Prompt { value, .. } = &mut self.mode {
                     value.pop();
                 }
                 KeyAction::None
             }
-            KeyCode::Char(c) => {
+            Key::Char(c) => {
                 if let Mode::Prompt { value, .. } = &mut self.mode {
                     value.push(c);
                 }
@@ -94,26 +94,26 @@ impl App {
         }
     }
 
-    fn handle_suggest_key(&mut self, key: KeyEvent) -> KeyAction {
-        if let Some(action) = modal_key(key.code).or_else(|| list_key(key.code)) {
+    fn handle_suggest_key(&mut self, key: Chord) -> KeyAction {
+        if let Some(action) = modal_key(key.key).or_else(|| list_key(key.key)) {
             return self.apply(action);
         }
-        match key.code {
-            KeyCode::Tab => self.apply(Action::SuggestComplete),
-            KeyCode::Char(c) => self.insert_char(c),
-            KeyCode::Backspace => self.backspace(),
+        match key.key {
+            Key::Tab => self.apply(Action::SuggestComplete),
+            Key::Char(c) => self.insert_char(c),
+            Key::Backspace => self.backspace(),
             _ => KeyAction::None,
         }
     }
 
-    fn handle_confirm_key(&mut self, key: KeyEvent) -> KeyAction {
-        if let Some(action) = modal_key(key.code).or_else(|| list_key(key.code)) {
+    fn handle_confirm_key(&mut self, key: Chord) -> KeyAction {
+        if let Some(action) = modal_key(key.key).or_else(|| list_key(key.key)) {
             return self.apply(action);
         }
-        match key.code {
-            KeyCode::Char('y' | 'Y' | '1') => self.apply(Action::ConfirmAllow),
-            KeyCode::Char('n' | 'N' | '2') => self.apply(Action::ConfirmDeny),
-            KeyCode::Left | KeyCode::Right | KeyCode::Tab => self.apply(Action::ConfirmToggle),
+        match key.key {
+            Key::Char('y' | 'Y' | '1') => self.apply(Action::ConfirmAllow),
+            Key::Char('n' | 'N' | '2') => self.apply(Action::ConfirmDeny),
+            Key::Left | Key::Right | Key::Tab => self.apply(Action::ConfirmToggle),
             _ => KeyAction::None,
         }
     }
@@ -367,19 +367,19 @@ fn step(cursor: usize, delta: isize, len: usize) -> usize {
 }
 
 /// Keys every modal answers the same way.
-fn modal_key(code: KeyCode) -> Option<Action> {
+fn modal_key(code: Key) -> Option<Action> {
     match code {
-        KeyCode::Esc => Some(Action::ModalCancel),
-        KeyCode::Enter => Some(Action::ModalAccept),
+        Key::Escape => Some(Action::ModalCancel),
+        Key::Enter => Some(Action::ModalAccept),
         _ => None,
     }
 }
 
 /// Navigation shared by the modals that show a list.
-fn list_key(code: KeyCode) -> Option<Action> {
+fn list_key(code: Key) -> Option<Action> {
     match code {
-        KeyCode::Up => Some(Action::ModalUp),
-        KeyCode::Down => Some(Action::ModalDown),
+        Key::Up => Some(Action::ModalUp),
+        Key::Down => Some(Action::ModalDown),
         _ => None,
     }
 }

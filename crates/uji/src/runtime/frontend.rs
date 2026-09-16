@@ -1,14 +1,12 @@
 use std::io;
 
 use calloop::channel::Sender;
-use crossterm::event::Event as TermEvent;
 use uji_ui::app::App;
+use uji_ui::input::{Input, Reader};
 use uji_ui::terminal;
 
-use super::input::Reader;
-
 pub trait Frontend {
-    fn start(&mut self, events: Sender<TermEvent>) -> io::Result<()>;
+    fn start(&mut self, events: Sender<Input>) -> io::Result<()>;
     fn draw(&mut self, app: &App) -> io::Result<()>;
     fn suspend(&mut self) -> io::Result<()>;
     fn resume(&mut self) -> io::Result<()>;
@@ -34,7 +32,7 @@ impl Terminal {
 }
 
 impl Frontend for Terminal {
-    fn start(&mut self, events: Sender<TermEvent>) -> io::Result<()> {
+    fn start(&mut self, events: Sender<Input>) -> io::Result<()> {
         self.term = Some(terminal::open()?);
         self.reader = Some(Reader::spawn(events));
         Ok(())

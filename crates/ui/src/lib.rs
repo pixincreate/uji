@@ -8,8 +8,10 @@
 pub mod app;
 pub mod clipboard;
 pub mod config;
+pub mod input;
 pub mod keymap;
 pub mod model;
 pub mod render;
+pub mod sessions;
 pub mod state;
 pub mod terminal;

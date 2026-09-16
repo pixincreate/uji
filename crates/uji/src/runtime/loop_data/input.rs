@@ -1,24 +1,23 @@
-use crossterm::event::{Event as TermEvent, KeyCode, KeyEvent, KeyModifiers};
 use uji_ui::app::{Action, KeyAction};
+use uji_ui::input::Input;
 use uji_ui::keymap::{Binding, Chord, Key, describe};
 
 use super::{Control, LoopData, ModalInput};
 
 impl LoopData {
-    pub(crate) fn on_term_event(&mut self, event: &TermEvent) {
-        match event {
-            TermEvent::Key(key) => self.on_key(*key),
-            TermEvent::Mouse(mouse) => self.on_mouse(*mouse),
-            TermEvent::Paste(text) => {
+    pub(crate) fn on_input(&mut self, input: &Input) {
+        match input {
+            Input::Key(chord) => self.on_key(*chord),
+            Input::Mouse { point, kind } => self.on_mouse(*point, *kind),
+            Input::Paste(text) => {
                 self.app.paste(text);
                 self.dirty = true;
             }
-            TermEvent::Resize(..) => self.dirty = true,
-            _ => {}
+            Input::Resize => self.dirty = true,
         }
     }
 
-    fn on_key(&mut self, key: KeyEvent) {
+    fn on_key(&mut self, key: Chord) {
         self.clear_selection();
         let Some(action) = self.dispatch_key(key) else {
             self.dirty = true;
@@ -45,14 +44,13 @@ impl LoopData {
         self.dirty = true;
     }
 
-    fn dispatch_key(&mut self, key: KeyEvent) -> Option<KeyAction> {
+    fn dispatch_key(&mut self, key: Chord) -> Option<KeyAction> {
         if self.inner.api.capture().is_active() {
             self.dispatch_capture(key);
             return None;
         }
         let mode = self.app.keymap_mode();
-        let binding = chord_of(key)
-            .and_then(|chord| self.inner.api.keymap().borrow().get(mode, chord).cloned());
+        let binding = self.inner.api.keymap().borrow().get(mode, key).cloned();
         match binding {
             Some(Binding::Unbound) => None,
             Some(Binding::Command(command)) => {
@@ -78,11 +76,8 @@ impl LoopData {
         }
     }
 
-    fn dispatch_capture(&mut self, key: KeyEvent) {
+    fn dispatch_capture(&mut self, chord: Chord) {
         let Some(handler) = self.inner.api.capture().handler() else {
-            return;
-        };
-        let Some(chord) = chord_of(key) else {
             return;
         };
         let Ok(event) = self.inner.lua.create_table() else {
@@ -101,33 +96,4 @@ impl LoopData {
         }
         self.dirty = true;
     }
-}
-
-fn chord_of(key: KeyEvent) -> Option<Chord> {
-    let mapped = match key.code {
-        KeyCode::Char(c) => Key::Char(c),
-        KeyCode::Enter => Key::Enter,
-        KeyCode::Esc => Key::Escape,
-        KeyCode::Backspace => Key::Backspace,
-        KeyCode::Delete => Key::Delete,
-        KeyCode::Tab => Key::Tab,
-        KeyCode::BackTab => Key::BackTab,
-        KeyCode::Left => Key::Left,
-        KeyCode::Right => Key::Right,
-        KeyCode::Up => Key::Up,
-        KeyCode::Down => Key::Down,
-        KeyCode::Home => Key::Home,
-        KeyCode::End => Key::End,
-        KeyCode::PageUp => Key::PageUp,
-        KeyCode::PageDown => Key::PageDown,
-        KeyCode::Insert => Key::Insert,
-        KeyCode::F(number) => Key::F(number),
-        _ => return None,
-    };
-    Some(Chord::new(
-        mapped,
-        key.modifiers.contains(KeyModifiers::CONTROL),
-        key.modifiers.contains(KeyModifiers::ALT),
-        key.modifiers.contains(KeyModifiers::SHIFT),
-    ))
 }

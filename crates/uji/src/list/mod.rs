@@ -1,5 +1,3 @@
-mod ui;
-
 use std::error::Error;
 
 use uji_ui::render::style::Palette;
@@ -28,7 +26,7 @@ pub fn run(mut storage: Box<dyn SessionStorage>) -> Result<(), Box<dyn Error>> {
         Palette::of(&state.opts().theme)
     };
 
-    let Some(index) = ui::pick(&sessions, &current_dir, palette)? else {
+    let Some(index) = uji_ui::sessions::pick(&sessions, &current_dir, palette)? else {
         return Ok(());
     };
 

@@ -14,12 +14,19 @@ pub enum Request {
     Interrupt,
     Modal(Box<modal::ModalRequest>),
     Answer(modal::Answer),
+    /// What a deferred tool finally produced, from its `done` callback.
+    ToolResult(String),
     JobStart {
         id: u64,
         command: Vec<String>,
         cwd: Option<PathBuf>,
     },
     JobStop(u64),
+    /// Data for a job's stdin; `None` closes it.
+    JobWrite {
+        id: u64,
+        data: Option<String>,
+    },
     /// Fresh candidates for a live picker, tagged with the query they answer.
     PickItems {
         items: Vec<String>,

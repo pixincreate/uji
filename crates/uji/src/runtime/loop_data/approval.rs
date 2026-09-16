@@ -4,12 +4,15 @@ use uji_agent::llm::{LuaToolSpec, ToolSpec};
 use uji_agent::session::model::ToolCall;
 use uji_agent::tools::policy::Action;
 
-use super::{LoopData, ToolApproval};
+use super::{Awaiting, LoopData, ToolApproval, ToolOutcome};
 use crate::runtime::events;
 
 impl LoopData {
     pub(super) fn resolve_tool_confirmation(&mut self, allow: bool) {
-        if let Some((arguments, reply)) = self.pending_tool.take() {
+        let waiting = self
+            .awaiting
+            .take_if(|awaiting| matches!(awaiting, Awaiting::Approval { .. }));
+        if let Some(Awaiting::Approval { arguments, reply }) = waiting {
             let decision = if allow {
                 ToolDecision::Allow { arguments }
             } else {
@@ -79,7 +82,10 @@ impl LoopData {
             }
             ToolApproval::Ask { title } => {
                 let prompt = uji_agent::tools::prompt::describe(&tool.name, &final_args);
-                self.pending_tool = Some((final_args, reply));
+                self.awaiting = Some(Awaiting::Approval {
+                    arguments: final_args,
+                    reply,
+                });
                 self.app
                     .open_confirm(title.unwrap_or(prompt.question), prompt.detail);
                 self.dirty = true;
@@ -108,20 +114,45 @@ impl LoopData {
         tools
     }
 
-    pub(super) fn run_lua_tool(&self, name: &str, arguments: &str) -> String {
+    pub(super) fn run_lua_tool(&self, name: &str, arguments: &str) -> ToolOutcome {
         let args: serde_json::Value =
             serde_json::from_str(arguments).unwrap_or(serde_json::Value::Null);
         let Ok(args) = self.inner.lua.to_value(&args) else {
-            return String::from("error: failed to convert arguments");
+            return ToolOutcome::Done(String::from("error: failed to convert arguments"));
         };
         let tools = self.inner.api.lua_tools();
         let tools = tools.borrow();
         let Some(tool) = tools.get(name) else {
-            return format!("error: unknown tool {name}");
+            return ToolOutcome::Done(format!("error: unknown tool {name}"));
         };
-        match tool.run.call::<String>(args) {
-            Ok(text) => text,
-            Err(err) => format!("error: {err}"),
+        if !tool.defer {
+            return match tool.run.call::<String>(args) {
+                Ok(text) => ToolOutcome::Done(text),
+                Err(err) => ToolOutcome::Done(format!("error: {err}")),
+            };
+        }
+        let done = match crate::api::tools::completion(&self.inner.lua, &self.inner.api) {
+            Ok(done) => done,
+            Err(err) => return ToolOutcome::Done(format!("error: {err}")),
+        };
+        match tool.run.call::<()>((args, done)) {
+            Ok(()) => ToolOutcome::Pending,
+            Err(err) => ToolOutcome::Done(format!("error: {err}")),
+        }
+    }
+
+    /// Hand a deferred tool's answer to whatever is waiting for it.
+    pub(super) fn finish_lua_tool(&mut self, text: String) {
+        let waiting = self
+            .awaiting
+            .take_if(|awaiting| matches!(awaiting, Awaiting::Result(_)));
+        match waiting {
+            Some(Awaiting::Result(reply)) => {
+                let _ = reply.send(text);
+            }
+            _ => self
+                .inner
+                .report(String::from("tool done() called with no tool waiting")),
         }
     }
 }

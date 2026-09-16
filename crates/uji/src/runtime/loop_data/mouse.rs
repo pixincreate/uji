@@ -1,36 +1,34 @@
 use std::time::Instant;
 
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use uji_ui::app::selection::Point;
 use uji_ui::clipboard::{self, Copied};
+use uji_ui::input::MouseKind;
 
 use super::LoopData;
 
 const SCROLL_LINES: usize = 3;
 
 impl LoopData {
-    pub(super) fn on_mouse(&mut self, mouse: MouseEvent) {
-        let point = Point::new(mouse.column, mouse.row);
-        match mouse.kind {
-            MouseEventKind::ScrollUp => self.app.scroll_up(SCROLL_LINES),
-            MouseEventKind::ScrollDown => self.app.scroll_down(SCROLL_LINES),
-            MouseEventKind::Down(MouseButton::Left) => {
+    pub(super) fn on_mouse(&mut self, point: Point, kind: MouseKind) {
+        match kind {
+            MouseKind::ScrollUp => self.app.scroll_up(SCROLL_LINES),
+            MouseKind::ScrollDown => self.app.scroll_down(SCROLL_LINES),
+            MouseKind::Press => {
                 self.app
                     .overlay()
                     .screen()
                     .borrow_mut()
                     .press(point, Instant::now());
             }
-            MouseEventKind::Drag(MouseButton::Left) => {
+            MouseKind::Drag => {
                 self.app.overlay().screen().borrow_mut().drag(point);
             }
-            MouseEventKind::Up(MouseButton::Left) => {
+            MouseKind::Release => {
                 let text = self.app.overlay().screen().borrow_mut().release();
                 if let Some(text) = text {
                     self.copy(&text);
                 }
             }
-            _ => return,
         }
         self.dirty = true;
     }

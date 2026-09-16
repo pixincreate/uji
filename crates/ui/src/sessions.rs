@@ -11,16 +11,21 @@ use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table};
 
 use uji_agent::session::id::now_millis;
 use uji_agent::session::model::Session;
-use uji_ui::render::style::Palette;
-use uji_ui::terminal::{self, Term};
 
-pub(super) struct State {
+use crate::render::style::Palette;
+use crate::terminal::{self, Term};
+
+struct State {
     cursor: usize,
     selected: Option<usize>,
     running: bool,
 }
 
-pub(super) fn pick(
+/// Full-screen picker for resuming a session, drawn before the app starts.
+///
+/// Owns its own terminal and event loop: at this point there is no `App` to
+/// drive, only a list to choose from.
+pub fn pick(
     sessions: &[Session],
     current_dir: &str,
     palette: Palette,

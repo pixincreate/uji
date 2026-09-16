@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crossterm::event::KeyCode;
+use crate::keymap::Key;
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher};
 use strum::{EnumString, VariantNames};
@@ -98,18 +98,18 @@ impl App {
     }
 }
 
-pub(super) fn default_action(code: KeyCode) -> Option<Action> {
+pub(super) fn default_action(code: Key) -> Option<Action> {
     Some(match code {
-        KeyCode::Backspace => Action::Backspace,
-        KeyCode::Left => Action::CursorLeft,
-        KeyCode::Right => Action::CursorRight,
-        KeyCode::Up => Action::HistoryPrev,
-        KeyCode::Down => Action::HistoryNext,
-        KeyCode::PageUp => Action::PageUp,
-        KeyCode::PageDown => Action::PageDown,
-        KeyCode::Home => Action::ScrollTop,
-        KeyCode::End => Action::ScrollBottom,
-        KeyCode::Enter => Action::Submit,
+        Key::Backspace => Action::Backspace,
+        Key::Left => Action::CursorLeft,
+        Key::Right => Action::CursorRight,
+        Key::Up => Action::HistoryPrev,
+        Key::Down => Action::HistoryNext,
+        Key::PageUp => Action::PageUp,
+        Key::PageDown => Action::PageDown,
+        Key::Home => Action::ScrollTop,
+        Key::End => Action::ScrollBottom,
+        Key::Enter => Action::Submit,
         _ => return None,
     })
 }

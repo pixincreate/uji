@@ -16,6 +16,7 @@ pulldown-cmark = { version = "0.13.4", default-features = false }
 chrono-humanize = "0.2.3"
 chrono = { version = "0.4.45", default-features = false }
 strum = { version = "0.28.0", features = ["derive"] }
+calloop = "0.14.4"
 
 [lints]
 workspace = true

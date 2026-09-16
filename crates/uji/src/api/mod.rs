@@ -7,6 +7,7 @@ pub mod event;
 pub mod handlers;
 pub mod input;
 pub mod job;
+pub mod json;
 pub mod keymap;
 pub mod llm;
 pub mod modal;
@@ -250,6 +251,7 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     status.set("segments", status::segments(lua, api)?)?;
     uji.set("status", status)?;
 
+    uji.set("json", json::register(lua, api)?)?;
     uji.set("schedule", schedule::schedule(lua, api)?)?;
     uji.set("on", event::on(lua, api)?)?;
     uji.set("emit", event::emit(lua, api)?)?;

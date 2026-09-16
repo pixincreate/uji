@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 use std::process::Stdio;
 
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use uji_agent::llm::CancelToken;
 
@@ -27,11 +28,15 @@ where
     lines.next_line().await.ok().flatten()
 }
 
+/// What to put on a job's stdin. `None` closes it, so the child sees EOF.
+pub(crate) type Write = Option<String>;
+
 pub(crate) async fn run(
     id: u64,
     command: Vec<String>,
     cwd: Option<PathBuf>,
     cancel: CancelToken,
+    mut writes: UnboundedReceiver<Write>,
     send: impl Fn(JobEvent) + Send + 'static,
 ) {
     let Some((program, args)) = command.split_first() else {
@@ -39,8 +44,11 @@ pub(crate) async fn run(
         return;
     };
     let mut builder = tokio::process::Command::new(program);
+    // stdin is piped even when nothing writes to it: inheriting it would let a
+    // child read the keys meant for uji.
     builder
         .args(args)
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if let Some(cwd) = cwd {
@@ -60,6 +68,7 @@ pub(crate) async fn run(
 
     let mut stdout = child.stdout.take().map(|pipe| BufReader::new(pipe).lines());
     let mut stderr = child.stderr.take().map(|pipe| BufReader::new(pipe).lines());
+    let mut stdin = child.stdin.take();
 
     loop {
         tokio::select! {
@@ -73,6 +82,18 @@ pub(crate) async fn run(
                 match line {
                     Some(line) => send(JobEvent::Stderr { id, line }),
                     None => stderr = None,
+                }
+            }
+            write = writes.recv(), if stdin.is_some() => {
+                match write {
+                    Some(Some(data)) => {
+                        if let Some(pipe) = stdin.as_mut()
+                            && pipe.write_all(data.as_bytes()).await.is_err() {
+                            stdin = None;
+                        }
+                    }
+                    // the sender is gone, or asked for EOF
+                    _ => stdin = None,
                 }
             }
             status = child.wait(), if stdout.is_none() && stderr.is_none() => {

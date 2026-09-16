@@ -120,6 +120,7 @@ impl LoopData {
 
     pub(super) fn stop_working(&mut self) {
         self.cancel = None;
+        self.awaiting = None;
         {
             let state_rc = self.inner.state();
             let mut state = state_rc.borrow_mut();

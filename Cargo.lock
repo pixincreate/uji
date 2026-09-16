@@ -3740,13 +3740,9 @@ name = "uji"
 version = "0.1.0"
 dependencies = [
  "calloop",
- "chrono",
- "chrono-humanize",
  "clap",
- "crossterm",
  "globset",
  "mlua",
- "ratatui",
  "regex",
  "reqwest",
  "serde",
@@ -3791,6 +3787,7 @@ version = "0.1.0"
 dependencies = [
  "arboard",
  "base64",
+ "calloop",
  "chrono",
  "chrono-humanize",
  "crossterm",
