@@ -9,6 +9,9 @@ mod input;
 mod model;
 mod mouse;
 mod persist;
+mod picker;
+
+pub(crate) use picker::LiveQuery;
 mod queue;
 
 use std::collections::VecDeque;
@@ -60,6 +63,7 @@ pub(crate) struct LoopData {
     pub(crate) action_done: bool,
     pub(crate) pending_tool: Option<(String, tokio::sync::oneshot::Sender<ToolDecision>)>,
     pub(crate) queued: VecDeque<String>,
+    pub(crate) live_query: LiveQuery,
     pub(crate) cancel: Option<CancelToken>,
     pub(crate) deferred: VecDeque<StreamEvent>,
     pub(crate) last_reveal: Instant,

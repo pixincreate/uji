@@ -123,6 +123,7 @@ impl Runtime {
             action_done: false,
             pending_tool: None,
             queued: VecDeque::new(),
+            live_query: loop_data::LiveQuery::default(),
             cancel: None,
             deferred: VecDeque::new(),
             last_reveal: std::time::Instant::now(),

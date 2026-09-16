@@ -8,6 +8,7 @@ use crate::api::request::Request;
 
 pub enum ModalKind {
     Select { items: Vec<String> },
+    Pick { items: Vec<String>, live: bool },
     Prompt { value: String, hidden: bool },
 }
 
@@ -35,6 +36,47 @@ pub fn select(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
                 kind: ModalKind::Select { items },
                 on_done,
             })));
+            Ok(())
+        },
+    )
+}
+
+/// A picker: fuzzy-filtered results with a preview of the highlighted one.
+///
+/// `preview` overrides the built-in `path:line:` previewer; `on_query` makes the
+/// item list live, re-fetched per keystroke.
+pub fn pick(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    bind(
+        lua,
+        api,
+        move |api, _, (opts, on_done): (Table, Function)| {
+            let items = opts
+                .get::<Option<Vec<String>>>("items")?
+                .unwrap_or_default();
+            let preview = opts.get::<Option<Function>>("preview")?;
+            let on_query = opts.get::<Option<Function>>("on_query")?;
+            api.pick().borrow_mut().open(preview, on_query.clone());
+            api.request(Request::Modal(Box::new(ModalRequest {
+                title: title_of(&opts)?,
+                kind: ModalKind::Pick {
+                    items,
+                    live: on_query.is_some(),
+                },
+                on_done,
+            })));
+            Ok(())
+        },
+    )
+}
+
+/// Hand a live picker the results for a query. `token` is what `on_query` was
+/// given; results for a superseded query are dropped.
+pub fn pick_items(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    bind(
+        lua,
+        api,
+        move |api, _, (items, token): (Vec<String>, u64)| {
+            api.request(Request::PickItems { items, token });
             Ok(())
         },
     )

@@ -6,6 +6,32 @@ use mlua::{Function, Lua, Table, Value as LuaValue};
 use super::Api;
 use crate::api::bind::bind;
 
+/// Where file tools may reach: the working directory plus any granted roots,
+/// and whether that set is enforced at all.
+#[derive(Default)]
+pub struct Access {
+    roots: Vec<PathBuf>,
+    confined: bool,
+}
+
+impl Access {
+    pub fn roots(&self) -> &[PathBuf] {
+        &self.roots
+    }
+
+    pub fn set_roots(&mut self, roots: Vec<PathBuf>) {
+        self.roots = roots;
+    }
+
+    pub fn confined(&self) -> bool {
+        self.confined
+    }
+
+    pub fn set_confined(&mut self, confined: bool) {
+        self.confined = confined;
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct LuaTool {
     pub description: String,
@@ -48,7 +74,7 @@ pub fn roots(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
             .iter()
             .map(|path| PathBuf::from(expand(path)))
             .collect();
-        *api.tool_roots().borrow_mut() = expanded;
+        api.access().borrow_mut().set_roots(expanded);
         Ok(())
     })
 }
@@ -56,7 +82,7 @@ pub fn roots(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 pub fn list_roots(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(lua, api, move |api, lua, ()| {
         let out = lua.create_table()?;
-        for (at, root) in api.tool_roots().borrow().iter().enumerate() {
+        for (at, root) in api.access().borrow().roots().iter().enumerate() {
             out.set(at + 1, root.display().to_string())?;
         }
         Ok(out)
@@ -65,8 +91,10 @@ pub fn list_roots(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 
 pub fn confine(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(lua, api, move |api, _, enabled: Option<bool>| {
-        api.set_tool_confined(enabled.unwrap_or(true));
-        Ok(api.tool_confined())
+        api.access()
+            .borrow_mut()
+            .set_confined(enabled.unwrap_or(true));
+        Ok(api.access().borrow().confined())
     })
 }
 

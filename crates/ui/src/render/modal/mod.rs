@@ -4,6 +4,7 @@ use crate::render::Render;
 use crate::render::Surface;
 
 pub(crate) mod confirm;
+mod pick;
 mod prompt;
 mod select;
 mod suggest;
@@ -12,7 +13,9 @@ pub(crate) struct Modal;
 
 pub(crate) fn rows(ctx: &Context<'_>, _width: u16) -> Option<u16> {
     match ctx.app.mode() {
-        Mode::Normal | Mode::Confirm { .. } => None,
+        // Confirm takes over the frame; a picker draws into its own float.
+        // Neither claims strip rows.
+        Mode::Normal | Mode::Confirm { .. } | Mode::Pick { .. } => None,
         Mode::Select { matches, .. } => {
             let matches = matches.len();
             let visible = matches.min(select::MAX_ROWS);
@@ -53,6 +56,25 @@ impl Render for Modal {
                     query,
                     cursor: *cursor,
                     matches,
+                }
+                .render(ctx, surface);
+            }
+            Mode::Pick {
+                title,
+                items,
+                query,
+                cursor,
+                matches,
+                preview,
+                ..
+            } => {
+                pick::Pick {
+                    title,
+                    items,
+                    query,
+                    cursor: *cursor,
+                    matches,
+                    preview,
                 }
                 .render(ctx, surface);
             }

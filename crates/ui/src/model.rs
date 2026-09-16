@@ -145,6 +145,29 @@ pub enum Border {
     Horizontal,
 }
 
+/// A centred overlay, sized as a fraction of the frame or in cells.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Float {
+    pub width: Extent,
+    pub height: Extent,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Extent {
+    /// Percent of the frame, 1-100.
+    Percent(u16),
+    Cells(u16),
+}
+
+impl Extent {
+    pub fn resolve(self, available: u16) -> u16 {
+        match self {
+            Self::Percent(percent) => available.saturating_mul(percent.min(100)) / 100,
+            Self::Cells(cells) => cells.min(available),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Size {
     Fill,
@@ -166,6 +189,7 @@ pub const WIN_DEFAULT_PRIORITY: i64 = 50;
 #[derive(Debug, Clone, PartialEq)]
 pub struct WinOpts {
     pub priority: i64,
+    pub float: Option<Float>,
     pub split: Split,
     pub size: Size,
     pub border: Border,
@@ -179,6 +203,7 @@ impl Default for WinOpts {
     fn default() -> Self {
         Self {
             priority: WIN_DEFAULT_PRIORITY,
+            float: None,
             split: Split::Top,
             size: Size::Fill,
             border: Border::None,

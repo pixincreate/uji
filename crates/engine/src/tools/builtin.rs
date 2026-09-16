@@ -739,3 +739,33 @@ fn collect(buffer: &mut String, line: &str, progress: &Progress) {
 fn broken_pipe() -> std::io::Error {
     std::io::Error::other("command produced no output stream")
 }
+
+/// Read `lines` of context centred on `line`, for previewing a search hit.
+///
+/// Goes through the same [`resolve`] confinement as the file tools, so a
+/// preview can never reach somewhere a tool could not.
+pub fn read_around(
+    cwd: &Path,
+    path: &str,
+    line: usize,
+    lines: usize,
+    roots: &Roots,
+) -> Result<Vec<String>, String> {
+    let target = resolve(cwd, path, roots)?;
+    let bytes = target
+        .dir
+        .read(&target.rel)
+        .map_err(|err| fs_error("read", path, cwd, &err))?;
+    if is_probably_binary(&bytes) {
+        return Err(format!("{path} looks like a binary file"));
+    }
+    let text = String::from_utf8_lossy(&bytes);
+    let start = line.saturating_sub(1).saturating_sub(lines / 4);
+    Ok(text
+        .lines()
+        .enumerate()
+        .skip(start)
+        .take(lines)
+        .map(|(at, text)| format!("{:>5}| {text}", at.saturating_add(1)))
+        .collect())
+}

@@ -101,7 +101,14 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
             None => blit(&mut surface, window, palette),
         }
     }
-    let area = modal_rect.unwrap_or_else(|| above(frame.area(), input_rect));
+    // A picker needs room; if no float was declared for the modal window, give
+    // it a centred slice of the frame rather than the usual strip.
+    let area = match modal_rect {
+        Some(rect) if !wants_float(&ctx) || rect.height >= MIN_PICK_ROWS => rect,
+        _ if wants_float(&ctx) => centered(frame.area()),
+        Some(rect) => rect,
+        None => above(frame.area(), input_rect),
+    };
     let mut surface = Surface::new(area, frame.buffer_mut());
     modal::Modal.render(&ctx, &mut surface);
 
@@ -109,6 +116,26 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
 }
 
 const MAX_INPUT_ROWS: u16 = 10;
+
+const MIN_PICK_ROWS: u16 = 10;
+
+fn wants_float(ctx: &Context<'_>) -> bool {
+    matches!(ctx.app.mode(), crate::app::Mode::Pick { .. })
+}
+
+/// The default picker area when the config did not declare a float.
+fn centered(area: Rect) -> Rect {
+    let width = area.width.saturating_mul(90) / 100;
+    let height = area.height.saturating_mul(80) / 100;
+    Rect {
+        x: area.x.saturating_add(area.width.saturating_sub(width) / 2),
+        y: area
+            .y
+            .saturating_add(area.height.saturating_sub(height) / 2),
+        width,
+        height,
+    }
+}
 
 fn fits(area: Rect, app: &App, state: &UiState) -> Vec<(u32, u16)> {
     let rects = layout::layout(area, state.windows());

@@ -10,6 +10,7 @@ pub mod job;
 pub mod keymap;
 pub mod llm;
 pub mod modal;
+pub mod pick;
 pub mod provider;
 pub mod request;
 
@@ -22,7 +23,7 @@ pub mod status;
 pub mod tools;
 pub mod window;
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -58,8 +59,8 @@ pub struct Api {
     capture: Capture,
     session_state: SessionState,
     requests: RefCell<Vec<request::Request>>,
-    tool_roots: RefCell<Vec<PathBuf>>,
-    tool_confined: Cell<bool>,
+    pick: RefCell<pick::Pick>,
+    access: RefCell<tools::Access>,
     segments: Registry,
     agent_context: Registry,
     actions: Actions,
@@ -72,6 +73,7 @@ impl Api {
             scheduled: Scheduled::default(),
             handlers: RefCell::default(),
             commands: RefCell::default(),
+            access: RefCell::default(),
             tools: RefCell::default(),
             providers: RefCell::default(),
             keymap: RefCell::default(),
@@ -82,8 +84,7 @@ impl Api {
             capture: Capture::default(),
             session_state: SessionState::new(conversation),
             requests: RefCell::default(),
-            tool_roots: RefCell::default(),
-            tool_confined: Cell::new(false),
+            pick: RefCell::default(),
             segments: Registry::default(),
             agent_context: Registry::default(),
             actions: Actions::default(),
@@ -135,6 +136,11 @@ impl Api {
         self.requests.borrow_mut().push(request);
     }
 
+    /// The open picker's callbacks and query generation.
+    pub fn pick(&self) -> &RefCell<pick::Pick> {
+        &self.pick
+    }
+
     pub fn take_requests(&self) -> Vec<request::Request> {
         std::mem::take(&mut *self.requests.borrow_mut())
     }
@@ -173,16 +179,9 @@ impl Api {
         self.run(event, payload, Policy::All);
     }
 
-    pub fn tool_roots(&self) -> &RefCell<Vec<PathBuf>> {
-        &self.tool_roots
-    }
-
-    pub fn tool_confined(&self) -> bool {
-        self.tool_confined.get()
-    }
-
-    pub fn set_tool_confined(&self, confined: bool) {
-        self.tool_confined.set(confined);
+    /// Where file tools may reach, and whether they are confined to it.
+    pub fn access(&self) -> &RefCell<tools::Access> {
+        &self.access
     }
 
     pub fn has_handler(&self, event: &str) -> bool {
@@ -227,6 +226,8 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     ui.set("configure", window::configure(lua, api)?)?;
     ui.set("exec", window::exec(lua, api)?)?;
     ui.set("select", modal::select(lua, api)?)?;
+    ui.set("pick", modal::pick(lua, api)?)?;
+    ui.set("pick_items", modal::pick_items(lua, api)?)?;
     ui.set("prompt", modal::prompt(lua, api)?)?;
     uji.set("ui", ui)?;
 

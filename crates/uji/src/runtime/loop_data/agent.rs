@@ -47,8 +47,9 @@ impl LoopData {
         let system = self.with_agent_context(system);
         let lua_tools = self.gather_lua_tools();
         let roots = {
-            let extra = self.inner.api.tool_roots().borrow().clone();
-            if self.inner.api.tool_confined() {
+            let access = self.inner.api.access().borrow();
+            let extra = access.roots().to_vec();
+            if access.confined() {
                 uji_engine::tools::builtin::Roots::confined(extra)
             } else {
                 uji_engine::tools::builtin::Roots::new(extra)

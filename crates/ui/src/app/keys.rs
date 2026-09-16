@@ -1,5 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
+use crate::model::Builtin;
+
 use super::action::{Action, KeyAction, default_action, rank_items};
 use super::{App, Mode, sent};
 use std::rc::Rc;
@@ -7,9 +9,14 @@ use std::rc::Rc;
 const SELECT_PAGE: isize = 10;
 
 impl App {
+    /// Keys go to the focused window; the modal window then picks the handler
+    /// for whatever it is showing.
     pub fn handle_key(&mut self, key: KeyEvent) -> KeyAction {
+        if self.focus() == Builtin::Input {
+            return self.handle_normal_key(key);
+        }
         match self.mode {
-            Mode::Select { .. } => self.handle_select_key(key),
+            Mode::Select { .. } | Mode::Pick { .. } => self.handle_select_key(key),
             Mode::Prompt { .. } => self.handle_prompt_key(key),
             Mode::Suggest { .. } => self.handle_suggest_key(key),
             Mode::Confirm { .. } => self.handle_confirm_key(key),
@@ -43,7 +50,9 @@ impl App {
                 KeyAction::None
             }
             KeyCode::Char(c) => {
-                if let Mode::Select { query, cursor, .. } = &mut self.mode {
+                if let Mode::Select { query, cursor, .. } | Mode::Pick { query, cursor, .. } =
+                    &mut self.mode
+                {
                     query.push(c);
                     *cursor = 0;
                 }
@@ -51,7 +60,9 @@ impl App {
                 KeyAction::None
             }
             KeyCode::Backspace => {
-                if let Mode::Select { query, cursor, .. } = &mut self.mode {
+                if let Mode::Select { query, cursor, .. } | Mode::Pick { query, cursor, .. } =
+                    &mut self.mode
+                {
                     query.pop();
                     *cursor = 0;
                 }
@@ -214,7 +225,7 @@ impl App {
 
     pub(super) fn modal_accept(&mut self) -> KeyAction {
         match &self.mode {
-            Mode::Select { cursor, .. } => {
+            Mode::Select { cursor, .. } | Mode::Pick { cursor, .. } => {
                 let cursor = *cursor;
                 let item = self
                     .select_matches()
@@ -287,7 +298,7 @@ impl App {
 
     fn modal_move(&mut self, delta: isize) {
         match &mut self.mode {
-            Mode::Select { .. } => self.select_move(delta),
+            Mode::Select { .. } | Mode::Pick { .. } => self.select_move(delta),
             Mode::Suggest { items, cursor } => {
                 *cursor = step(*cursor, delta, items.len());
             }
@@ -297,12 +308,18 @@ impl App {
     }
 
     fn rerank(&mut self) {
-        let Mode::Select {
+        let (Mode::Select {
             items,
             query,
             matches,
             ..
-        } = &mut self.mode
+        }
+        | Mode::Pick {
+            items,
+            query,
+            matches,
+            ..
+        }) = &mut self.mode
         else {
             return;
         };
@@ -311,7 +328,7 @@ impl App {
 
     fn select_matches(&self) -> Vec<&String> {
         match &self.mode {
-            Mode::Select { items, matches, .. } => {
+            Mode::Select { items, matches, .. } | Mode::Pick { items, matches, .. } => {
                 matches.iter().filter_map(|at| items.get(*at)).collect()
             }
             _ => Vec::new(),
@@ -320,7 +337,7 @@ impl App {
 
     fn select_move(&mut self, delta: isize) {
         let len = self.select_matches().len();
-        if let Mode::Select { cursor, .. } = &mut self.mode {
+        if let Mode::Select { cursor, .. } | Mode::Pick { cursor, .. } = &mut self.mode {
             *cursor = step(*cursor, delta, len);
         }
     }
@@ -333,12 +350,19 @@ impl App {
     }
 }
 
+/// Move a modal cursor. Single steps cycle the list the way telescope does;
+/// page jumps clamp, so paging never teleports across the ends.
 fn step(cursor: usize, delta: isize, len: usize) -> usize {
+    if len == 0 {
+        return 0;
+    }
     let last = len.saturating_sub(1);
-    if delta < 0 {
-        cursor.saturating_sub(delta.unsigned_abs())
-    } else {
-        cursor.saturating_add(delta.unsigned_abs()).min(last)
+    let distance = delta.unsigned_abs();
+    match (distance, delta < 0) {
+        (1, true) if cursor == 0 => last,
+        (1, false) if cursor >= last => 0,
+        (_, true) => cursor.saturating_sub(distance),
+        (_, false) => cursor.saturating_add(distance).min(last),
     }
 }
 

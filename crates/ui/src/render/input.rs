@@ -4,6 +4,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 
 use crate::app::Mode;
+use crate::model::Builtin;
 use crate::render::Context;
 use crate::render::Render;
 use crate::render::Surface;
@@ -56,7 +57,12 @@ impl Input<'_> {
 
         let input = ctx.app.input();
         let cursor = input[..ctx.app.cursor_offset()].chars().count();
-        let display = with_cursor(input, cursor);
+        // Only the focused window draws a cursor.
+        let display = if ctx.app.focus() == Builtin::Input {
+            with_cursor(input, cursor)
+        } else {
+            input.chars().collect()
+        };
         let rows = wrap::ranges(&display, usize::from(inner.width));
         let cursor_row = rows
             .iter()

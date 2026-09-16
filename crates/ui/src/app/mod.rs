@@ -190,6 +190,79 @@ impl App {
         };
     }
 
+    pub fn open_pick(&mut self, title: String, items: Vec<String>, live: bool) {
+        let matches = (0..items.len()).collect();
+        self.mode = Mode::Pick {
+            title,
+            items,
+            query: String::new(),
+            cursor: 0,
+            matches,
+            preview: Vec::new(),
+            previewed: None,
+            live,
+        };
+    }
+
+    /// Replace a live picker's candidates with a fresh set from Lua.
+    pub fn set_pick_items(&mut self, next: Vec<String>) {
+        if let Mode::Pick {
+            items,
+            matches,
+            cursor,
+            previewed,
+            ..
+        } = &mut self.mode
+        {
+            *items = next;
+            *matches = (0..items.len()).collect();
+            *cursor = 0;
+            *previewed = None;
+        }
+    }
+
+    /// The query of an open live picker, if it has one.
+    pub fn live_query(&self) -> Option<&str> {
+        match &self.mode {
+            Mode::Pick { query, live, .. } if *live => Some(query.as_str()),
+            _ => None,
+        }
+    }
+
+    /// The item under the cursor, if a picker is open.
+    pub fn picked(&self) -> Option<(usize, &str)> {
+        let Mode::Pick {
+            items,
+            matches,
+            cursor,
+            ..
+        } = &self.mode
+        else {
+            return None;
+        };
+        let at = *matches.get(*cursor)?;
+        Some((*cursor, items.get(at)?.as_str()))
+    }
+
+    /// Whether the highlighted item still needs its preview fetched.
+    pub fn preview_pending(&self) -> bool {
+        matches!(&self.mode, Mode::Pick { cursor, previewed, matches, .. }
+            if !matches.is_empty() && *previewed != Some(*cursor))
+    }
+
+    pub fn set_preview(&mut self, lines: Vec<String>) {
+        if let Mode::Pick {
+            preview,
+            previewed,
+            cursor,
+            ..
+        } = &mut self.mode
+        {
+            *preview = lines;
+            *previewed = Some(*cursor);
+        }
+    }
+
     pub fn open_prompt(&mut self, title: String, value: String, echo: Echo) {
         self.mode = Mode::Prompt { title, value, echo };
     }
@@ -210,10 +283,15 @@ impl App {
         self.suggest_pool = items;
     }
 
+    /// The window that owns keys and the cursor.
+    pub fn focus(&self) -> crate::model::Builtin {
+        self.mode.focus()
+    }
+
     pub fn keymap_mode(&self) -> keymap::Mode {
         match self.mode {
             Mode::Normal => keymap::Mode::Normal,
-            Mode::Select { .. } => keymap::Mode::Select,
+            Mode::Select { .. } | Mode::Pick { .. } => keymap::Mode::Select,
             Mode::Prompt { .. } => keymap::Mode::Prompt,
             Mode::Suggest { .. } => keymap::Mode::Suggest,
             Mode::Confirm { .. } => keymap::Mode::Confirm,

@@ -12,4 +12,9 @@ pub enum Request {
     Interrupt,
     Modal(Box<modal::ModalRequest>),
     Answer(modal::Answer),
+    /// Fresh candidates for a live picker, tagged with the query they answer.
+    PickItems {
+        items: Vec<String>,
+        token: u64,
+    },
 }

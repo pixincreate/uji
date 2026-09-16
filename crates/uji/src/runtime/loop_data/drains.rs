@@ -37,6 +37,7 @@ impl LoopData {
         self.apply_composer();
         self.drain_requests();
         self.drain_jobs();
+        self.sync_picker();
         self.drain_diagnostics();
 
         for callback in self.inner.api.scheduled().take() {
@@ -149,6 +150,13 @@ impl LoopData {
                 }
                 Request::Modal(request) => self.open_modal(*request),
                 Request::Exec(command) => self.exec(&command),
+                Request::PickItems { items, token } => {
+                    // Drop results whose query has already been superseded.
+                    if token == self.inner.api.pick().borrow().token() {
+                        self.app.set_pick_items(items);
+                        self.dirty = true;
+                    }
+                }
             }
         }
     }
@@ -178,6 +186,7 @@ impl LoopData {
         self.modal = Some(LuaAction::new(request.on_done));
         match request.kind {
             ModalKind::Select { items } => self.app.open_select(request.title, items),
+            ModalKind::Pick { items, live } => self.app.open_pick(request.title, items, live),
             ModalKind::Prompt { value, hidden } => {
                 let echo = if hidden { Echo::Hidden } else { Echo::Plain };
                 self.app.open_prompt(request.title, value, echo);

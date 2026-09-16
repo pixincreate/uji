@@ -1,5 +1,5 @@
-use mlua::Value as LuaValue;
-use uji_ui::model::{Border, Color, Size, Split, WinOpts};
+use mlua::{Table, Value as LuaValue};
+use uji_ui::model::{Border, Color, Extent, Float, Size, Split, WinOpts};
 
 pub(crate) trait FromLuaValue: Sized {
     fn from_lua_value(value: &LuaValue) -> mlua::Result<Self>;
@@ -45,6 +45,12 @@ impl FromLuaValue for WinOpts {
         opts.title = table.get::<Option<String>>("title")?;
         opts.wrap = table.get::<Option<bool>>("wrap")?.unwrap_or(false);
         opts.padding = table.get::<Option<u16>>("padding")?.unwrap_or(0);
+        if let Some(float) = table.get::<Option<Table>>("float")? {
+            opts.float = Some(Float {
+                width: extent(&float, "width")?,
+                height: extent(&float, "height")?,
+            });
+        }
         if let Some(color) = table.get::<Option<String>>("border_color")? {
             opts.border_color = Some(
                 color
@@ -53,5 +59,33 @@ impl FromLuaValue for WinOpts {
             );
         }
         Ok(opts)
+    }
+}
+
+/// A float dimension: `"80%"` for a share of the frame, or an integer cell count.
+fn extent(table: &Table, key: &str) -> mlua::Result<Extent> {
+    let Some(value) = table.get::<Option<LuaValue>>(key)? else {
+        return Ok(Extent::Percent(80));
+    };
+    match value {
+        LuaValue::Integer(cells) => u16::try_from(cells)
+            .map(Extent::Cells)
+            .map_err(|_| mlua::Error::runtime(format!("float {key} must fit in a terminal"))),
+        LuaValue::String(text) => {
+            let text = text.to_str()?;
+            let percent = text
+                .trim()
+                .strip_suffix('%')
+                .and_then(|number| number.trim().parse::<u16>().ok())
+                .filter(|percent| (1..=100).contains(percent));
+            percent.map(Extent::Percent).ok_or_else(|| {
+                mlua::Error::runtime(format!(
+                    "float {key} must be \"1%\"..\"100%\" or a cell count"
+                ))
+            })
+        }
+        _ => Err(mlua::Error::runtime(format!(
+            "float {key} must be a percent string or a cell count"
+        ))),
     }
 }
