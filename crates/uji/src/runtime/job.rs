@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
 
@@ -17,27 +16,6 @@ impl JobEvent {
         match self {
             Self::Stdout { id, .. } | Self::Stderr { id, .. } | Self::Exit { id, .. } => *id,
         }
-    }
-}
-
-#[derive(Default)]
-pub(crate) struct Running {
-    tokens: HashMap<u64, CancelToken>,
-}
-
-impl Running {
-    pub(crate) fn insert(&mut self, id: u64, token: CancelToken) {
-        self.tokens.insert(id, token);
-    }
-
-    pub(crate) fn stop(&mut self, id: u64) {
-        if let Some(token) = self.tokens.remove(&id) {
-            token.cancel();
-        }
-    }
-
-    pub(crate) fn finish(&mut self, id: u64) {
-        self.tokens.remove(&id);
     }
 }
 

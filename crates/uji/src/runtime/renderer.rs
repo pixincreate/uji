@@ -24,7 +24,7 @@ impl LuaRenderer {
                 table.set("text", text).ok()?;
                 return Some(table);
             }
-            Block::Pending(text) => {
+            Block::Pending { text, .. } => {
                 table.set("type", "pending").ok()?;
                 table.set("text", text).ok()?;
                 return Some(table);
@@ -62,8 +62,12 @@ impl LuaRenderer {
 }
 
 impl BlockRenderer for LuaRenderer {
+    fn overrides(&self) -> bool {
+        self.inner.api.has_handler(events::RENDER_MESSAGE)
+    }
+
     fn render(&self, block: Block<'_>) -> Option<Vec<Line>> {
-        if !self.inner.api.has_handler(events::RENDER_MESSAGE) {
+        if !self.overrides() {
             return None;
         }
         let table = self.payload(block)?;

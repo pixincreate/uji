@@ -29,27 +29,91 @@ fn opens_tool_group(stored: &StoredMessage) -> bool {
     }
 }
 
+/// The message still streaming in.
+///
+/// Its text only ever grows, so the markdown before the last finished block
+/// renders once and is kept; each frame re-renders only the block still being
+/// written. Rendering the whole thing every frame instead costs O(length²)
+/// over a response, since every newline crossed re-parses everything so far.
 #[derive(Default)]
-struct Cached {
+struct Streamed {
     key: String,
+    settled: usize,
+    scanned: usize,
+    whole: bool,
     lines: Vec<Line<'static>>,
+    open: Vec<Line<'static>>,
 }
 
-impl Cached {
+impl Streamed {
     fn clear(&mut self) {
         self.key.clear();
+        self.settled = 0;
+        self.scanned = 0;
+        self.whole = false;
         self.lines.clear();
+        self.open.clear();
     }
 
-    fn get(&mut self, key: &str, render: impl FnOnce(&mut Vec<Line<'static>>)) -> &[Line<'static>] {
-        if self.key != key {
-            self.clear();
-            self.key.push_str(key);
-            if !key.is_empty() {
-                render(&mut self.lines);
-            }
+    /// Watch for a link reference definition, which forces whole-text renders
+    /// from then on. Only the tail is scanned, from the start of the line that
+    /// was still incomplete last frame.
+    fn scan(&mut self, text: &str) {
+        if self.whole {
+            return;
         }
-        &self.lines
+        if crate::render::markdown::defines_reference(&text[self.scanned..]) {
+            self.whole = true;
+            return;
+        }
+        self.scanned = text.rfind('\n').map_or(0, |at| at.saturating_add(1));
+    }
+
+    /// Re-render whatever changed since the last frame.
+    ///
+    /// `split` is false when a plugin overrides block rendering, since an
+    /// override has to be handed the message whole.
+    fn update(
+        &mut self,
+        text: &str,
+        split: bool,
+        render: impl Fn(&mut Vec<Line<'static>>, &str, bool),
+    ) {
+        if self.key == text {
+            return;
+        }
+        if !split || !text.starts_with(self.key.as_str()) {
+            self.clear();
+        }
+        self.scan(text);
+        self.key.clear();
+        self.key.push_str(text);
+        if text.is_empty() {
+            return;
+        }
+        if !split || self.whole {
+            self.settled = 0;
+            self.lines.clear();
+            self.open.clear();
+            render(&mut self.open, text, false);
+            return;
+        }
+        let grown = self
+            .settled
+            .saturating_add(crate::render::markdown::settled(&text[self.settled..]));
+        if grown > self.settled {
+            let continuing = !self.lines.is_empty();
+            render(&mut self.lines, &text[self.settled..grown], continuing);
+            self.settled = grown;
+        }
+        self.open.clear();
+        if self.settled < text.len() {
+            render(
+                &mut self.open,
+                &text[self.settled..],
+                !self.lines.is_empty(),
+            );
+        }
     }
 }
 
@@ -93,7 +157,14 @@ pub struct Rendered<'a> {
     pub notices: &'a [Line<'static>],
     pub queued: &'a [Line<'static>],
     pub folded: &'a [Line<'static>],
-    pub pending: &'a [Line<'static>],
+    pub settled: &'a [Line<'static>],
+    pub open: &'a [Line<'static>],
+}
+
+impl Rendered<'_> {
+    pub fn pending_len(&self) -> usize {
+        self.settled.len().saturating_add(self.open.len())
+    }
 }
 
 #[derive(Default)]
@@ -107,13 +178,14 @@ pub struct Transcript {
     lines: Vec<Line<'static>>,
     notices: CachedList,
     queued: CachedList,
-    pending: Cached,
+    pending: Streamed,
 }
 
 impl Transcript {
     pub(crate) fn frame(
         &mut self,
         input: &Input<'_>,
+        split: bool,
         render: impl Fn(&mut Vec<Line<'static>>, Block<'_>, usize),
     ) -> Rendered<'_> {
         if self.width != input.width
@@ -140,14 +212,23 @@ impl Transcript {
                 render(lines, Block::Queued(queued), width);
             }
         });
-        self.pending.get(input.pending, |lines| {
-            render(lines, Block::Pending(input.pending), width);
-        });
+        self.pending
+            .update(input.pending, split, |lines, chunk, continuing| {
+                render(
+                    lines,
+                    Block::Pending {
+                        text: chunk,
+                        continuing,
+                    },
+                    width,
+                );
+            });
         Rendered {
             notices: &self.notices.lines,
             queued: &self.queued.lines,
             folded: &self.lines,
-            pending: &self.pending.lines,
+            settled: &self.pending.lines,
+            open: &self.pending.open,
         }
     }
 

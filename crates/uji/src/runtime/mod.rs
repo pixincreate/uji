@@ -128,7 +128,6 @@ impl Runtime {
             deferred: VecDeque::new(),
             last_reveal: std::time::Instant::now(),
             config_dir,
-            jobs: job::Running::default(),
             runtime: tokio::runtime::Runtime::new()?,
         };
 

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::api::modal;
 
 /// Something a plugin asked the runtime to do, to be carried out on the next
@@ -12,6 +14,12 @@ pub enum Request {
     Interrupt,
     Modal(Box<modal::ModalRequest>),
     Answer(modal::Answer),
+    JobStart {
+        id: u64,
+        command: Vec<String>,
+        cwd: Option<PathBuf>,
+    },
+    JobStop(u64),
     /// Fresh candidates for a live picker, tagged with the query they answer.
     PickItems {
         items: Vec<String>,

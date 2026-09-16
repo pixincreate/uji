@@ -35,6 +35,7 @@ pub struct App {
     suggest_pool: Vec<SuggestItem>,
     overlay: overlay::Overlay,
     transcript: RefCell<crate::render::transcript::Transcript>,
+    typed: RefCell<crate::render::input::Layout>,
     renderer: Option<Rc<dyn renderer::BlockRenderer>>,
 }
 
@@ -51,6 +52,7 @@ impl App {
             suggest_pool: Vec::new(),
             overlay: overlay::Overlay::default(),
             transcript: RefCell::default(),
+            typed: RefCell::default(),
             renderer: None,
         }
     }
@@ -73,6 +75,14 @@ impl App {
 
     pub fn transcript(&self) -> RefMut<'_, crate::render::transcript::Transcript> {
         self.transcript.borrow_mut()
+    }
+
+    pub fn typed(&self) -> RefMut<'_, crate::render::input::Layout> {
+        self.typed.borrow_mut()
+    }
+
+    pub fn input_revision(&self) -> u64 {
+        self.composer.revision()
     }
 
     pub fn set_renderer(&mut self, renderer: Rc<dyn renderer::BlockRenderer>) {

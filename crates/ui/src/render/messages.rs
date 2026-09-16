@@ -1,7 +1,6 @@
 use crate::model::WindowSpec;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
 
 use crate::app::renderer::Block;
 use crate::render::Context;
@@ -31,6 +30,7 @@ impl Render for Messages<'_> {
         let pending = ctx.app.pending().unwrap_or_default();
         let (committed, partial) = split_committed(pending);
         let mut transcript = ctx.app.transcript();
+        let split = !renderer.is_some_and(|renderer| renderer.overrides());
         let parts = transcript.frame(
             &transcript::Input {
                 conversation: &conversation,
@@ -41,6 +41,7 @@ impl Render for Messages<'_> {
                 width,
                 palette,
             },
+            split,
             |lines, block, width| match renderer.and_then(|renderer| renderer.render(block)) {
                 Some(custom) => push_custom(lines, &custom, width),
                 None => push_builtin(lines, block, width, palette),
@@ -95,31 +96,31 @@ impl Render for Messages<'_> {
         let body_height = height.saturating_sub(queued.len());
         let total = above
             .saturating_add(lead.len())
-            .saturating_add(parts.pending.len())
+            .saturating_add(parts.pending_len())
             .saturating_add(tail.len());
         let start = ctx
             .app
             .resolve_scroll(total.saturating_sub(body_height), body_height);
         let end = start.saturating_add(body_height).min(total);
-        let mut window: Vec<Line<'static>> = parts
+        // Written straight into the buffer rather than through a `Paragraph`:
+        // these lines are already wrapped to `width`, and a paragraph re-walks
+        // every grapheme of every one of them to re-truncate it.
+        if let Some(block) = block {
+            surface.render_widget(block);
+        }
+        let visible = parts
             .notices
             .iter()
             .chain(gap.iter())
             .chain(parts.folded.iter())
             .chain(lead.iter())
-            .chain(parts.pending.iter())
+            .chain(parts.settled.iter())
+            .chain(parts.open.iter())
             .chain(tail.iter())
             .skip(start)
             .take(end.saturating_sub(start))
-            .cloned()
-            .collect();
-        window.extend(queued);
-        let paragraph = Paragraph::new(window);
-        let paragraph = match block {
-            Some(block) => paragraph.block(block),
-            None => paragraph,
-        };
-        surface.render_widget(paragraph);
+            .chain(queued.iter());
+        crate::render::write_lines(surface, inner, visible);
     }
 }
 
@@ -134,7 +135,9 @@ fn push_builtin(lines: &mut Vec<Line<'static>>, block: Block<'_>, width: usize, 
             Fill::Line,
         ),
         Block::Message(stored) => push_message(lines, stored, width, palette),
-        Block::Pending(text) => push_markdown(lines, text, width, palette),
+        Block::Pending { text, continuing } => {
+            push_markdown(lines, text, width, palette, continuing);
+        }
         Block::Thinking(text) => push_wrapped(
             lines,
             text,
@@ -184,7 +187,7 @@ pub(crate) fn push_message(
             text, tool_calls, ..
         } => {
             if !text.is_empty() {
-                push_markdown(lines, text, width, palette);
+                push_markdown(lines, text, width, palette, false);
             }
             for call in tool_calls {
                 if !text.is_empty() {
@@ -352,8 +355,15 @@ fn split_committed(pending: &str) -> (&str, &str) {
     }
 }
 
-fn push_markdown(lines: &mut Vec<Line<'static>>, text: &str, width: usize, palette: Palette) {
-    for mut line in crate::render::markdown::render(text, width.saturating_sub(1), palette) {
+fn push_markdown(
+    lines: &mut Vec<Line<'static>>,
+    text: &str,
+    width: usize,
+    palette: Palette,
+    continuing: bool,
+) {
+    let width = width.saturating_sub(1);
+    for mut line in crate::render::markdown::render_from(text, width, palette, continuing) {
         line.spans.insert(0, Span::raw(" "));
         lines.push(line);
     }

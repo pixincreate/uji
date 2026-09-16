@@ -4,7 +4,7 @@ use ratatui::Frame;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::text::Line as TLine;
-use ratatui::widgets::{Paragraph, Widget};
+use ratatui::widgets::Widget;
 
 use crate::app::App;
 
@@ -54,6 +54,27 @@ impl<'a> Surface<'a> {
 
 pub trait Render {
     fn render(&self, ctx: &Context<'_>, surface: &mut Surface<'_>);
+}
+
+/// Write already-wrapped lines into `area`, one per row.
+///
+/// Used instead of a `Paragraph`, which re-walks every grapheme of every line
+/// to re-truncate what is already the right width.
+pub(crate) fn write_lines<'a>(
+    surface: &mut Surface<'_>,
+    area: Rect,
+    lines: impl Iterator<Item = &'a TLine<'static>>,
+) {
+    let buf = surface.buf();
+    for (at, line) in lines.enumerate() {
+        let Ok(at) = u16::try_from(at) else {
+            break;
+        };
+        if at >= area.height {
+            break;
+        }
+        buf.set_line(area.x, area.y.saturating_add(at), line, area.width);
+    }
 }
 
 pub fn render(frame: &mut Frame<'_>, app: &App) {
@@ -162,7 +183,7 @@ fn fits(area: Rect, app: &App, state: &UiState) -> Vec<(u32, u16)> {
         }
         let rows = match window.builtin {
             Some(Builtin::Input) => modal::takeover_rows(&ctx, content).unwrap_or_else(|| {
-                let rows = input::rows_needed(app.input(), usize::from(content));
+                let rows = input::rows_needed(app, usize::from(content));
                 u16::try_from(rows)
                     .unwrap_or(MAX_INPUT_ROWS)
                     .clamp(1, MAX_INPUT_ROWS)
@@ -211,9 +232,8 @@ fn blit(surface: &mut Surface<'_>, window: &WindowSpec, palette: style::Palette)
             }
         })
         .collect();
-    let paragraph = Paragraph::new(lines);
-    match block {
-        Some(block) => surface.render_widget(paragraph.block(block)),
-        None => surface.render_widget(paragraph),
+    if let Some(block) = block {
+        surface.render_widget(block);
     }
+    write_lines(surface, inner, lines.iter());
 }

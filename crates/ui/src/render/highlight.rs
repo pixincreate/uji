@@ -5,30 +5,37 @@ use crate::app::App;
 use crate::app::selection::Point;
 
 pub fn overlay(buf: &mut Buffer, app: &App) {
-    let mut screen = app.overlay().screen().borrow_mut();
-    screen.set_lines(text(buf));
-    let Some(selection) = screen.selection() else {
+    let width = usize::from(buf.area.width);
+    if width == 0 {
         return;
-    };
-    let area = buf.area;
-    for y in 0..area.height {
-        for x in 0..area.width {
-            if selection.contains(Point::new(x, y)) {
-                buf[(area.x.saturating_add(x), area.y.saturating_add(y))]
-                    .modifier
-                    .insert(Modifier::REVERSED);
+    }
+    let mut screen = app.overlay().screen().borrow_mut();
+    {
+        // Walked by row rather than cell by cell: the buffer is row-major, so
+        // indexing every cell only re-derives an offset already known.
+        let rows = screen.rows(usize::from(buf.area.height));
+        for (row, cells) in rows.iter_mut().zip(buf.content.chunks_exact(width)) {
+            row.clear();
+            row.reserve(width);
+            for cell in cells {
+                row.push_str(cell.symbol());
             }
         }
     }
-}
-
-fn text(buf: &Buffer) -> Vec<String> {
-    let area = buf.area;
-    (0..area.height)
-        .map(|y| {
-            (0..area.width)
-                .map(|x| buf[(area.x.saturating_add(x), area.y.saturating_add(y))].symbol())
-                .collect()
-        })
-        .collect()
+    let Some(selection) = screen.selection() else {
+        return;
+    };
+    for (y, cells) in buf.content.chunks_exact_mut(width).enumerate() {
+        let Ok(y) = u16::try_from(y) else {
+            break;
+        };
+        for (x, cell) in cells.iter_mut().enumerate() {
+            let Ok(x) = u16::try_from(x) else {
+                break;
+            };
+            if selection.contains(Point::new(x, y)) {
+                cell.modifier.insert(Modifier::REVERSED);
+            }
+        }
+    }
 }

@@ -274,10 +274,71 @@ impl Renderer {
     }
 }
 
-pub(crate) fn render(source: &str, width: usize, palette: Palette) -> Vec<Line<'static>> {
+/// Whether `source` defines a link reference.
+///
+/// A definition applies to the whole document and may appear after the uses it
+/// resolves, so a text containing one cannot be rendered a piece at a time.
+pub(crate) fn defines_reference(source: &str) -> bool {
+    source.lines().any(|line| {
+        let line = line.trim_start();
+        line.starts_with('[') && line.contains("]:")
+    })
+}
+
+/// How much of `source` is finished markdown.
+///
+/// A block is only final once another block has started after it: until then
+/// more text can still join it, as a lazy paragraph continuation or a setext
+/// underline would. Everything before the returned offset renders the same
+/// whatever is appended next, so it never needs rendering twice.
+pub(crate) fn settled(source: &str) -> usize {
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    let mut depth = 0usize;
+    let mut settled = 0usize;
+    let mut closed = 0usize;
+    for (event, range) in Parser::new_ext(source, options).into_offset_iter() {
+        match event {
+            Event::Start(_) => {
+                if depth == 0 {
+                    settled = closed;
+                }
+                depth = depth.saturating_add(1);
+            }
+            Event::End(_) => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    closed = range.end;
+                }
+            }
+            Event::Rule if depth == 0 => {
+                settled = closed;
+                closed = range.end;
+            }
+            _ => {}
+        }
+    }
+    settled
+}
+
+/// Render `source`, optionally as a continuation of output already produced.
+///
+/// A block is separated from the one before it by a blank line, and the blank
+/// is suppressed at the start of a render and trimmed at the end. Continuing
+/// seeds that blank so a chunk joins onto earlier lines exactly as it would
+/// have if the whole text had been rendered at once.
+pub(crate) fn render_from(
+    source: &str,
+    width: usize,
+    palette: Palette,
+    continuing: bool,
+) -> Vec<Line<'static>> {
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
     let mut renderer = Renderer::new(width, palette);
+    if continuing {
+        renderer.lines.push(Line::from(""));
+    }
     for event in Parser::new_ext(source, options) {
         renderer.event(event);
     }

@@ -27,7 +27,6 @@ use crate::cmd::{Action, LuaAction};
 
 use super::Inner;
 use super::frontend::Frontend;
-use super::job::Running;
 use super::signal::Signal;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -68,5 +67,4 @@ pub(crate) struct LoopData {
     pub(crate) deferred: VecDeque<StreamEvent>,
     pub(crate) last_reveal: Instant,
     pub(crate) config_dir: Option<PathBuf>,
-    pub(crate) jobs: Running,
 }

@@ -10,8 +10,14 @@ pub struct Screen {
 }
 
 impl Screen {
-    pub fn set_lines(&mut self, lines: Vec<String>) {
-        self.lines = lines;
+    /// The rows to fill with what is on screen, reusing what is already here.
+    ///
+    /// Handed out rather than replaced so a redraw does not allocate a fresh
+    /// `String` per row; the screen is captured on every frame but only read
+    /// when someone is selecting.
+    pub fn rows(&mut self, height: usize) -> &mut [String] {
+        self.lines.resize_with(height, String::new);
+        &mut self.lines
     }
 
     pub fn selection(&self) -> Option<Selection> {

@@ -14,6 +14,43 @@ use crate::render::wrap;
 
 const CURSOR: char = '█';
 
+/// The input, laid out into rows.
+///
+/// Both the measuring pass and the draw pass need this, and neither changes it,
+/// so it is computed once per edit rather than twice per frame. Without it a
+/// large paste is split into `char`s and wrapped twice on every frame, whether
+/// or not anything was typed.
+#[derive(Default)]
+pub struct Layout {
+    key: (u64, usize, usize, bool),
+    ready: bool,
+    display: Vec<char>,
+    cursor: usize,
+    rows: Vec<(usize, usize)>,
+}
+
+impl Layout {
+    fn sync(&mut self, app: &crate::app::App, width: usize) {
+        let focused = app.focus() == Builtin::Input;
+        let key = (app.input_revision(), app.cursor_offset(), width, focused);
+        if self.ready && self.key == key {
+            return;
+        }
+        self.key = key;
+        self.ready = true;
+        let input = app.input();
+        self.cursor = input[..app.cursor_offset()].chars().count();
+        self.display.clear();
+        self.display.extend(input.chars());
+        if focused {
+            self.display
+                .insert(self.cursor.min(self.display.len()), CURSOR);
+        }
+        self.rows.clear();
+        self.rows.extend(wrap::ranges(&self.display, width));
+    }
+}
+
 pub(crate) struct Input<'a> {
     pub(crate) window: &'a WindowSpec,
 }
@@ -55,15 +92,15 @@ impl Input<'_> {
             cursor_style = cursor_style.add_modifier(Modifier::SLOW_BLINK);
         }
 
-        let input = ctx.app.input();
-        let cursor = input[..ctx.app.cursor_offset()].chars().count();
-        // Only the focused window draws a cursor.
-        let display = if ctx.app.focus() == Builtin::Input {
-            with_cursor(input, cursor)
-        } else {
-            input.chars().collect()
-        };
-        let rows = wrap::ranges(&display, usize::from(inner.width));
+        let mut typed = ctx.app.typed();
+        typed.sync(ctx.app, usize::from(inner.width));
+        let Layout {
+            display,
+            cursor,
+            rows,
+            ..
+        } = &*typed;
+        let cursor = *cursor;
         let cursor_row = rows
             .iter()
             .position(|(start, end)| (*start..*end).contains(&cursor))
@@ -87,24 +124,17 @@ impl Input<'_> {
             })
             .collect();
 
-        let paragraph = Paragraph::new(lines);
-        let paragraph = match block {
-            Some(block) => paragraph.block(block),
-            None => paragraph,
-        };
-        surface.render_widget(paragraph);
+        if let Some(block) = block {
+            surface.render_widget(block);
+        }
+        crate::render::write_lines(surface, inner, lines.iter());
     }
 }
 
-pub(crate) fn rows_needed(input: &str, width: usize) -> usize {
-    let display = with_cursor(input, input.chars().count());
-    wrap::ranges(&display, width).len()
-}
-
-fn with_cursor(input: &str, at: usize) -> Vec<char> {
-    let mut display: Vec<char> = input.chars().collect();
-    display.insert(at.min(display.len()), CURSOR);
-    display
+pub(crate) fn rows_needed(app: &crate::app::App, width: usize) -> usize {
+    let mut typed = app.typed();
+    typed.sync(app, width);
+    typed.rows.len()
 }
 
 fn collect(chars: &[char]) -> String {

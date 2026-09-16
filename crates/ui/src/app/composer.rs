@@ -2,6 +2,7 @@
 pub struct Composer {
     text: String,
     cursor: usize,
+    revision: u64,
     recall: Recall,
     pastes: crate::app::paste::Pastes,
 }
@@ -25,8 +26,15 @@ impl Composer {
         self.cursor
     }
 
+    /// Bumped on every edit, so a cache of the laid-out input knows when it
+    /// has gone stale without comparing the text itself.
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
     fn edit(&mut self, change: impl FnOnce(&mut String, &mut usize)) {
         self.recall = Recall::Editing;
+        self.revision = self.revision.wrapping_add(1);
         change(&mut self.text, &mut self.cursor);
     }
 

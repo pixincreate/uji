@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -36,7 +37,6 @@ impl LoopData {
     ) -> std::io::Result<()> {
         self.apply_composer();
         self.drain_requests();
-        self.drain_jobs();
         self.sync_picker();
         self.drain_diagnostics();
 
@@ -118,7 +118,6 @@ impl LoopData {
         }
         if exited {
             self.inner.api.jobs().borrow_mut().finish(id);
-            self.jobs.finish(id);
         }
         self.dirty = true;
     }
@@ -150,6 +149,8 @@ impl LoopData {
                 }
                 Request::Modal(request) => self.open_modal(*request),
                 Request::Exec(command) => self.exec(&command),
+                Request::JobStart { id, command, cwd } => self.start_job(id, command, cwd),
+                Request::JobStop(id) => self.inner.api.jobs().borrow().stop(id),
                 Request::PickItems { items, token } => {
                     // Drop results whose query has already been superseded.
                     if token == self.inner.api.pick().borrow().token() {
@@ -205,29 +206,18 @@ impl LoopData {
         }
     }
 
-    fn drain_jobs(&mut self) {
-        let (requests, stops) = {
-            let jobs = self.inner.api.jobs();
-            let mut jobs = jobs.borrow_mut();
-            (jobs.take_requests(), jobs.take_stops())
-        };
-        for id in stops {
-            self.jobs.stop(id);
-        }
-        for request in requests {
-            let cancel = CancelToken::new();
-            self.jobs.insert(request.id, cancel.clone());
-            let sender = self.signals.clone();
-            self.runtime.spawn(job::run(
-                request.id,
-                request.command,
-                request.cwd,
-                cancel,
-                move |event| {
-                    let _ = sender.send(Signal::Job(event));
-                },
-            ));
-        }
+    fn start_job(&mut self, id: u64, command: Vec<String>, cwd: Option<PathBuf>) {
+        let cancel = CancelToken::new();
+        self.inner
+            .api
+            .jobs()
+            .borrow_mut()
+            .attach(id, cancel.clone());
+        let sender = self.signals.clone();
+        self.runtime
+            .spawn(job::run(id, command, cwd, cancel, move |event| {
+                let _ = sender.send(Signal::Job(event));
+            }));
     }
 
     fn perform_reload(&mut self) {

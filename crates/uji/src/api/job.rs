@@ -3,15 +3,11 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use mlua::{Function, Lua, Table, Value};
+use uji_agent::llm::CancelToken;
 
 use crate::api::Api;
 use crate::api::bind::bind;
-
-pub struct JobRequest {
-    pub id: u64,
-    pub command: Vec<String>,
-    pub cwd: Option<PathBuf>,
-}
+use crate::api::request::Request;
 
 #[derive(Default)]
 #[allow(clippy::struct_field_names)]
@@ -21,29 +17,57 @@ pub struct JobHandlers {
     pub on_exit: Option<Function>,
 }
 
+/// A job a plugin started: the callbacks it gave, and the token that stops it
+/// once the loop has actually spawned it.
+struct Job {
+    handlers: JobHandlers,
+    cancel: Option<CancelToken>,
+}
+
+/// Every job a plugin has running, in one place.
+///
+/// The callbacks and the cancel token used to live either side of the Lua
+/// boundary, keyed by the same id, so ending a job meant finishing it twice.
 #[derive(Default)]
 pub struct Jobs {
-    handlers: HashMap<u64, JobHandlers>,
-    requests: Vec<JobRequest>,
-    stops: Vec<u64>,
+    live: HashMap<u64, Job>,
     next: u64,
 }
 
 impl Jobs {
-    pub fn take_requests(&mut self) -> Vec<JobRequest> {
-        std::mem::take(&mut self.requests)
-    }
-
-    pub fn take_stops(&mut self) -> Vec<u64> {
-        std::mem::take(&mut self.stops)
-    }
-
     pub fn handlers(&self, id: u64) -> Option<&JobHandlers> {
-        self.handlers.get(&id)
+        self.live.get(&id).map(|job| &job.handlers)
+    }
+
+    /// Record a job Lua asked for. It is not running until the loop spawns it.
+    fn open(&mut self, handlers: JobHandlers) -> u64 {
+        self.next = self.next.saturating_add(1);
+        self.live.insert(
+            self.next,
+            Job {
+                handlers,
+                cancel: None,
+            },
+        );
+        self.next
+    }
+
+    /// Hand a spawned job the token that stops it.
+    pub fn attach(&mut self, id: u64, cancel: CancelToken) {
+        if let Some(job) = self.live.get_mut(&id) {
+            job.cancel = Some(cancel);
+        }
+    }
+
+    /// Ask a job to stop. Its callbacks stay until it reports that it exited.
+    pub fn stop(&self, id: u64) {
+        if let Some(cancel) = self.live.get(&id).and_then(|job| job.cancel.as_ref()) {
+            cancel.cancel();
+        }
     }
 
     pub fn finish(&mut self, id: u64) {
-        self.handlers.remove(&id);
+        self.live.remove(&id);
     }
 }
 
@@ -79,19 +103,15 @@ pub(crate) fn start(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
             on_stderr: opts.get("on_stderr")?,
             on_exit: opts.get("on_exit")?,
         };
-        let jobs = api.jobs();
-        let mut jobs = jobs.borrow_mut();
-        jobs.next += 1;
-        let id = jobs.next;
-        jobs.handlers.insert(id, handlers);
-        jobs.requests.push(JobRequest { id, command, cwd });
+        let id = api.jobs().borrow_mut().open(handlers);
+        api.request(Request::JobStart { id, command, cwd });
         Ok(id)
     })
 }
 
 pub(crate) fn stop(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(lua, api, move |api, _, id: u64| {
-        api.jobs().borrow_mut().stops.push(id);
+        api.request(Request::JobStop(id));
         Ok(())
     })
 }
