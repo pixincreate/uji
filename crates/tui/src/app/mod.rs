@@ -31,6 +31,7 @@ pub struct App {
     mode: Mode,
     suggest_pool: Vec<SuggestItem>,
     notices: Vec<String>,
+    queued: Vec<String>,
     transcript: RefCell<crate::ui::transcript::Transcript>,
     renderer: Option<Rc<dyn renderer::BlockRenderer>>,
 }
@@ -47,6 +48,7 @@ impl App {
             mode: Mode::Normal,
             suggest_pool: Vec::new(),
             notices: Vec::new(),
+            queued: Vec::new(),
             transcript: RefCell::default(),
             renderer: None,
         }
@@ -151,6 +153,14 @@ impl App {
 
     pub fn mode(&self) -> &Mode {
         &self.mode
+    }
+
+    pub fn queued(&self) -> &[String] {
+        &self.queued
+    }
+
+    pub fn set_queued(&mut self, queued: Vec<String>) {
+        self.queued = queued;
     }
 
     pub fn notices(&self) -> &[String] {

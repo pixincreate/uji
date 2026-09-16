@@ -18,6 +18,7 @@ pub enum KeyAction {
     Confirmed(bool),
     Cancel,
     Interrupt,
+    InterruptOrQuit,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, VariantNames)]

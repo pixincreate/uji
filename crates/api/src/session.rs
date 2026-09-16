@@ -125,5 +125,14 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
         })?,
     )?;
 
+    let interrupt_api = Rc::clone(api);
+    session.set(
+        "interrupt",
+        lua.create_function(move |_, ()| {
+            interrupt_api.queue_interrupt();
+            Ok(())
+        })?,
+    )?;
+
     Ok(session)
 }

@@ -38,6 +38,7 @@ impl LoopData {
         self.drain_titles();
         self.drain_jobs();
         self.drain_exec();
+        self.drain_interrupt();
         self.drain_modal();
         self.drain_answers();
         self.drain_diagnostics();
@@ -180,6 +181,12 @@ impl LoopData {
             }
         }
         self.dirty = true;
+    }
+
+    fn drain_interrupt(&mut self) {
+        if self.inner.api.take_interrupt() {
+            self.interrupt();
+        }
     }
 
     fn drain_exec(&mut self) {

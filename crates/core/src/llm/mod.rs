@@ -655,6 +655,9 @@ pub enum ToolDecision {
 
 pub enum StreamEvent {
     Delta(String),
+    SteerRequest {
+        reply: oneshot::Sender<Option<String>>,
+    },
     Compacted {
         summary: String,
         usage: Option<Usage>,
@@ -846,6 +849,19 @@ async fn compact_turn(
     Some((summarised.summary, summarised.usage))
 }
 
+async fn steer(
+    messages: &mut Vec<Message>,
+    on_event: &mut (dyn FnMut(StreamEvent) + Send),
+) -> bool {
+    let (reply, receiver) = oneshot::channel();
+    on_event(StreamEvent::SteerRequest { reply });
+    let Ok(Some(text)) = receiver.await else {
+        return false;
+    };
+    messages.push(Message::User { text });
+    true
+}
+
 pub async fn run_agent(
     config: &AgentConfig<'_>,
     mut messages: Vec<Message>,
@@ -862,6 +878,7 @@ pub async fn run_agent(
         if let Some((summary, usage)) = compact_turn(config, &mut messages).await {
             on_event(StreamEvent::Compacted { summary, usage });
         }
+        steer(&mut messages, on_event).await;
         let request = LlmRequest {
             model: config.model.clone(),
             system: config.system.clone(),
@@ -886,6 +903,19 @@ pub async fn run_agent(
             }
         }
         if tool_calls.is_empty() {
+            if steer(&mut messages, on_event).await {
+                on_event(StreamEvent::AssistantStep {
+                    text: text.clone(),
+                    tool_calls: Vec::new(),
+                    reasoning_content: reasoning_content.clone(),
+                });
+                messages.push(Message::Assistant {
+                    text,
+                    tool_calls: Vec::new(),
+                    reasoning_content,
+                });
+                continue;
+            }
             on_event(StreamEvent::Done {
                 text,
                 reasoning_content,

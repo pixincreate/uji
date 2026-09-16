@@ -2,6 +2,7 @@ pub const SESSION_CREATED: &str = "session_created";
 pub const SESSION_RESUMED: &str = "session_resumed";
 pub const SESSION_TITLED: &str = "session_titled";
 pub const MESSAGE_SUBMITTED: &str = "message_submitted";
+pub const QUEUE_CHANGED: &str = "queue_changed";
 pub const MESSAGE_APPENDED: &str = "message_appended";
 pub const RENDER_MESSAGE: &str = "render_message";
 pub const TOOL_CALL: &str = "tool_call";

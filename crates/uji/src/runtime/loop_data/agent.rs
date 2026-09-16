@@ -17,11 +17,11 @@ use crate::runtime::signal::Signal;
 impl LoopData {
     pub(crate) fn submit(&mut self, text: &str) {
         if self.inner.state().borrow().run_state() == RunState::Working {
-            self.queued.push_back(text.to_string());
+            self.enqueue(text);
             return;
         }
         if self.compact_if_needed() {
-            self.queued.push_back(text.to_string());
+            self.enqueue(text);
             return;
         }
         self.app.clear_notices();
@@ -133,6 +133,16 @@ impl LoopData {
                 self.drain_diagnostics();
                 self.dirty = true;
             }
+            StreamEvent::SteerRequest { reply } => {
+                let next = self.queued.pop_front();
+                if let Some(text) = next.clone() {
+                    self.app.take_pending();
+                    self.append(Message::User { text });
+                    self.sync_queue();
+                    self.dirty = true;
+                }
+                let _ = reply.send(next);
+            }
             StreamEvent::AssistantStep {
                 text,
                 tool_calls,
@@ -170,7 +180,6 @@ impl LoopData {
             } => {
                 self.finish_assistant(&text, reasoning_content);
                 self.stop_working();
-                self.maybe_submit_queued();
             }
             StreamEvent::Usage(usage) => {
                 self.inner.api.session().add_usage(usage);
@@ -180,13 +189,11 @@ impl LoopData {
                 self.app.take_pending();
                 self.fail_assistant("interrupted");
                 self.stop_working();
-                self.queued.clear();
             }
             StreamEvent::Failed(err) => {
                 self.app.take_pending();
                 self.fail_assistant(&err);
                 self.stop_working();
-                self.maybe_submit_queued();
             }
         }
     }
@@ -416,10 +423,19 @@ impl LoopData {
         self.inner.emit(events::TURN_FINISHED, &[]);
     }
 
-    pub(super) fn maybe_submit_queued(&mut self) {
-        if let Some(text) = self.queued.pop_front() {
-            self.submit(&text);
-        }
+    fn enqueue(&mut self, text: &str) {
+        self.queued.push_back(text.to_string());
+        self.sync_queue();
+        self.dirty = true;
+    }
+
+    fn sync_queue(&mut self) {
+        let queued: Vec<String> = self.queued.iter().cloned().collect();
+        self.inner.emit(
+            events::QUEUE_CHANGED,
+            &[("count", queued.len().to_string())],
+        );
+        self.app.set_queued(queued);
     }
 
     fn fail_assistant(&mut self, error: &str) {

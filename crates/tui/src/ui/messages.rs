@@ -35,6 +35,7 @@ impl Render for Messages<'_> {
             &transcript::Input {
                 conversation: &conversation,
                 notices: ctx.app.notices(),
+                queued: ctx.app.queued(),
                 pending: committed,
                 width,
                 palette,
@@ -71,10 +72,17 @@ impl Render for Messages<'_> {
             );
         }
 
+        let mut queued = Vec::new();
+        if !parts.queued.is_empty() {
+            queued.push(Line::from(""));
+            queued.extend(parts.queued.iter().cloned());
+        }
+
         let total = above
             .saturating_add(lead.len())
             .saturating_add(parts.pending.len())
-            .saturating_add(tail.len());
+            .saturating_add(tail.len())
+            .saturating_add(queued.len());
         let start = ctx.app.resolve_scroll(total.saturating_sub(height), height);
         let end = start.saturating_add(height).min(total);
         let window: Vec<Line<'static>> = parts
@@ -85,6 +93,7 @@ impl Render for Messages<'_> {
             .chain(lead.iter())
             .chain(parts.pending.iter())
             .chain(tail.iter())
+            .chain(queued.iter())
             .skip(start)
             .take(end.saturating_sub(start))
             .cloned()
@@ -110,6 +119,16 @@ fn push_builtin(lines: &mut Vec<Line<'static>>, block: Block<'_>, width: usize, 
         ),
         Block::Message(stored) => push_message(lines, stored, width, palette),
         Block::Pending(text) => push_markdown(lines, text, width, palette),
+        Block::Queued(text) => push_wrapped(
+            lines,
+            text,
+            width,
+            Style::default()
+                .fg(palette.muted)
+                .add_modifier(Modifier::DIM),
+            " › ",
+            Fill::Line,
+        ),
     }
 }
 

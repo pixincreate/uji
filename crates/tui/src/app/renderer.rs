@@ -6,6 +6,7 @@ pub enum Block<'a> {
     Notice(&'a str),
     Message(&'a StoredMessage),
     Pending(&'a str),
+    Queued(&'a str),
 }
 
 pub trait BlockRenderer {

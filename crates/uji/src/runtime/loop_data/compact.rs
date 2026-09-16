@@ -117,7 +117,6 @@ impl LoopData {
         }
         self.stop_working();
         self.drain_diagnostics();
-        self.maybe_submit_queued();
         self.dirty = true;
     }
 

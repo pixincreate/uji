@@ -20,7 +20,7 @@ pub mod status;
 pub mod tools;
 pub mod window;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -56,6 +56,7 @@ pub struct Api {
     capture: Capture,
     session_state: SessionState,
     exec: RefCell<Vec<Vec<String>>>,
+    interrupt: Cell<bool>,
     modal: RefCell<Option<modal::ModalRequest>>,
     answers: RefCell<Vec<modal::Answer>>,
     tool_roots: RefCell<Vec<PathBuf>>,
@@ -81,6 +82,7 @@ impl Api {
             capture: Capture::default(),
             session_state: SessionState::new(conversation),
             exec: RefCell::default(),
+            interrupt: Cell::default(),
             modal: RefCell::default(),
             answers: RefCell::default(),
             tool_roots: RefCell::default(),
@@ -148,6 +150,14 @@ impl Api {
 
     pub fn queue_exec(&self, command: Vec<String>) {
         self.exec.borrow_mut().push(command);
+    }
+
+    pub fn queue_interrupt(&self) {
+        self.interrupt.set(true);
+    }
+
+    pub fn take_interrupt(&self) -> bool {
+        self.interrupt.replace(false)
     }
 
     pub fn take_exec(&self) -> Vec<Vec<String>> {

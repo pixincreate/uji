@@ -40,6 +40,9 @@ impl LoopData {
             KeyAction::Prompted(value) => self.on_modal(ModalInput::Prompt(value)),
             KeyAction::Cancel => self.on_modal(ModalInput::Cancel),
             KeyAction::Interrupt => {
+                self.interrupt();
+            }
+            KeyAction::InterruptOrQuit => {
                 if !self.interrupt() {
                     self.control = Control::Quit;
                 }

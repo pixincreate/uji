@@ -29,6 +29,11 @@ impl LuaRenderer {
                 table.set("text", text).ok()?;
                 return Some(table);
             }
+            Block::Queued(text) => {
+                table.set("type", "queued").ok()?;
+                table.set("text", text).ok()?;
+                return Some(table);
+            }
             Block::Message(stored) => stored,
         };
         table.set("type", stored.message.type_name()).ok()?;

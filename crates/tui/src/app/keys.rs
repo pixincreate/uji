@@ -254,7 +254,7 @@ impl App {
                 KeyAction::None
             }
             Mode::Confirm { .. } => KeyAction::Confirmed(false),
-            Mode::Normal => KeyAction::Interrupt,
+            Mode::Normal => KeyAction::InterruptOrQuit,
             _ => {
                 self.mode = Mode::Normal;
                 KeyAction::Cancel

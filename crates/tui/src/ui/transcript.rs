@@ -82,6 +82,7 @@ impl CachedList {
 pub struct Input<'a> {
     pub conversation: &'a Conversation,
     pub notices: &'a [String],
+    pub queued: &'a [String],
     pub pending: &'a str,
     pub width: usize,
     pub palette: Palette,
@@ -89,6 +90,7 @@ pub struct Input<'a> {
 
 pub struct Rendered<'a> {
     pub notices: &'a [Line<'static>],
+    pub queued: &'a [Line<'static>],
     pub folded: &'a [Line<'static>],
     pub pending: &'a [Line<'static>],
 }
@@ -102,6 +104,7 @@ pub struct Transcript {
     grouping: Grouping,
     lines: Vec<Line<'static>>,
     notices: CachedList,
+    queued: CachedList,
     pending: Cached,
 }
 
@@ -116,6 +119,7 @@ impl Transcript {
             self.palette = input.palette;
             self.reset();
             self.notices.clear();
+            self.queued.clear();
             self.pending.clear();
         }
         let width = input.width;
@@ -125,11 +129,17 @@ impl Transcript {
                 render(lines, Block::Notice(notice), width);
             }
         });
+        self.queued.get(input.queued, |lines| {
+            for queued in input.queued {
+                render(lines, Block::Queued(queued), width);
+            }
+        });
         self.pending.get(input.pending, |lines| {
             render(lines, Block::Pending(input.pending), width);
         });
         Rendered {
             notices: &self.notices.lines,
+            queued: &self.queued.lines,
             folded: &self.lines,
             pending: &self.pending.lines,
         }
