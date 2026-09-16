@@ -4,13 +4,11 @@ use tokio::sync::Mutex;
 use crate::auth::{self, Tokens};
 use crate::credential::{self, Credential};
 use crate::llm::{
-    Llm, LlmConfig, LlmError, LlmRequest, LlmResponse, OAuthSession, Usage, decode, response_lines,
+    LlmConfig, LlmError, LlmRequest, LlmResponse, OAuthSession, Protocol, Usage, response_lines,
     send, status_error,
 };
 
-use super::transformer::{
-    AnthropicRequest, AnthropicResponse, AnthropicStreamEvent, AnthropicToolAcc,
-};
+use super::transformer::{AnthropicRequest, AnthropicStreamEvent, AnthropicToolAcc};
 
 pub struct Anthropic {
     pub base_url: String,
@@ -100,34 +98,8 @@ impl Anthropic {
 }
 
 #[async_trait]
-impl Llm for Anthropic {
-    async fn send_request(
-        &self,
-        client: &reqwest::Client,
-        request: &LlmRequest,
-    ) -> Result<LlmResponse, LlmError> {
-        let provider_request = self.build(request);
-        let response = self.post(client, &provider_request).await?;
-        let parsed: AnthropicResponse = decode(response).await?;
-        let text = parsed.text();
-        let tool_calls = parsed.tool_calls();
-        if tool_calls.is_empty() {
-            if parsed.truncated() {
-                return Err(LlmError::output_limit());
-            }
-            if text.is_empty() {
-                return Err(LlmError::empty_response());
-            }
-        }
-        Ok(LlmResponse {
-            text,
-            tool_calls,
-            reasoning_content: None,
-            usage: parsed.usage.map(Into::into),
-        })
-    }
-
-    async fn stream(
+impl Protocol for Anthropic {
+    async fn call(
         &self,
         client: &reqwest::Client,
         request: &LlmRequest,

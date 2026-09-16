@@ -1,17 +1,11 @@
 use async_trait::async_trait;
 
 use crate::llm::{
-    Llm, LlmConfig, LlmError, LlmRequest, LlmResponse, Usage, decode, response_lines, send,
+    LlmConfig, LlmError, LlmRequest, LlmResponse, Protocol, Usage, response_lines, send,
     status_error,
 };
 
 use super::transformer::{GeminiRequest, GeminiResponse, GeminiToolAcc};
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Streaming {
-    On,
-    Off,
-}
 
 pub struct Gemini {
     pub base_url: String,
@@ -34,14 +28,12 @@ impl Gemini {
         &self,
         client: &reqwest::Client,
         model: &str,
-        streaming: Streaming,
         request: &GeminiRequest,
     ) -> Result<reqwest::Response, LlmError> {
-        let suffix = match streaming {
-            Streaming::On => ":streamGenerateContent?alt=sse",
-            Streaming::Off => ":generateContent",
-        };
-        let url = format!("{}/models/{model}{suffix}", self.base_url);
+        let url = format!(
+            "{}/models/{model}:streamGenerateContent?alt=sse",
+            self.base_url
+        );
         let mut builder = client.post(&url);
         if let Some(key) = &self.api_key {
             builder = builder.header("x-goog-api-key", key);
@@ -51,45 +43,15 @@ impl Gemini {
 }
 
 #[async_trait]
-impl Llm for Gemini {
-    async fn send_request(
-        &self,
-        client: &reqwest::Client,
-        request: &LlmRequest,
-    ) -> Result<LlmResponse, LlmError> {
-        let provider_request = GeminiRequest::from(request);
-        let response = self
-            .post(client, &request.model, Streaming::Off, &provider_request)
-            .await?;
-        let parsed: GeminiResponse = decode(response).await?;
-        let text = parsed.text();
-        let tool_calls = parsed.tool_calls();
-        if tool_calls.is_empty() {
-            if parsed.truncated() {
-                return Err(LlmError::output_limit());
-            }
-            if text.is_empty() {
-                return Err(LlmError::empty_response());
-            }
-        }
-        Ok(LlmResponse {
-            text,
-            tool_calls,
-            reasoning_content: None,
-            usage: parsed.usage_metadata.map(Into::into),
-        })
-    }
-
-    async fn stream(
+impl Protocol for Gemini {
+    async fn call(
         &self,
         client: &reqwest::Client,
         request: &LlmRequest,
         on_delta: &mut (dyn FnMut(String) + Send),
     ) -> Result<LlmResponse, LlmError> {
         let provider_request = GeminiRequest::from(request);
-        let response = self
-            .post(client, &request.model, Streaming::On, &provider_request)
-            .await?;
+        let response = self.post(client, &request.model, &provider_request).await?;
         if !response.status().is_success() {
             return Err(status_error(response).await);
         }

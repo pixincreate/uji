@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::{DEFAULT_MAX_OUTPUT, Effort, Llm, LlmRequest, Retention, Usage};
+use super::{DEFAULT_MAX_OUTPUT, Effort, Llm, LlmRequest, Protocol, Retention, Usage, silent};
 use crate::session::model::Message;
 
 const PROMPT: &str = "You name coding sessions. Read the user's first message and reply \
@@ -17,7 +17,7 @@ pub struct Titled {
 
 pub async fn generate(
     client: &reqwest::Client,
-    provider: Arc<dyn Llm>,
+    provider: Arc<Llm>,
     model: String,
     first_message: &str,
 ) -> Option<Titled> {
@@ -32,7 +32,7 @@ pub async fn generate(
         cache: Retention::Off,
         max_output: DEFAULT_MAX_OUTPUT,
     };
-    let response = provider.send_request(client, &request).await.ok()?;
+    let response = provider.call(client, &request, &mut silent()).await.ok()?;
     let title = sanitize(&response.text)?;
     Some(Titled {
         title,

@@ -2,7 +2,8 @@ use std::rc::Rc;
 
 use mlua::{Function, Lua, LuaSerdeExt, Table, Value as LuaValue};
 
-use uji_screen::model::{Builtin, Color, Line, Size, Span, Style, UiConfig, WinOpts};
+use uji_screen::config::UiConfig;
+use uji_screen::model::{Builtin, Color, Line, Size, Span, Style, WinOpts};
 
 use super::Api;
 use super::convert::FromLuaValue;

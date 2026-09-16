@@ -1,11 +1,15 @@
 mod agent;
+mod approval;
 mod background;
 mod commands;
 mod compact;
 mod drains;
+mod events;
 mod input;
 mod model;
 mod mouse;
+mod persist;
+mod queue;
 
 use std::collections::VecDeque;
 use std::path::PathBuf;

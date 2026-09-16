@@ -30,10 +30,10 @@ impl App {
     }
 
     fn handle_select_key(&mut self, key: KeyEvent) -> KeyAction {
+        if let Some(action) = modal_key(key.code).or_else(|| list_key(key.code)) {
+            return self.apply(action);
+        }
         match key.code {
-            KeyCode::Esc => self.apply(Action::ModalCancel),
-            KeyCode::Up => self.apply(Action::ModalUp),
-            KeyCode::Down => self.apply(Action::ModalDown),
             KeyCode::PageUp => {
                 self.select_move(-SELECT_PAGE);
                 KeyAction::None
@@ -42,7 +42,6 @@ impl App {
                 self.select_move(SELECT_PAGE);
                 KeyAction::None
             }
-            KeyCode::Enter => self.apply(Action::ModalAccept),
             KeyCode::Char(c) => {
                 if let Mode::Select { query, cursor, .. } = &mut self.mode {
                     query.push(c);
@@ -64,9 +63,10 @@ impl App {
     }
 
     fn handle_prompt_key(&mut self, key: KeyEvent) -> KeyAction {
+        if let Some(action) = modal_key(key.code) {
+            return self.apply(action);
+        }
         match key.code {
-            KeyCode::Esc => self.apply(Action::ModalCancel),
-            KeyCode::Enter => self.apply(Action::ModalAccept),
             KeyCode::Backspace => {
                 if let Mode::Prompt { value, .. } = &mut self.mode {
                     value.pop();
@@ -84,12 +84,11 @@ impl App {
     }
 
     fn handle_suggest_key(&mut self, key: KeyEvent) -> KeyAction {
+        if let Some(action) = modal_key(key.code).or_else(|| list_key(key.code)) {
+            return self.apply(action);
+        }
         match key.code {
-            KeyCode::Esc => self.apply(Action::ModalCancel),
-            KeyCode::Up => self.apply(Action::ModalUp),
-            KeyCode::Down => self.apply(Action::ModalDown),
             KeyCode::Tab => self.apply(Action::SuggestComplete),
-            KeyCode::Enter => self.apply(Action::ModalAccept),
             KeyCode::Char(c) => self.insert_char(c),
             KeyCode::Backspace => self.backspace(),
             _ => KeyAction::None,
@@ -97,13 +96,12 @@ impl App {
     }
 
     fn handle_confirm_key(&mut self, key: KeyEvent) -> KeyAction {
+        if let Some(action) = modal_key(key.code).or_else(|| list_key(key.code)) {
+            return self.apply(action);
+        }
         match key.code {
-            KeyCode::Esc => self.apply(Action::ModalCancel),
             KeyCode::Char('y' | 'Y' | '1') => self.apply(Action::ConfirmAllow),
             KeyCode::Char('n' | 'N' | '2') => self.apply(Action::ConfirmDeny),
-            KeyCode::Enter => self.apply(Action::ModalAccept),
-            KeyCode::Up => self.apply(Action::ModalUp),
-            KeyCode::Down => self.apply(Action::ModalDown),
             KeyCode::Left | KeyCode::Right | KeyCode::Tab => self.apply(Action::ConfirmToggle),
             _ => KeyAction::None,
         }
@@ -341,5 +339,23 @@ fn step(cursor: usize, delta: isize, len: usize) -> usize {
         cursor.saturating_sub(delta.unsigned_abs())
     } else {
         cursor.saturating_add(delta.unsigned_abs()).min(last)
+    }
+}
+
+/// Keys every modal answers the same way.
+fn modal_key(code: KeyCode) -> Option<Action> {
+    match code {
+        KeyCode::Esc => Some(Action::ModalCancel),
+        KeyCode::Enter => Some(Action::ModalAccept),
+        _ => None,
+    }
+}
+
+/// Navigation shared by the modals that show a list.
+fn list_key(code: KeyCode) -> Option<Action> {
+    match code {
+        KeyCode::Up => Some(Action::ModalUp),
+        KeyCode::Down => Some(Action::ModalDown),
+        _ => None,
     }
 }

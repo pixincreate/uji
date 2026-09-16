@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 
 use crate::llm::{
-    Llm, LlmConfig, LlmError, LlmRequest, LlmResponse, decode, response_lines, send, status_error,
+    LlmConfig, LlmError, LlmRequest, LlmResponse, Protocol, response_lines, send, status_error,
 };
 
-use super::transformer::{OpenAiChunk, OpenAiRequest, OpenAiResponse, OpenAiToolAcc};
+use super::transformer::{OpenAiChunk, OpenAiRequest, OpenAiToolAcc};
 
 pub struct OpenAi {
     pub base_url: String,
@@ -44,33 +44,8 @@ fn truncated(finish_reason: Option<&str>) -> Result<(), LlmError> {
 }
 
 #[async_trait]
-impl Llm for OpenAi {
-    async fn send_request(
-        &self,
-        client: &reqwest::Client,
-        request: &LlmRequest,
-    ) -> Result<LlmResponse, LlmError> {
-        let provider_request = OpenAiRequest::from(request);
-        let response = self.post(client, &provider_request).await?;
-        let parsed: OpenAiResponse = decode(response).await?;
-        let text = parsed.text().unwrap_or_default().to_string();
-        let tool_calls = parsed.tool_calls();
-        if tool_calls.is_empty() {
-            truncated(parsed.finish_reason())?;
-            if text.is_empty() {
-                return Err(LlmError::empty_response());
-            }
-        }
-        let reasoning_content = parsed.reasoning_content().map(str::to_string);
-        Ok(LlmResponse {
-            text,
-            tool_calls,
-            reasoning_content,
-            usage: parsed.usage.map(Into::into),
-        })
-    }
-
-    async fn stream(
+impl Protocol for OpenAi {
+    async fn call(
         &self,
         client: &reqwest::Client,
         request: &LlmRequest,

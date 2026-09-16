@@ -1,4 +1,5 @@
 use super::{Action, Args, Context};
+use uji_core::session::store::Setting;
 use uji_tui::app::Echo;
 
 const SUBSCRIPTION: &str = "Subscription (sign in with browser)";
@@ -123,13 +124,13 @@ impl Login {
     }
 
     fn finish_configure(&self, ctx: &mut dyn Context) {
-        ctx.set_setting("llm.provider", &self.draft.provider_id);
+        ctx.set_setting(&Setting::Provider, &self.draft.provider_id);
         if self.draft.is_custom {
-            ctx.set_setting("llm.base_url", &self.draft.base_url);
+            ctx.set_setting(&Setting::BaseUrl, &self.draft.base_url);
             let model = self.draft.model.clone();
             super::remember_model(ctx, &self.draft.provider_id, &model);
         } else {
-            ctx.set_setting("llm.base_url", "");
+            ctx.set_setting(&Setting::BaseUrl, "");
             if let Some(provider) = ctx.provider(&self.draft.provider_id) {
                 let model = super::model_for(ctx, &provider);
                 super::remember_model(ctx, &provider.id, &model);

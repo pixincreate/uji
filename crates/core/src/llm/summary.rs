@@ -1,4 +1,4 @@
-use super::{DEFAULT_MAX_OUTPUT, Effort, Llm, LlmRequest, Retention, Usage};
+use super::{DEFAULT_MAX_OUTPUT, Effort, LlmRequest, Protocol, Retention, Usage, silent};
 use crate::session::model::Message;
 
 const FORMAT: &str = "## Goal\n\
@@ -46,9 +46,9 @@ pub struct Summarized {
     pub usage: Option<Usage>,
 }
 
-pub async fn generate(
+pub async fn generate<P: Protocol + ?Sized>(
     client: &reqwest::Client,
-    provider: &dyn Llm,
+    provider: &P,
     model: String,
     messages: &[&Message],
     previous: Option<&str>,
@@ -73,7 +73,7 @@ pub async fn generate(
         cache: Retention::Off,
         max_output: DEFAULT_MAX_OUTPUT,
     };
-    let response = provider.send_request(client, &request).await.ok()?;
+    let response = provider.call(client, &request, &mut silent()).await.ok()?;
     let summary = response.text.trim().to_string();
     if summary.is_empty() {
         return None;

@@ -3,7 +3,8 @@
     {
       "id": "gpt-5.5",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-4",
@@ -58,43 +59,51 @@
     {
       "id": "gpt-5",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     "gpt-5-chat-latest",
     {
       "id": "gpt-5-mini",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5-nano",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5-pro",
       "context": 400000,
-      "output": 272000
+      "output": 272000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.1",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.2",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.2-chat-latest",
       "context": 128000,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "gpt-5.2-pro",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.3-chat-latest",
@@ -104,92 +113,110 @@
     {
       "id": "gpt-5.3-codex",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.3-codex-spark",
       "context": 128000,
-      "output": 32000
+      "output": 32000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.4",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.4-mini",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.4-nano",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.4-pro",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.5-pro",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.6-luna",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.6-sol",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.6-terra",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-6-astra",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-realtime-2.1",
       "context": 128000,
-      "output": 32000
+      "output": 32000,
+      "reasoning": true
     },
     {
       "id": "o1",
       "context": 200000,
-      "output": 100000
+      "output": 100000,
+      "reasoning": true
     },
     {
       "id": "o1-pro",
       "context": 200000,
-      "output": 100000
+      "output": 100000,
+      "reasoning": true
     },
     {
       "id": "o3",
       "context": 200000,
-      "output": 100000
+      "output": 100000,
+      "reasoning": true
     },
     {
       "id": "o3-mini",
       "context": 200000,
-      "output": 100000
+      "output": 100000,
+      "reasoning": true
     },
     {
       "id": "o3-pro",
       "context": 200000,
-      "output": 100000
+      "output": 100000,
+      "reasoning": true
     },
     {
       "id": "o4-mini",
       "context": 200000,
-      "output": 100000
+      "output": 100000,
+      "reasoning": true
     },
     "chatgpt-image-latest",
     "gpt-image-1.5",
@@ -209,7 +236,8 @@
     {
       "id": "gpt-5.6",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "text-embedding-3-small",
@@ -227,197 +255,233 @@
       "id": "claude-opus-4-8",
       "context": 1000000,
       "output": 128000,
-      "cache": true
+      "cache": true,
+      "reasoning": true
     },
     {
       "id": "claude-fable-5",
       "context": 1000000,
       "output": 128000,
-      "cache": true
+      "cache": true,
+      "reasoning": true
     },
     {
       "id": "claude-fable-5-1",
       "context": 1000000,
       "output": 128000,
-      "cache": true
+      "cache": true,
+      "reasoning": true
     },
     {
       "id": "claude-haiku-4-5",
       "context": 200000,
       "output": 64000,
-      "cache": true
+      "cache": true,
+      "reasoning": true
     },
     {
       "id": "claude-haiku-4-5-20251001",
       "context": 200000,
       "output": 64000,
-      "cache": true
+      "cache": true,
+      "reasoning": true
     },
     {
       "id": "claude-opus-4-5",
       "context": 200000,
       "output": 64000,
-      "cache": true
+      "cache": true,
+      "reasoning": true
     },
     {
       "id": "claude-opus-4-5-20251101",
       "context": 200000,
       "output": 64000,
-      "cache": true
+      "cache": true,
+      "reasoning": true
     },
     {
       "id": "claude-opus-4-6",
       "context": 1000000,
       "output": 128000,
-      "cache": true
+      "cache": true,
+      "reasoning": true
     },
     {
       "id": "claude-opus-4-7",
       "context": 1000000,
       "output": 128000,
-      "cache": true
+      "cache": true,
+      "reasoning": true
     },
     {
       "id": "claude-opus-5",
       "context": 1000000,
       "output": 128000,
-      "cache": true
+      "cache": true,
+      "reasoning": true
     },
     {
       "id": "claude-sonnet-4-5",
       "context": 1000000,
       "output": 64000,
-      "cache": true
+      "cache": true,
+      "reasoning": true
     },
     {
       "id": "claude-sonnet-4-5-20250929",
       "context": 1000000,
       "output": 64000,
-      "cache": true
+      "cache": true,
+      "reasoning": true
     },
     {
       "id": "claude-sonnet-4-6",
       "context": 1000000,
       "output": 128000,
-      "cache": true
+      "cache": true,
+      "reasoning": true
     },
     {
       "id": "claude-sonnet-5",
       "context": 1000000,
       "output": 128000,
-      "cache": true
+      "cache": true,
+      "reasoning": true
     }
   ],
   "google": [
     {
       "id": "gemini-3.1-pro-preview",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "deep-research-max-preview-04-2026",
       "context": 131072,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "deep-research-preview-04-2026",
       "context": 131072,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-2.5-computer-use-preview-10-2025",
       "context": 131072,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-2.5-flash",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-2.5-flash-lite",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-2.5-pro",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3-flash-preview",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3.1-flash-lite",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3.1-flash-lite-image",
       "context": 65536,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3.1-flash-lite-preview",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3.1-flash-live-preview",
       "context": 131072,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3.1-pro-preview-customtools",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3.5-flash",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3.5-flash-lite",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3.6-flash",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3.7-flash",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3.8-flash",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-flash-latest",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-flash-lite-latest",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemma-4-26b-a4b-it",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "gemma-4-31b-it",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "lyria-3-clip-preview",
@@ -427,12 +491,14 @@
     {
       "id": "gemini-2.5-flash-image",
       "context": 32768,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "gemini-3-pro-image",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "gemini-2.5-pro-preview-tts",
@@ -462,17 +528,20 @@
     {
       "id": "gemini-3.1-flash-image",
       "context": 65536,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3-pro-image-preview",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "gemini-3.1-flash-tts-preview",
       "context": 8192,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "veo-3.1-lite-generate-preview",
@@ -497,19 +566,22 @@
     {
       "id": "gemini-3.1-flash-image-preview",
       "context": 65536,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-omni-flash-preview",
       "context": 131072,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     }
   ],
   "openrouter": [
     {
       "id": "moonshotai/kimi-k2.6",
       "context": 262144,
-      "output": 235929
+      "output": 235929,
+      "reasoning": true
     },
     {
       "id": "anthropic/claude-3-haiku",
@@ -519,92 +591,110 @@
     {
       "id": "anthropic/claude-fable-5",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "anthropic/claude-fable-5.1",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "anthropic/claude-haiku-4.5",
       "context": 200000,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "anthropic/claude-opus-4",
       "context": 200000,
-      "output": 32000
+      "output": 32000,
+      "reasoning": true
     },
     {
       "id": "anthropic/claude-opus-4.1",
       "context": 200000,
-      "output": 32000
+      "output": 32000,
+      "reasoning": true
     },
     {
       "id": "anthropic/claude-opus-4.5",
       "context": 200000,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "anthropic/claude-opus-4.6",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "anthropic/claude-opus-4.7",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "anthropic/claude-opus-4.8",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "anthropic/claude-opus-5",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "anthropic/claude-sonnet-4",
       "context": 1000000,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "anthropic/claude-sonnet-4.5",
       "context": 1000000,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "anthropic/claude-sonnet-4.6",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "anthropic/claude-sonnet-5",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "aion-labs/aion-2.0",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "aion-labs/aion-3.0",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "aion-labs/aion-3.0-mini",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "amazon/nova-2-lite-v1",
       "context": 1000000,
-      "output": 65535
+      "output": 65535,
+      "reasoning": true
     },
     {
       "id": "amazon/nova-lite-v1",
@@ -641,38 +731,45 @@
     {
       "id": "arcee-ai/trinity-large-thinking",
       "context": 262144,
-      "output": 80000
+      "output": 80000,
+      "reasoning": true
     },
     "auto",
     {
       "id": "bytedance-seed/seed-1.6",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "bytedance-seed/seed-1.6-flash",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "bytedance-seed/seed-2-1-turbo",
       "context": 262144,
-      "output": 235929
+      "output": 235929,
+      "reasoning": true
     },
     {
       "id": "bytedance-seed/seed-2.0-code",
       "context": 262144,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "bytedance-seed/seed-2.0-lite",
       "context": 262144,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "bytedance-seed/seed-2.0-mini",
       "context": 262144,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "cohere/command-r-08-2024",
@@ -687,7 +784,8 @@
     {
       "id": "cohere/north-mini-code:free",
       "context": 256000,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "deepseek/deepseek-chat",
@@ -702,86 +800,102 @@
     {
       "id": "deepseek/deepseek-chat-v3.1",
       "context": 163840,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "deepseek/deepseek-r1",
       "context": 64000,
-      "output": 16000
+      "output": 16000,
+      "reasoning": true
     },
     {
       "id": "deepseek/deepseek-r1-0528",
       "context": 163840,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "deepseek/deepseek-v3.1-terminus",
       "context": 163840,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "deepseek/deepseek-v3.2",
       "context": 163840,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "deepseek/deepseek-v3.2-exp",
       "context": 163840,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "deepseek/deepseek-v4-flash",
       "context": 1048576,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "deepseek/deepseek-v4-flash-0731",
       "context": 1310720,
-      "output": 943718
+      "output": 943718,
+      "reasoning": true
     },
     "deepseek/deepseek-v4-flash-0731:batch",
     {
       "id": "deepseek/deepseek-v4-flash-vision-exp",
       "context": 1048576,
-      "output": 943718
+      "output": 943718,
+      "reasoning": true
     },
     {
       "id": "deepseek/deepseek-v4-pro",
       "context": 1048576,
-      "output": 393216
+      "output": 393216,
+      "reasoning": true
     },
     {
       "id": "deepseek/deepseek-v4-pro-0813",
       "context": 1048576,
-      "output": 393216
+      "output": 393216,
+      "reasoning": true
     },
     "deepseek/deepseek-v4-pro-0813:batch",
     {
       "id": "dots-studio/dots-3-note-preview:free",
       "context": 512000,
-      "output": 460800
+      "output": 460800,
+      "reasoning": true
     },
     {
       "id": "google/gemini-2.5-flash",
       "context": 1048576,
-      "output": 65535
+      "output": 65535,
+      "reasoning": true
     },
     {
       "id": "google/gemini-2.5-flash-lite",
       "context": 1048576,
-      "output": 65535
+      "output": 65535,
+      "reasoning": true
     },
     "google/gemini-2.5-flash-lite:batch",
     "google/gemini-2.5-flash:batch",
     {
       "id": "google/gemini-2.5-pro",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "google/gemini-2.5-pro-preview",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "google/gemini-2.5-pro-preview-05-06",
@@ -792,64 +906,75 @@
     {
       "id": "google/gemini-3-flash-preview",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     "google/gemini-3-flash-preview:batch",
     {
       "id": "google/gemini-3-pro-image",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "google/gemini-3.1-flash-lite",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "google/gemini-3.1-flash-lite-preview",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     "google/gemini-3.1-flash-lite:batch",
     {
       "id": "google/gemini-3.1-pro-preview",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "google/gemini-3.1-pro-preview-customtools",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     "google/gemini-3.1-pro-preview:batch",
     {
       "id": "google/gemini-3.5-flash",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "google/gemini-3.5-flash-lite",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     "google/gemini-3.5-flash-lite:batch",
     "google/gemini-3.5-flash:batch",
     {
       "id": "google/gemini-3.6-flash",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     "google/gemini-3.6-flash:batch",
     {
       "id": "google/gemini-3.7-flash",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     "google/gemini-3.7-flash:batch",
     {
       "id": "google/gemini-3.8-flash",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     "google/gemini-3.8-flash:batch",
     {
@@ -865,54 +990,64 @@
     {
       "id": "google/gemma-4-26b-a4b-it",
       "context": 262144,
-      "output": 235929
+      "output": 235929,
+      "reasoning": true
     },
     {
       "id": "google/gemma-4-26b-a4b-it:free",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "google/gemma-4-31b-it",
       "context": 262144,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     "google/gemma-4-31b-it:batch",
     {
       "id": "google/gemma-4-31b-it:free",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "ibm-granite/granite-4.2-8b",
       "context": 131072,
-      "output": 117964
+      "output": 117964,
+      "reasoning": true
     },
     {
       "id": "inception/mercury-2",
       "context": 128000,
-      "output": 50000
+      "output": 50000,
+      "reasoning": true
     },
     "inception/mercury-2.5-preview",
     {
       "id": "inclusionai/ling-3.0-flash",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "inclusionai/ling-3.0-flash-fin",
       "context": 262144,
-      "output": 235929
+      "output": 235929,
+      "reasoning": true
     },
     {
       "id": "inclusionai/ling-3.0-flash-fin:free",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "inclusionai/ling-3.0-flash-sante:free",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "kwaipilot/kat-coder-pro-v2",
@@ -927,12 +1062,14 @@
     {
       "id": "liquid/lfm-2.5-2.6b:free",
       "context": 65536,
-      "output": 8192
+      "output": 8192,
+      "reasoning": true
     },
     {
       "id": "meituan/longcat-2.0",
       "context": 1048756,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "meta-llama/llama-3.1-70b-instruct",
@@ -962,64 +1099,76 @@
     {
       "id": "meta/muse-glimmer-30b",
       "context": 131072,
-      "output": 117964
+      "output": 117964,
+      "reasoning": true
     },
     "meta/muse-glimmer-30b:batch",
     {
       "id": "meta/muse-spark-1.1",
       "context": 1048576,
-      "output": 943718
+      "output": 943718,
+      "reasoning": true
     },
     {
       "id": "meta/muse-spark-1.2",
       "context": 1048576,
-      "output": 943718
+      "output": 943718,
+      "reasoning": true
     },
     {
       "id": "meta/muse-spark-1.2-contributor",
       "context": 1048576,
-      "output": 943718
+      "output": 943718,
+      "reasoning": true
     },
     {
       "id": "meta/muse-spark-1.3",
       "context": 1048576,
-      "output": 943718
+      "output": 943718,
+      "reasoning": true
     },
     {
       "id": "meta/muse-spark-1.3-contributor",
       "context": 1048576,
-      "output": 943718
+      "output": 943718,
+      "reasoning": true
     },
     {
       "id": "minimax/minimax-m1",
       "context": 1000000,
-      "output": 40000
+      "output": 40000,
+      "reasoning": true
     },
     {
       "id": "minimax/minimax-m2",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "minimax/minimax-m2.1",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "minimax/minimax-m2.5",
       "context": 204800,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "minimax/minimax-m2.7",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     "minimax/minimax-m2.7:free",
     {
       "id": "minimax/minimax-m3",
       "context": 1048576,
-      "output": 512000
+      "output": 512000,
+      "reasoning": true
     },
     "minimax/minimax-m3:batch",
     "minimax/minimax-m3:free",
@@ -1071,7 +1220,8 @@
     {
       "id": "mistralai/mistral-medium-3-5",
       "context": 262144,
-      "output": 209715
+      "output": 209715,
+      "reasoning": true
     },
     "mistralai/mistral-medium-3-5:batch",
     {
@@ -1092,7 +1242,8 @@
     {
       "id": "mistralai/mistral-small-2603",
       "context": 262144,
-      "output": 209715
+      "output": 209715,
+      "reasoning": true
     },
     {
       "id": "mistralai/mistral-small-3.2-24b-instruct",
@@ -1122,22 +1273,26 @@
     {
       "id": "moonshotai/kimi-k2-thinking",
       "context": 262144,
-      "output": 98304
+      "output": 98304,
+      "reasoning": true
     },
     {
       "id": "moonshotai/kimi-k2.5",
       "context": 262144,
-      "output": 235929
+      "output": 235929,
+      "reasoning": true
     },
     {
       "id": "moonshotai/kimi-k2.7-code",
       "context": 262144,
-      "output": 235929
+      "output": 235929,
+      "reasoning": true
     },
     {
       "id": "moonshotai/kimi-k3",
       "context": 1048576,
-      "output": 943718
+      "output": 943718,
+      "reasoning": true
     },
     "moonshotai/kimi-k3:batch",
     "nex-agi/nex-n2-mini",
@@ -1145,42 +1300,50 @@
     {
       "id": "nvidia/nemotron-3-nano-30b-a3b",
       "context": 262144,
-      "output": 235929
+      "output": 235929,
+      "reasoning": true
     },
     {
       "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
       "context": 256000,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "nvidia/nemotron-3-super-120b-a12b",
       "context": 262144,
-      "output": 235929
+      "output": 235929,
+      "reasoning": true
     },
     {
       "id": "nvidia/nemotron-3-super-120b-a12b:free",
       "context": 262144,
-      "output": 235929
+      "output": 235929,
+      "reasoning": true
     },
     {
       "id": "nvidia/nemotron-3-ultra-550b-a55b",
       "context": 262144,
-      "output": 182520
+      "output": 182520,
+      "reasoning": true
     },
     {
       "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
       "context": 1000000,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "nvidia/nemotron-3.5-lightning",
       "context": 262144,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "nvidia/nemotron-3.5-lightning:free",
       "context": 1000000,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-3.5-turbo",
@@ -1267,51 +1430,60 @@
     {
       "id": "openai/gpt-5",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-5-mini",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     "openai/gpt-5-mini:batch",
     {
       "id": "openai/gpt-5-nano",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     "openai/gpt-5-nano:batch",
     {
       "id": "openai/gpt-5-pro",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     "openai/gpt-5-pro:batch",
     {
       "id": "openai/gpt-5.1",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-5.1-codex",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-5.1-codex-max",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-5.1-codex-mini",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     "openai/gpt-5.1:batch",
     {
       "id": "openai/gpt-5.2",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-5.2-chat",
@@ -1321,89 +1493,104 @@
     {
       "id": "openai/gpt-5.2-codex",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-5.2-pro",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     "openai/gpt-5.2-pro:batch",
     "openai/gpt-5.2:batch",
     {
       "id": "openai/gpt-5.3-codex",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-5.4",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-5.4-mini",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     "openai/gpt-5.4-mini:batch",
     {
       "id": "openai/gpt-5.4-nano",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     "openai/gpt-5.4-nano:batch",
     {
       "id": "openai/gpt-5.4-pro",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     "openai/gpt-5.4-pro:batch",
     "openai/gpt-5.4:batch",
     {
       "id": "openai/gpt-5.5",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-5.5-pro",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     "openai/gpt-5.5-pro:batch",
     "openai/gpt-5.5:batch",
     {
       "id": "openai/gpt-5.6-luna",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-5.6-luna-pro",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     "openai/gpt-5.6-luna-pro:batch",
     "openai/gpt-5.6-luna:batch",
     {
       "id": "openai/gpt-5.6-sol",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-5.6-sol-pro",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     "openai/gpt-5.6-sol-pro:batch",
     "openai/gpt-5.6-sol:batch",
     {
       "id": "openai/gpt-5.6-terra",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-5.6-terra-pro",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     "openai/gpt-5.6-terra-pro:batch",
     "openai/gpt-5.6-terra:batch",
@@ -1411,12 +1598,14 @@
     {
       "id": "openai/gpt-6-astra",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-6-astra-pro",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     "openai/gpt-6-astra-pro:batch",
     "openai/gpt-6-astra:batch",
@@ -1438,67 +1627,79 @@
     {
       "id": "openai/gpt-oss-120b",
       "context": 131072,
-      "output": 117964
+      "output": 117964,
+      "reasoning": true
     },
     "openai/gpt-oss-120b:batch",
     {
       "id": "openai/gpt-oss-20b",
       "context": 131072,
-      "output": 117964
+      "output": 117964,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-oss-safeguard-20b",
       "context": 131072,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "openai/o1",
       "context": 200000,
-      "output": 100000
+      "output": 100000,
+      "reasoning": true
     },
     {
       "id": "openai/o3",
       "context": 200000,
-      "output": 100000
+      "output": 100000,
+      "reasoning": true
     },
     {
       "id": "openai/o3-mini",
       "context": 200000,
-      "output": 100000
+      "output": 100000,
+      "reasoning": true
     },
     {
       "id": "openai/o3-mini-high",
       "context": 200000,
-      "output": 100000
+      "output": 100000,
+      "reasoning": true
     },
     "openai/o3-mini:batch",
     {
       "id": "openai/o3-pro",
       "context": 200000,
-      "output": 100000
+      "output": 100000,
+      "reasoning": true
     },
     "openai/o3:batch",
     {
       "id": "openai/o4-mini",
       "context": 200000,
-      "output": 100000
+      "output": 100000,
+      "reasoning": true
     },
     {
       "id": "openai/o4-mini-high",
       "context": 200000,
-      "output": 100000
+      "output": 100000,
+      "reasoning": true
     },
     "openai/o4-mini:batch",
     {
       "id": "openrouter/auto",
       "context": 2000000,
-      "output": 2000000
+      "output": 2000000,
+      "reasoning": true
     },
     "openrouter/auto-beta",
     {
       "id": "openrouter/free",
       "context": 200000,
-      "output": 8000
+      "output": 8000,
+      "reasoning": true
     },
     {
       "id": "openrouter/fusion",
@@ -1508,22 +1709,26 @@
     {
       "id": "poolside/laguna-s-2.1",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "poolside/laguna-s-2.1:free",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "poolside/laguna-xs-2.1",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "poolside/laguna-xs-2.1:free",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen-2.5-72b-instruct",
@@ -1548,12 +1753,14 @@
     {
       "id": "qwen/qwen3-14b",
       "context": 131072,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3-235b-a22b",
       "context": 131072,
-      "output": 8192
+      "output": 8192,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3-235b-a22b-2507",
@@ -1563,12 +1770,14 @@
     {
       "id": "qwen/qwen3-235b-a22b-thinking-2507",
       "context": 131072,
-      "output": 117964
+      "output": 117964,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3-30b-a3b",
       "context": 131072,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3-30b-a3b-instruct-2507",
@@ -1578,17 +1787,20 @@
     {
       "id": "qwen/qwen3-30b-a3b-thinking-2507",
       "context": 81920,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3-32b",
       "context": 131072,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3-8b",
       "context": 131072,
-      "output": 8192
+      "output": 8192,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3-coder",
@@ -1623,7 +1835,8 @@
     {
       "id": "qwen/qwen3-max-thinking",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3-next-80b-a3b-instruct",
@@ -1633,7 +1846,8 @@
     {
       "id": "qwen/qwen3-next-80b-a3b-thinking",
       "context": 262144,
-      "output": 235929
+      "output": 235929,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3-vl-235b-a22b-instruct",
@@ -1643,7 +1857,8 @@
     {
       "id": "qwen/qwen3-vl-235b-a22b-thinking",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3-vl-30b-a3b-instruct",
@@ -1653,7 +1868,8 @@
     {
       "id": "qwen/qwen3-vl-30b-a3b-thinking",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3-vl-32b-instruct",
@@ -1668,109 +1884,130 @@
     {
       "id": "qwen/qwen3-vl-8b-thinking",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.5-122b-a10b",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.5-27b",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.5-35b-a3b",
       "context": 262144,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.5-397b-a17b",
       "context": 262144,
-      "output": 235929
+      "output": 235929,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.5-9b",
       "context": 262144,
-      "output": 235929
+      "output": 235929,
+      "reasoning": true
     },
     "qwen/qwen3.5-9b:batch",
     {
       "id": "qwen/qwen3.5-flash-02-23",
       "context": 1000000,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.5-plus-02-15",
       "context": 1000000,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.5-plus-20260420",
       "context": 1000000,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.6-27b",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.6-35b-a3b",
       "context": 262144,
-      "output": 235929
+      "output": 235929,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.6-flash",
       "context": 1000000,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.6-max-preview",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.6-plus",
       "context": 1000000,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.7-flash",
       "context": 1000000,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.7-max",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.7-plus",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.8-2.4t-a95b",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     "qwen/qwen3.8-2.4t-a95b:batch",
     {
       "id": "qwen/qwen3.8-27b",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.8-flash",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.8-max-0902",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "rekaai/reka-edge",
@@ -1785,12 +2022,14 @@
     {
       "id": "sakana/fugu-ultra",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "sakana/sakana-namazu",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "sao10k/l3.1-euryale-70b",
@@ -1800,27 +2039,32 @@
     {
       "id": "stepfun/step-3.5-flash",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "stepfun/step-3.7-flash",
       "context": 262144,
-      "output": 230400
+      "output": 230400,
+      "reasoning": true
     },
     {
       "id": "tencent/hy3",
       "context": 262144,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "tencent/hy3-preview",
       "context": 262144,
-      "output": 235929
+      "output": 235929,
+      "reasoning": true
     },
     {
       "id": "tencent/hy4-preview",
       "context": 1048576,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "thedrummer/unslopnemo-12b",
@@ -1830,203 +2074,245 @@
     {
       "id": "thinkingmachines/inkling",
       "context": 1048576,
-      "output": 471859
+      "output": 471859,
+      "reasoning": true
     },
     {
       "id": "thinkingmachines/inkling-small",
       "context": 1048576,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     "thinkingmachines/inkling-small:batch",
     {
       "id": "thinkingmachines/inkling-small:free",
       "context": 1048576,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     "thinkingmachines/inkling:batch",
     {
       "id": "thinkingmachines/inkling:free",
       "context": 1048576,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "upstage/solar-pro-3",
       "context": 131072,
-      "output": 117964
+      "output": 117964,
+      "reasoning": true
     },
     {
       "id": "upstage/solar-pro4",
       "context": 524288,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "x-ai/grok-4.20",
       "context": 2000000,
-      "output": 1800000
+      "output": 1800000,
+      "reasoning": true
     },
     {
       "id": "x-ai/grok-4.3",
       "context": 1000000,
-      "output": 900000
+      "output": 900000,
+      "reasoning": true
     },
     "x-ai/grok-4.3:batch",
     {
       "id": "x-ai/grok-4.5",
       "context": 500000,
-      "output": 450000
+      "output": 450000,
+      "reasoning": true
     },
     {
       "id": "x-ai/grok-4.6",
       "context": 500000,
-      "output": 450000
+      "output": 450000,
+      "reasoning": true
     },
     {
       "id": "x-ai/grok-build-0.1",
       "context": 256000,
-      "output": 230400
+      "output": 230400,
+      "reasoning": true
     },
     {
       "id": "xiaomi/mimo-v2.5",
       "context": 1050000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "xiaomi/mimo-v2.5-pro",
       "context": 1050000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "z-ai/glm-4.5",
       "context": 131072,
-      "output": 98304
+      "output": 98304,
+      "reasoning": true
     },
     {
       "id": "z-ai/glm-4.5-air",
       "context": 131072,
-      "output": 98304
+      "output": 98304,
+      "reasoning": true
     },
     {
       "id": "z-ai/glm-4.5v",
       "context": 65536,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "z-ai/glm-4.6",
       "context": 204800,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "z-ai/glm-4.6v",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "z-ai/glm-4.7",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "z-ai/glm-4.7-flash",
       "context": 200000,
-      "output": 117964
+      "output": 117964,
+      "reasoning": true
     },
     {
       "id": "z-ai/glm-5",
       "context": 204800,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "z-ai/glm-5-turbo",
       "context": 202752,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "z-ai/glm-5.1",
       "context": 204800,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "z-ai/glm-5.2",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
-    "z-ai/glm-5.2:free",
+    {
+      "id": "z-ai/glm-5.2:free",
+      "reasoning": true
+    },
     {
       "id": "z-ai/glm-5.3",
       "context": 1310720,
-      "output": 943717
+      "output": 943717,
+      "reasoning": true
     },
     {
       "id": "z-ai/glm-5.3-flash",
       "context": 1310720,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     "z-ai/glm-5.3-flash:batch",
     {
       "id": "z-ai/glm-5v-turbo",
       "context": 202752,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "~anthropic/claude-fable-latest",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "~anthropic/claude-haiku-latest",
       "context": 200000,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "~anthropic/claude-opus-latest",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "~anthropic/claude-sonnet-latest",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "~deepseek/deepseek-v4-flash-latest",
       "context": 1310720,
-      "output": 393216
+      "output": 393216,
+      "reasoning": true
     },
     {
       "id": "~google/gemini-flash-latest",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "~google/gemini-pro-latest",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "~moonshotai/kimi-latest",
       "context": 1048576,
-      "output": 943718
+      "output": 943718,
+      "reasoning": true
     },
     "~openai/gpt-latest",
     {
       "id": "~openai/gpt-mini-latest",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "~x-ai/grok-latest",
       "context": 500000,
-      "output": 450000
+      "output": 450000,
+      "reasoning": true
     },
     {
       "id": "~z-ai/glm-flash-latest",
       "context": 1310720,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "~z-ai/glm-latest",
       "context": 1310720,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen2.5-vl-72b-instruct",
@@ -2041,7 +2327,8 @@
     {
       "id": "baidu/ernie-4.5-vl-424b-a47b",
       "context": 123000,
-      "output": 16000
+      "output": 16000,
+      "reasoning": true
     },
     {
       "id": "aion-labs/aion-rp-llama-3.1-8b",
@@ -2066,12 +2353,14 @@
     {
       "id": "~deepseek/deepseek-pro-latest",
       "context": 1048576,
-      "output": 393216
+      "output": 393216,
+      "reasoning": true
     },
     {
       "id": "~deepseek/deepseek-flash-latest",
       "context": 1048576,
-      "output": 943718
+      "output": 943718,
+      "reasoning": true
     },
     {
       "id": "mistralai/mistral-small-24b-instruct-2501",
@@ -2096,17 +2385,20 @@
     {
       "id": "nvidia/nemotron-3.5-content-safety",
       "context": 131072,
-      "output": 117964
+      "output": 117964,
+      "reasoning": true
     },
     {
       "id": "nvidia/nemotron-3.5-content-safety:free",
       "context": 128000,
-      "output": 8192
+      "output": 8192,
+      "reasoning": true
     },
     {
       "id": "google/gemini-3.1-flash-lite-image",
       "context": 65536,
-      "output": 58982
+      "output": 58982,
+      "reasoning": true
     },
     {
       "id": "google/gemma-3-4b-it",
@@ -2126,12 +2418,14 @@
     {
       "id": "google/gemini-3.1-flash-image",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "google/gemini-3-pro-image-preview",
       "context": 65536,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "google/lyria-3-pro-preview",
@@ -2141,7 +2435,8 @@
     {
       "id": "google/gemini-3.1-flash-image-preview",
       "context": 65536,
-      "output": 58982
+      "output": 58982,
+      "reasoning": true
     },
     {
       "id": "google/gemma-2-27b-it",
@@ -2156,12 +2451,14 @@
     {
       "id": "nex-agi/nex-n2.5-mini:free",
       "context": 262144,
-      "output": 235929
+      "output": 235929,
+      "reasoning": true
     },
     {
       "id": "nex-agi/nex-n2.5-pro:free",
       "context": 262144,
-      "output": 235929
+      "output": 235929,
+      "reasoning": true
     },
     {
       "id": "gryphe/mythomax-l2-13b",
@@ -2171,7 +2468,8 @@
     {
       "id": "perceptron/perceptron-mk1",
       "context": 32768,
-      "output": 8192
+      "output": 8192,
+      "reasoning": true
     },
     {
       "id": "thedrummer/skyfall-36b-v2",
@@ -2191,7 +2489,8 @@
     {
       "id": "inception/mercury-2.5",
       "context": 260000,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "writer/palmyra-x5",
@@ -2211,12 +2510,14 @@
     {
       "id": "sakana/fugu-max",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "sakana/fugu-ultra-v2",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "ibm-granite/granite-4.0-h-micro",
@@ -2226,42 +2527,50 @@
     {
       "id": "deepseek/deepseek-v4.1-flash",
       "context": 1048576,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "deepseek/deepseek-r1-distill-llama-70b",
       "context": 8192,
-      "output": 7372
+      "output": 7372,
+      "reasoning": true
     },
     {
       "id": "~openai/gpt-terra-latest",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "~openai/gpt-sol-latest",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "~openai/gpt-luna-latest",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "~openai/gpt-astra-latest",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "inclusionai/ling-3.0-flash-vl:free",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "inclusionai/ling-3.0-flash-vl",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "anthracite-org/magnum-v4-72b",
@@ -2296,7 +2605,8 @@
     {
       "id": "x-ai/grok-4.20-multi-agent",
       "context": 2000000,
-      "output": 1800000
+      "output": 1800000,
+      "reasoning": true
     },
     {
       "id": "meta-llama/llama-guard-4-12b",
@@ -2326,27 +2636,32 @@
     {
       "id": "nousresearch/hermes-4-405b",
       "context": 131072,
-      "output": 117964
+      "output": 117964,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-5-image",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-5.4-image-2",
       "context": 272000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "openai/o1-pro",
       "context": 200000,
-      "output": 100000
+      "output": 100000,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-5-image-mini",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-3.5-turbo-instruct",
@@ -2391,7 +2706,8 @@
     {
       "id": "tencent/hunyuan-a13b-instruct",
       "context": 131072,
-      "output": 117964
+      "output": 117964,
+      "reasoning": true
     },
     {
       "id": "cognitivecomputations/dolphin-mistral-24b-venice-edition",
@@ -2401,7 +2717,8 @@
     {
       "id": "perplexity/sonar-pro-search",
       "context": 200000,
-      "output": 8000
+      "output": 8000,
+      "reasoning": true
     },
     {
       "id": "perplexity/sonar",
@@ -2411,7 +2728,8 @@
     {
       "id": "perplexity/sonar-reasoning-pro",
       "context": 128000,
-      "output": 115200
+      "output": 115200,
+      "reasoning": true
     },
     {
       "id": "perplexity/sonar-pro",
@@ -2421,61 +2739,72 @@
     {
       "id": "perplexity/sonar-deep-research",
       "context": 128000,
-      "output": 115200
+      "output": 115200,
+      "reasoning": true
     },
     {
       "id": "rekaai/reka-flash-3",
       "context": 65536,
-      "output": 58982
+      "output": 58982,
+      "reasoning": true
     }
   ],
   "deepseek": [
     {
       "id": "deepseek-v4-pro",
       "context": 1000000,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "deepseek-flash",
       "context": 1000000,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "deepseek-v4-flash-vision-exp",
       "context": 1000000,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "deepseek-v4-flash",
       "context": 1000000,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     }
   ],
   "xai": [
     {
       "id": "grok-4.6",
       "context": 500000,
-      "output": 500000
+      "output": 500000,
+      "reasoning": true
     },
     {
       "id": "grok-4.3",
       "context": 1000000,
-      "output": 30000
+      "output": 30000,
+      "reasoning": true
     },
     {
       "id": "grok-4.5",
       "context": 500000,
-      "output": 500000
+      "output": 500000,
+      "reasoning": true
     },
     {
       "id": "grok-4.20-0309-reasoning",
       "context": 1000000,
-      "output": 30000
+      "output": 30000,
+      "reasoning": true
     },
     {
       "id": "grok-4.20-multi-agent-0309",
       "context": 1000000,
-      "output": 30000
+      "output": 30000,
+      "reasoning": true
     },
     {
       "id": "grok-imagine-image",
@@ -2488,7 +2817,8 @@
     {
       "id": "grok-build-0.1",
       "context": 256000,
-      "output": 256000
+      "output": 256000,
+      "reasoning": true
     },
     {
       "id": "grok-imagine-video-1.5",
@@ -2512,7 +2842,8 @@
     {
       "id": "openai/gpt-oss-120b",
       "context": 131072,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "llama-3.1-8b-instant",
@@ -2527,22 +2858,26 @@
     {
       "id": "openai/gpt-oss-20b",
       "context": 131072,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-oss-safeguard-20b",
       "context": 131072,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.6-27b",
       "context": 131072,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.8-27b",
       "context": 131042,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     "whisper-large-v3",
     "whisper-large-v3-turbo",
@@ -2626,12 +2961,14 @@
     {
       "id": "magistral-medium-latest",
       "context": 128000,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "magistral-small",
       "context": 128000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "ministral-3b-latest",
@@ -2671,13 +3008,15 @@
     {
       "id": "mistral-medium-2604",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     "mistral-medium-3.5",
     {
       "id": "mistral-medium-latest",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "mistral-nemo",
@@ -2692,12 +3031,14 @@
     {
       "id": "mistral-small-2603",
       "context": 256000,
-      "output": 256000
+      "output": 256000,
+      "reasoning": true
     },
     {
       "id": "mistral-small-latest",
       "context": 256000,
-      "output": 256000
+      "output": 256000,
+      "reasoning": true
     },
     {
       "id": "open-mistral-7b",
@@ -2737,7 +3078,8 @@
     {
       "id": "zai-glm-5-2",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "mistral-embed",
@@ -2751,17 +3093,20 @@
     {
       "id": "moonshotai/Kimi-K2.6",
       "context": 262144,
-      "output": 131000
+      "output": 131000,
+      "reasoning": true
     },
     {
       "id": "MiniMaxAI/MiniMax-M2.7",
       "context": 202752,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "MiniMaxAI/MiniMax-M3",
       "context": 524288,
-      "output": 250000
+      "output": 250000,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen2.5-7B-Instruct-Turbo",
@@ -2771,12 +3116,14 @@
     {
       "id": "Qwen/Qwen3.5-9B",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen3.6-Plus",
       "context": 1000000,
-      "output": 500000
+      "output": 500000,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen3.7-Max",
@@ -2786,22 +3133,26 @@
     {
       "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
       "context": 1000000,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-V4-Pro",
       "context": 512000,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
       "context": 1048576,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "google/gemma-4-31B-it",
       "context": 262144,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
@@ -2811,47 +3162,56 @@
     {
       "id": "moonshotai/Kimi-K2.7-Code",
       "context": 262144,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "moonshotai/Kimi-K3",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "nvidia/nemotron-3-ultra-550b-a55b",
       "context": 512300,
-      "output": 512300
+      "output": 512300,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-oss-120b",
       "context": 131072,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-oss-20b",
       "context": 131072,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "thinkingmachines/Inkling",
       "context": 524288,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-5.2",
       "context": 512000,
-      "output": 164000
+      "output": 164000,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-5.3",
       "context": 1048576,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-5.3-Flash",
       "context": 1048575,
-      "output": 400000
+      "output": 400000,
+      "reasoning": true
     },
     {
       "id": "essentialai/Rnj-1-Instruct",
@@ -2861,7 +3221,8 @@
     {
       "id": "deepseek-ai/DeepSeek-V3-1",
       "context": 131072,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-V3",
@@ -2871,17 +3232,20 @@
     {
       "id": "deepseek-ai/DeepSeek-V4.1-Flash",
       "context": 1048576,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-R1",
       "context": 163839,
-      "output": 163839
+      "output": 163839,
+      "reasoning": true
     },
     {
       "id": "pearl-ai/gemma-4-31b-it",
       "context": 32000,
-      "output": 32000
+      "output": 32000,
+      "reasoning": true
     },
     {
       "id": "google/gemma-3n-E4B-it",
@@ -2891,12 +3255,14 @@
     {
       "id": "zai-org/GLM-5.1",
       "context": 202752,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-5",
       "context": 202752,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "LiquidAI/LFM2-24B-A2B",
@@ -2911,7 +3277,8 @@
     {
       "id": "Qwen/Qwen3.5-397B-A17B",
       "context": 262144,
-      "output": 130000
+      "output": 130000,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8",
@@ -2926,12 +3293,14 @@
     {
       "id": "deepcogito/cogito-v2-1-671b",
       "context": 163840,
-      "output": 163840
+      "output": 163840,
+      "reasoning": true
     },
     {
       "id": "MiniMaxAI/MiniMax-M2.5",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "meta-llama/Meta-Llama-3-8B-Instruct-Lite",
@@ -2941,27 +3310,31 @@
     {
       "id": "moonshotai/Kimi-K2.5",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     }
   ],
   "cerebras": [
     {
       "id": "gpt-oss-120b",
       "context": 131072,
-      "output": 40960
+      "output": 40960,
+      "reasoning": true
     },
     "gemma-4-31b",
     {
       "id": "qwen-3.8-27b",
       "context": 65536,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     }
   ],
   "moonshotai": [
     {
       "id": "kimi-k2.6",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     "kimi-k2-0711-preview",
     "kimi-k2-0905-preview",
@@ -2972,129 +3345,153 @@
     {
       "id": "kimi-k2.7-code",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "kimi-k2.7-code-highspeed",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "kimi-k3",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     }
   ],
   "zhipuai": [
     {
       "id": "glm-5.3",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "glm-4.7",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     "glm-5-turbo",
     {
       "id": "glm-5.2",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     "glm-5.2-highspeed",
     {
       "id": "glm-5.3-flash",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     "glm-5.3-highspeed",
     {
       "id": "glm-5",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "glm-5.1",
       "context": 200000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "glm-5v-turbo",
       "context": 200000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "glm-4.7-flash",
       "context": 200000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "glm-4.7-flashx",
       "context": 200000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "glm-4.5v",
       "context": 64000,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "glm-4.5",
       "context": 131072,
-      "output": 98304
+      "output": 98304,
+      "reasoning": true
     },
     {
       "id": "glm-4.5-flash",
       "context": 131072,
-      "output": 98304
+      "output": 98304,
+      "reasoning": true
     },
     {
       "id": "glm-4.6v",
       "context": 128000,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "glm-4.6",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "glm-4.5-air",
       "context": 131072,
-      "output": 98304
+      "output": 98304,
+      "reasoning": true
     }
   ],
   "huggingface": [
     {
       "id": "moonshotai/Kimi-K2.6",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "MiniMaxAI/MiniMax-M2",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "MiniMaxAI/MiniMax-M2.1",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "MiniMaxAI/MiniMax-M2.5",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "MiniMaxAI/MiniMax-M2.7",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "MiniMaxAI/MiniMax-M3",
       "context": 524288,
-      "output": 512000
+      "output": 512000,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen2.5-Coder-32B-Instruct",
@@ -3104,7 +3501,8 @@
     {
       "id": "Qwen/Qwen3-235B-A22B",
       "context": 40960,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen3-235B-A22B-Instruct-2507",
@@ -3114,17 +3512,20 @@
     {
       "id": "Qwen/Qwen3-235B-A22B-Thinking-2507",
       "context": 262144,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen3-30B-A3B",
       "context": 40960,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen3-32B",
       "context": 131072,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
@@ -3159,77 +3560,92 @@
     {
       "id": "Qwen/Qwen3-VL-235B-A22B-Thinking",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen3.5-122B-A10B",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen3.5-27B",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen3.5-35B-A3B",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen3.5-397B-A17B",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen3.5-9B",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen3.6-27B",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen3.6-35B-A3B",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen3.8-2.4T-A95B",
       "context": 262144,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "Qwen/Qwen3.8-27B",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "XiaomiMiMo/MiMo-V2-Flash",
       "context": 262144,
-      "output": 4096
+      "output": 4096,
+      "reasoning": true
     },
     {
       "id": "XiaomiMiMo/MiMo-V2.5",
       "context": 262144,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "XiaomiMiMo/MiMo-V2.5-Pro",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-R1",
       "context": 64000,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-R1-0528",
       "context": 163840,
-      "output": 163840
+      "output": 163840,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-V3",
@@ -3244,47 +3660,56 @@
     {
       "id": "deepseek-ai/DeepSeek-V3.1",
       "context": 131072,
-      "output": 8192
+      "output": 8192,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-V3.2",
       "context": 163840,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-V4-Flash",
       "context": 1048576,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
       "context": 1048576,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
       "context": 1048576,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-V4-Pro",
       "context": 1048576,
-      "output": 393216
+      "output": 393216,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
       "context": 1000000,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "google/gemma-4-26B-A4B-it",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "google/gemma-4-31B-it",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "meta-llama/Llama-3.1-8B-Instruct",
@@ -3309,122 +3734,146 @@
     {
       "id": "moonshotai/Kimi-K2-Thinking",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "moonshotai/Kimi-K2.5",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "moonshotai/Kimi-K2.7-Code",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "moonshotai/Kimi-K3",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-oss-120b",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-oss-20b",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "stepfun-ai/Step-3.5-Flash",
       "context": 262144,
-      "output": 256000
+      "output": 256000,
+      "reasoning": true
     },
     {
       "id": "stepfun-ai/Step-3.7-Flash",
       "context": 262144,
-      "output": 256000
+      "output": 256000,
+      "reasoning": true
     },
     {
       "id": "tencent/Hy3",
       "context": 262144,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "thinkingmachines/Inkling",
       "context": 1048576,
-      "output": 1048576
+      "output": 1048576,
+      "reasoning": true
     },
     {
       "id": "thinkingmachines/Inkling-Small",
       "context": 524288,
-      "output": 1048576
+      "output": 1048576,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-4.5",
       "context": 131072,
-      "output": 98304
+      "output": 98304,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-4.5-Air",
       "context": 131072,
-      "output": 98304
+      "output": 98304,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-4.5V",
       "context": 65536,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-4.6",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-4.6V-Flash",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-4.7",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-4.7-Flash",
       "context": 200000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-5",
       "context": 202752,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-5.1",
       "context": 202752,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-5.2",
       "context": 262144,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-5.3",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-5.3-Flash",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-V4.1-Flash",
       "context": 1048576,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "google/gemma-3-4b-it",
@@ -3456,112 +3905,134 @@
     {
       "id": "accounts/fireworks/models/kimi-k2p6",
       "context": 262000,
-      "output": 262000
+      "output": 262000,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/deepseek-v4-flash-0731",
       "context": 1000000,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/deepseek-v4-flash-vision-exp",
       "context": 1000000,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/deepseek-v4-pro-0813",
       "context": 1000000,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/gpt-oss-120b",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/inkling",
       "context": 1048576,
-      "output": 1048576
+      "output": 1048576,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/kimi-k2p7-code",
       "context": 262000,
-      "output": 262000
+      "output": 262000,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/minimax-m3",
       "context": 512000,
-      "output": 512000
+      "output": 512000,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/muse-glimmer-30b",
       "context": 131072,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/nemotron-3-ultra-nvfp4",
       "context": 262144,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/nemotron-lightning-3p5-30b-a3b",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/qwen3p7-plus",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/qwen3p8-2p4t-a95b",
       "context": 262144,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/qwen3p8-max",
       "context": 262144,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/glm-5p2",
       "context": 1048575,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/glm-5p3",
       "context": 1048573,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/glm-5p3-flash",
       "context": 1048573,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/kimi-k3",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/routers/glm-5p2-fast",
       "context": 1048575,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/routers/kimi-k3-fast",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/routers/glm-5p3-fast",
       "context": 1048572,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/deepseek-v4p1-flash",
       "context": 1000000,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "accounts/fireworks/models/mistral-large-3-fp8",
@@ -3573,134 +4044,160 @@
     {
       "id": "zai-org/GLM-5.2",
       "context": 1048576,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-V4-Flash-0731",
       "context": 1048576,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-V4-Pro",
       "context": 1048576,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-V4-Pro-0813",
       "context": 1048576,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "moonshotai/Kimi-K2.5",
       "context": 262000,
-      "output": 262000
+      "output": 262000,
+      "reasoning": true
     },
     {
       "id": "moonshotai/Kimi-K2.6",
       "context": 262000,
-      "output": 262000
+      "output": 262000,
+      "reasoning": true
     },
     {
       "id": "moonshotai/Kimi-K2.7-Code",
       "context": 262000,
-      "output": 262000
+      "output": 262000,
+      "reasoning": true
     },
     {
       "id": "moonshotai/Kimi-K3",
       "context": 1048576,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B",
       "context": 202800,
-      "output": 202800
+      "output": 202800,
+      "reasoning": true
     },
     {
       "id": "nvidia/Nemotron-120B-A12B",
       "context": 202800,
-      "output": 202800
+      "output": 202800,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-oss-120b",
       "context": 128072,
-      "output": 128072
+      "output": 128072,
+      "reasoning": true
     },
     {
       "id": "thinkingmachines/inkling",
       "context": 1048576,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "thinkingmachines/inkling-small",
       "context": 1048576,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-4.7",
       "context": 200000,
-      "output": 200000
+      "output": 200000,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-5",
       "context": 202800,
-      "output": 202800
+      "output": 202800,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-5.1",
       "context": 202800,
-      "output": 202800
+      "output": 202800,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-5.2-Fast",
       "context": 1048576,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-5.3",
       "context": 1048576,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-5.3-Fast",
       "context": 1048576,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "zai-org/GLM-5.3-Flash",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-V3.1",
       "context": 164000,
-      "output": 131000
+      "output": 131000,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/DeepSeek-V4.1-Flash",
       "context": 1048576,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "MiniMaxAI/MiniMax-M2.5",
       "context": 204000,
-      "output": 204000
+      "output": 204000,
+      "reasoning": true
     }
   ],
   "nvidia": [
     {
       "id": "nvidia/nemotron-3-super-120b-a12b",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/deepseek-v4-flash-0731",
       "context": 1000000,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/deepseek-v4-pro-0813",
       "context": 1000000,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "google/gemma-3-12b-it",
@@ -3725,12 +4222,14 @@
     {
       "id": "meta/muse-glimmer-30b",
       "context": 131072,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "minimaxai/minimax-m3",
       "context": 1000000,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "mistralai/mistral-7b-instruct-v0.3",
@@ -3740,17 +4239,20 @@
     {
       "id": "moonshotai/kimi-k2.6",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "moonshotai/kimi-k3",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "nvidia/cosmos-reason2-8b",
       "context": 131072,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "nvidia/llama-3.1-nemotron-70b-instruct",
@@ -3760,32 +4262,38 @@
     {
       "id": "nvidia/llama-3.1-nemotron-ultra-253b-v1",
       "context": 128000,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
       "context": 256000,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "nvidia/nemotron-3-ultra-550b-a55b",
       "context": 1000000,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "nvidia/nemotron-3.5-lightning-30b-a3b",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "openai/gpt-oss-20b",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "poolside/laguna-xs-2.1",
       "context": 262144,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3-next-80b-a3b-instruct",
@@ -3795,12 +4303,14 @@
     {
       "id": "qwen/qwen3.5-397b-a17b",
       "context": 262144,
-      "output": 8192
+      "output": 8192,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3.5-122b-a10b",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     "qwen/qwen-image",
     {
@@ -3817,22 +4327,26 @@
     {
       "id": "stepfun-ai/step-3.7-flash",
       "context": 256000,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "stepfun-ai/step-3.5-flash",
       "context": 256000,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/deepseek-v4-flash",
       "context": 1048576,
-      "output": 393216
+      "output": 393216,
+      "reasoning": true
     },
     {
       "id": "deepseek-ai/deepseek-v4-pro",
       "context": 1048576,
-      "output": 393216
+      "output": 393216,
+      "reasoning": true
     },
     {
       "id": "mistralai/mistral-large-3-675b-instruct-2512",
@@ -3857,7 +4371,8 @@
     {
       "id": "mistralai/mistral-small-4-119b-2603",
       "context": 128000,
-      "output": 8192
+      "output": 8192,
+      "reasoning": true
     },
     {
       "id": "mistralai/mixtral-8x7b-instruct",
@@ -3867,7 +4382,8 @@
     {
       "id": "mistralai/mistral-medium-3.5-128b",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "mistralai/mistral-medium-3-instruct",
@@ -3887,7 +4403,8 @@
     {
       "id": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
       "context": 131072,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "nvidia/usdcode",
@@ -3919,13 +4436,15 @@
     {
       "id": "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
       "context": 32768,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     "nvidia/magpie-tts-zeroshot",
     {
       "id": "nvidia/nemotron-nano-12b-v2-vl",
       "context": 128000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "nvidia/sparsedrive",
@@ -3969,7 +4488,8 @@
     {
       "id": "nvidia/nemotron-content-safety-reasoning-4b",
       "context": 128000,
-      "output": 4096
+      "output": 4096,
+      "reasoning": true
     },
     {
       "id": "nvidia/riva-translate-4b-instruct-v1.1",
@@ -3979,7 +4499,8 @@
     {
       "id": "nvidia/nvidia-nemotron-nano-9b-v2",
       "context": 131072,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "nvidia/gliner-pii",
@@ -3989,7 +4510,8 @@
     {
       "id": "nvidia/llama-3.1-nemotron-nano-8b-v1",
       "context": 131072,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "nvidia/nv-embed-v1",
@@ -4004,12 +4526,14 @@
     {
       "id": "nvidia/llama-3.3-nemotron-super-49b-v1",
       "context": 131072,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "nvidia/nemotron-3-nano-30b-a3b",
       "context": 131072,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "google/gemma-3n-e2b-it",
@@ -4029,7 +4553,8 @@
     {
       "id": "google/gemma-4-31b-it",
       "context": 256000,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "google/gemma-3n-e4b-it",
@@ -4039,7 +4564,8 @@
     {
       "id": "thinkingmachines/inkling",
       "context": 1048576,
-      "output": 16384
+      "output": 16384,
+      "reasoning": true
     },
     {
       "id": "meta/llama-3.1-8b-instruct",
@@ -4109,7 +4635,8 @@
     {
       "id": "minimaxai/minimax-m2.7",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "baai/bge-m3",
@@ -4125,7 +4652,8 @@
     {
       "id": "openai/gpt-oss-120b",
       "context": 128000,
-      "output": 8192
+      "output": 8192,
+      "reasoning": true
     },
     {
       "id": "moonshotai/kimi-k2-instruct-0905",
@@ -4140,12 +4668,14 @@
     {
       "id": "z-ai/glm-5.2",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "z-ai/glm-5.3-flash",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "black-forest-labs/flux_1-kontext-dev",
@@ -4170,407 +4700,488 @@
     {
       "id": "kimi-k2.6",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "claude-fable-5",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "claude-fable-5-1",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "claude-haiku-4-5",
       "context": 200000,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "claude-opus-4-5",
       "context": 200000,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "claude-opus-4-6",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "claude-opus-4-7",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "claude-opus-4-8",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "claude-opus-5",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "claude-sonnet-4",
       "context": 1000000,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "claude-sonnet-4-5",
       "context": 1000000,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "claude-sonnet-4-6",
       "context": 1000000,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "claude-sonnet-5",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "qwen3.5-plus",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "qwen3.6-plus",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3-flash",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3.1-pro",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3.5-flash",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3.5-flash-lite",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3.6-flash",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3.7-flash",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "gemini-3.8-flash",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "big-pickle",
       "context": 200000,
-      "output": 32000
+      "output": 32000,
+      "reasoning": true
     },
     {
       "id": "deepseek-v4-flash",
       "context": 1000000,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "deepseek-v4-flash-vision-exp",
       "context": 1000000,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "deepseek-v4-pro",
       "context": 1000000,
-      "output": 384000
+      "output": 384000,
+      "reasoning": true
     },
     {
       "id": "glm-5",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "glm-5.1",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "glm-5.2",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "glm-5.3",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "glm-5.3-flash",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "kimi-k2.5",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "kimi-k2.7-code",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "kimi-k3",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "ling-3.0-flash-fin-free",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "mimo-v2.5-free",
       "context": 200000,
-      "output": 32000
+      "output": 32000,
+      "reasoning": true
     },
     {
       "id": "minimax-m2.5",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "minimax-m2.7",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "minimax-m3",
       "context": 512000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "nemotron-3-ultra-free",
       "context": 1000000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "nemotron-3.5-lightning-free",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "gpt-5",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5-codex",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5-nano",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.1",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.1-codex",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.1-codex-max",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.1-codex-mini",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.2",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.2-codex",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.3-codex",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.4",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.4-mini",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.4-nano",
       "context": 400000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.4-pro",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.5",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.5-pro",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.6-luna",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.6-sol",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-5.6-terra",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "gpt-6-astra",
       "context": 1050000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "grok-4.5",
       "context": 500000,
-      "output": 500000
+      "output": 500000,
+      "reasoning": true
     },
     {
       "id": "grok-4.6",
       "context": 500000,
-      "output": 500000
+      "output": 500000,
+      "reasoning": true
     },
     {
       "id": "grok-build-0.1",
       "context": 256000,
-      "output": 256000
+      "output": 256000,
+      "reasoning": true
     },
     {
       "id": "muse-spark-1.2",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "muse-spark-1.2-contributor-free",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "muse-spark-1.3",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "muse-spark-1.3-contributor-free",
       "context": 1048576,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "glm-4.7",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "hy3-preview-free",
       "context": 256000,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "grok-code",
       "context": 256000,
-      "output": 256000
+      "output": 256000,
+      "reasoning": true
     },
     {
       "id": "glm-4.6",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "north-mini-code-free",
       "context": 256000,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "minimax-m2.1",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "minimax-m2.1-free",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "longcat-2.0-free",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "deepseek-v4-flash-free",
       "context": 200000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "laguna-s-2.1-free",
       "context": 256000,
-      "output": 32000
+      "output": 32000,
+      "reasoning": true
     },
     {
       "id": "kimi-k2-thinking",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "gpt-5.3-codex-spark",
       "context": 128000,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "minimax-m3-free",
       "context": 200000,
-      "output": 32000
+      "output": 32000,
+      "reasoning": true
     },
     {
       "id": "qwen3-coder",
@@ -4580,7 +5191,8 @@
     {
       "id": "x-preview-f-free",
       "context": 1000000,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "ling-2.6-flash-free",
@@ -4590,22 +5202,26 @@
     {
       "id": "gemini-3-pro",
       "context": 1048576,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "hy3-free",
       "context": 190000,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "kimi-k2.5-free",
       "context": 262144,
-      "output": 262144
+      "output": 262144,
+      "reasoning": true
     },
     {
       "id": "ring-2.6-1t-free",
       "context": 262000,
-      "output": 66000
+      "output": 66000,
+      "reasoning": true
     },
     {
       "id": "claude-3-5-haiku",
@@ -4615,7 +5231,8 @@
     {
       "id": "nemotron-3-super-free",
       "context": 204800,
-      "output": 128000
+      "output": 128000,
+      "reasoning": true
     },
     {
       "id": "kimi-k2",
@@ -4625,12 +5242,14 @@
     {
       "id": "claude-opus-4-1",
       "context": 200000,
-      "output": 32000
+      "output": 32000,
+      "reasoning": true
     },
     {
       "id": "ling-3.0-flash-free",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "trinity-large-preview-free",
@@ -4640,42 +5259,50 @@
     {
       "id": "glm-4.7-free",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "glm-5-free",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "mimo-v2-flash-free",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "minimax-m2.5-free",
       "context": 204800,
-      "output": 131072
+      "output": 131072,
+      "reasoning": true
     },
     {
       "id": "mimo-v2-omni-free",
       "context": 262144,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "mimo-v2-pro-free",
       "context": 1048576,
-      "output": 64000
+      "output": 64000,
+      "reasoning": true
     },
     {
       "id": "qwen3.6-plus-free",
       "context": 262144,
-      "output": 65536
+      "output": 65536,
+      "reasoning": true
     },
     {
       "id": "ling-3.0-tiny-free",
       "context": 262144,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     }
   ],
   "ollama": [
@@ -4693,7 +5320,8 @@
     {
       "id": "openai/gpt-oss-20b",
       "context": 131072,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     },
     {
       "id": "qwen/qwen3-30b-a3b-2507",
@@ -4715,12 +5343,14 @@
     {
       "id": "sonar-reasoning-pro",
       "context": 128000,
-      "output": 4096
+      "output": 4096,
+      "reasoning": true
     },
     {
       "id": "sonar-deep-research",
       "context": 128000,
-      "output": 32768
+      "output": 32768,
+      "reasoning": true
     }
   ],
   "github-models": [

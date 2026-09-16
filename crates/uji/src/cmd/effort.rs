@@ -1,13 +1,14 @@
 use uji_core::llm::Effort;
 
 use super::{Action, Args, Context};
+use uji_core::session::store::Setting;
 
 #[derive(Default)]
 pub struct EffortPick;
 
 impl Action for EffortPick {
     fn start(&mut self, ctx: &mut dyn Context, _args: &Args) {
-        let current = ctx.get_setting("llm.effort").unwrap_or_default();
+        let current = ctx.get_setting(&Setting::Effort).unwrap_or_default();
         let items = Effort::ALL
             .into_iter()
             .map(|effort| {
@@ -25,7 +26,7 @@ impl Action for EffortPick {
         let name = item.split_whitespace().next().unwrap_or_default();
         match Effort::parse(name) {
             Some(effort) => {
-                ctx.set_setting("llm.effort", effort.name());
+                ctx.set_setting(&Setting::Effort, effort.name());
                 ctx.resolve_llm();
                 ctx.notify(&format!("reasoning effort: {effort}"));
             }

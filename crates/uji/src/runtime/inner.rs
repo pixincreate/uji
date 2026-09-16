@@ -21,7 +21,7 @@ use super::loader;
 pub(crate) struct Inner {
     pub(crate) lua: LuaState,
     pub(crate) api: Rc<Api>,
-    pub(crate) llm: RefCell<Arc<dyn Llm>>,
+    pub(crate) llm: RefCell<Arc<Llm>>,
     pub(crate) llm_model: RefCell<String>,
     pub(crate) llm_provider: RefCell<String>,
     pub(crate) llm_effort: RefCell<uji_core::llm::Effort>,
@@ -40,7 +40,7 @@ impl Inner {
         let inner = Rc::new(Self {
             lua: LuaState::new(),
             api: Api::new(state, conversation),
-            llm: RefCell::new(Arc::new(NotConfigured)),
+            llm: RefCell::new(Arc::new(Llm::NotConfigured(NotConfigured))),
             llm_model: RefCell::default(),
             llm_provider: RefCell::default(),
             llm_effort: RefCell::default(),

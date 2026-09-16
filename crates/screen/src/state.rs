@@ -1,8 +1,8 @@
 use std::time::Instant;
 
+use crate::config::{ConfirmConfig, ThemeConfig, UiConfig, overlay};
 use crate::model::{
-    Builtin, Color, ConfirmConfig, ConfirmOpts, GlobalOpts, Line, RunState, Size, ThemeConfig,
-    UiConfig, WinOpts, WindowSpec,
+    Builtin, Color, ConfirmOpts, GlobalOpts, Line, RunState, Size, WinOpts, WindowSpec,
 };
 
 #[derive(Debug, Default)]
@@ -121,15 +121,9 @@ impl UiState {
 
     pub fn set_confirm(&mut self, config: &ConfirmConfig) {
         let mut confirm = ConfirmOpts::default();
-        if let Some(title) = &config.title {
-            confirm.title.clone_from(title);
-        }
-        if let Some(yes) = &config.yes {
-            confirm.yes.clone_from(yes);
-        }
-        if let Some(no) = &config.no {
-            confirm.no.clone_from(no);
-        }
+        overlay(&mut confirm.title, config.title.clone());
+        overlay(&mut confirm.yes, config.yes.clone());
+        overlay(&mut confirm.no, config.no.clone());
         confirm.selected = parse_color(config.selected.as_deref(), &mut self.notices);
         confirm.unselected = parse_color(config.unselected.as_deref(), &mut self.notices);
         confirm.title_color = parse_color(config.title_color.as_deref(), &mut self.notices);
@@ -150,24 +144,22 @@ impl UiState {
             (&mut theme.error, config.error.as_deref()),
             (&mut theme.notice, config.notice.as_deref()),
         ] {
-            if let Some(color) = parse_color(value, &mut self.notices) {
-                *slot = color;
-            }
+            overlay(slot, parse_color(value, &mut self.notices));
         }
         self.opts.theme = theme;
     }
 
     pub fn apply_config(&mut self, config: &UiConfig) {
         self.apply_theme(&config.theme);
-        if let Some(enabled) = config.compaction.enabled {
-            self.opts.compaction.enabled = enabled;
-        }
-        if let Some(reserve) = config.compaction.reserve {
-            self.opts.compaction.reserve = Some(reserve);
-        }
-        if let Some(keep_recent) = config.compaction.keep_recent {
-            self.opts.compaction.keep_recent = keep_recent;
-        }
+        overlay(&mut self.opts.compaction.enabled, config.compaction.enabled);
+        overlay(
+            &mut self.opts.compaction.reserve,
+            config.compaction.reserve.map(Some),
+        );
+        overlay(
+            &mut self.opts.compaction.keep_recent,
+            config.compaction.keep_recent,
+        );
         if let Some(cursor_blink) = config.input.cursor_blink {
             self.set_cursor_blink(cursor_blink);
         }
@@ -188,12 +180,8 @@ impl UiState {
         }
         self.set_confirm(&config.confirm);
         if let Some(loader) = &config.waiting.loader {
-            if let Some(frames) = &loader.frames {
-                self.opts.loader_frames.clone_from(frames);
-            }
-            if let Some(interval_ms) = loader.interval_ms {
-                self.opts.loader_interval_ms = interval_ms;
-            }
+            overlay(&mut self.opts.loader_frames, loader.frames.clone());
+            overlay(&mut self.opts.loader_interval_ms, loader.interval_ms);
         }
     }
 

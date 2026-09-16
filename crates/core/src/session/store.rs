@@ -23,8 +23,33 @@ pub trait SessionStorage {
     fn messages(&mut self, session_id: &SessionId) -> Result<Vec<StoredMessage>>;
     fn message(&mut self, id: &MessageId) -> Result<Option<(SessionId, StoredMessage)>>;
 
-    fn get_setting(&mut self, key: &str) -> Result<Option<String>>;
-    fn set_setting(&mut self, key: &str, value: &str) -> Result<()>;
+    fn get_setting(&mut self, key: &Setting) -> Result<Option<String>>;
+    fn set_setting(&mut self, key: &Setting, value: &str) -> Result<()>;
+}
+
+/// A persisted setting key. Variants carry their own storage key so a reader and
+/// a writer cannot silently disagree on a string.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Setting {
+    Provider,
+    Model,
+    BaseUrl,
+    Effort,
+    Cache,
+    ModelFor(String),
+}
+
+impl Setting {
+    pub fn key(&self) -> std::borrow::Cow<'_, str> {
+        match self {
+            Self::Provider => "llm.provider".into(),
+            Self::Model => "llm.model".into(),
+            Self::BaseUrl => "llm.base_url".into(),
+            Self::Effort => "llm.effort".into(),
+            Self::Cache => "llm.cache".into(),
+            Self::ModelFor(provider) => format!("llm.model.{provider}").into(),
+        }
+    }
 }
 
 impl<T: StorageInterface<Connection = SqliteConnection>> SessionStorage for T {
@@ -170,20 +195,21 @@ impl<T: StorageInterface<Connection = SqliteConnection>> SessionStorage for T {
         }
     }
 
-    fn get_setting(&mut self, key: &str) -> Result<Option<String>> {
+    fn get_setting(&mut self, key: &Setting) -> Result<Option<String>> {
         let conn = self.get_connection();
         let value = settings::table
-            .find(key.to_string())
+            .find(key.key().into_owned())
             .select(settings::value)
             .first::<String>(conn)
             .optional()?;
         Ok(value)
     }
 
-    fn set_setting(&mut self, key: &str, value: &str) -> Result<()> {
+    fn set_setting(&mut self, key: &Setting, value: &str) -> Result<()> {
         let conn = self.get_connection();
+        let key = key.key().into_owned();
         insert_into(settings::table)
-            .values((settings::key.eq(key), settings::value.eq(value)))
+            .values((settings::key.eq(&key), settings::value.eq(value)))
             .on_conflict(settings::key)
             .do_update()
             .set(settings::value.eq(value))

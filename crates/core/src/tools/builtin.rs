@@ -618,6 +618,7 @@ impl Tool for RunCommand {
                 .arg("-c")
                 .arg(&command)
                 .current_dir(cwd)
+                .kill_on_drop(true)
                 .output(),
         )
         .await

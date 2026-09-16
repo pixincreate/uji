@@ -29,13 +29,14 @@ impl Args {
     }
 }
 use uji_core::llm::Provider;
+use uji_core::session::store::Setting;
 use uji_tui::app::Echo;
 
 pub trait Context {
     fn open_select(&mut self, title: String, items: Vec<String>);
     fn open_prompt(&mut self, title: String, value: String, echo: Echo);
-    fn set_setting(&mut self, key: &str, value: &str);
-    fn get_setting(&mut self, key: &str) -> Option<String>;
+    fn set_setting(&mut self, key: &Setting, value: &str);
+    fn get_setting(&mut self, key: &Setting) -> Option<String>;
     fn save_credential(&mut self, provider: &str, key: &str);
     fn resolve_llm(&mut self);
     fn reload(&mut self);
@@ -51,14 +52,14 @@ pub trait Context {
 }
 
 pub(crate) fn remember_model(ctx: &mut dyn Context, provider_id: &str, model: &str) {
-    ctx.set_setting("llm.model", model);
-    ctx.set_setting(&format!("llm.model.{provider_id}"), model);
+    ctx.set_setting(&Setting::Model, model);
+    ctx.set_setting(&Setting::ModelFor(provider_id.to_string()), model);
 }
 
 pub(crate) fn model_for(ctx: &mut dyn Context, provider: &Provider) -> String {
     let stored = ctx
-        .get_setting(&format!("llm.model.{}", provider.id))
-        .or_else(|| ctx.get_setting("llm.model"));
+        .get_setting(&Setting::ModelFor(provider.id.clone()))
+        .or_else(|| ctx.get_setting(&Setting::Model));
     provider.usable_model(stored)
 }
 

@@ -18,7 +18,7 @@ pub(crate) enum CompactEvent {
 
 pub(crate) struct CompactRequest {
     pub(crate) client: Arc<reqwest::Client>,
-    pub(crate) provider: Arc<dyn Llm>,
+    pub(crate) provider: Arc<Llm>,
     pub(crate) model: String,
     pub(crate) earlier: Vec<StoredMessage>,
     pub(crate) previous: Option<String>,
@@ -64,7 +64,7 @@ pub(crate) enum TitleEvent {
 pub(crate) fn title(
     runtime: &tokio::runtime::Runtime,
     client: Arc<reqwest::Client>,
-    provider: Arc<dyn Llm>,
+    provider: Arc<Llm>,
     model: String,
     first_message: String,
     sender: calloop::channel::Sender<Signal>,

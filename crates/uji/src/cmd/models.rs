@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use uji_core::llm::{self, Provider};
 
 use super::{Action, Args, Context};
+use uji_core::session::store::Setting;
 
 #[derive(Default)]
 pub struct Models {
@@ -16,7 +17,7 @@ struct Choice {
 
 impl Action for Models {
     fn start(&mut self, ctx: &mut dyn Context, _args: &Args) {
-        let current = ctx.get_setting("llm.provider").unwrap_or_default();
+        let current = ctx.get_setting(&Setting::Provider).unwrap_or_default();
         let available: Vec<Provider> = ctx
             .providers()
             .into_iter()
@@ -66,9 +67,9 @@ impl Action for Models {
         };
         let provider_id = choice.provider_id.clone();
         let model = choice.model.clone();
-        if ctx.get_setting("llm.provider").as_deref() != Some(provider_id.as_str()) {
-            ctx.set_setting("llm.provider", &provider_id);
-            ctx.set_setting("llm.base_url", "");
+        if ctx.get_setting(&Setting::Provider).as_deref() != Some(provider_id.as_str()) {
+            ctx.set_setting(&Setting::Provider, &provider_id);
+            ctx.set_setting(&Setting::BaseUrl, "");
         }
         super::remember_model(ctx, &provider_id, &model);
         ctx.resolve_llm();

@@ -32,6 +32,11 @@ impl LoopData {
         false
     }
 
+    pub(super) fn keep_recent_now(&self) -> u64 {
+        let used = self.app.messages().used_tokens();
+        self.keep_recent().min(used / KEEP_CEILING_FRACTION).max(1)
+    }
+
     pub(super) fn keep_recent(&self) -> u64 {
         let room = self
             .budget()

@@ -10,6 +10,7 @@ use super::{Control, LoopData, ModalInput};
 use crate::cmd::{Action, Args, Context};
 use crate::runtime::builtin::{self, BUILTINS};
 use crate::runtime::events;
+use uji_core::session::store::Setting;
 
 impl LoopData {
     pub(crate) fn refresh_suggestions(&mut self) {
@@ -117,11 +118,11 @@ impl Context for LoopData {
         }
     }
 
-    fn set_setting(&mut self, key: &str, value: &str) {
+    fn set_setting(&mut self, key: &Setting, value: &str) {
         let _ = self.storage.set_setting(key, value);
     }
 
-    fn get_setting(&mut self, key: &str) -> Option<String> {
+    fn get_setting(&mut self, key: &Setting) -> Option<String> {
         self.storage.get_setting(key).ok().flatten()
     }
 
@@ -143,7 +144,7 @@ impl Context for LoopData {
     }
 
     fn compact(&mut self) -> bool {
-        let keep = self.keep_recent();
+        let keep = self.keep_recent_now();
         self.run_compaction(keep)
     }
 
