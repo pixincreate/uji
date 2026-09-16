@@ -95,6 +95,16 @@ impl App {
         self.composer.cursor()
     }
 
+    pub fn toggle_thinking(&mut self) -> KeyAction {
+        let shown = self.state.borrow_mut().toggle_thinking();
+        self.overlay_mut().push_notices(vec![String::from(if shown {
+            "thinking: shown"
+        } else {
+            "thinking: hidden"
+        })]);
+        KeyAction::None
+    }
+
     pub fn paste(&mut self, text: &str) {
         self.composer.paste(text);
         self.mode = Mode::Normal;

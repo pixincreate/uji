@@ -66,6 +66,14 @@ pub fn list_roots(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     })
 }
 
+pub fn confine(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    let api = Rc::clone(api);
+    lua.create_function(move |_, enabled: Option<bool>| {
+        api.set_tool_confined(enabled.unwrap_or(true));
+        Ok(api.tool_confined())
+    })
+}
+
 fn expand(path: &str) -> String {
     match path.strip_prefix("~/") {
         Some(rest) => {

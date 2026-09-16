@@ -28,6 +28,7 @@ pub enum Action {
     Nothing,
     Quit,
     Interrupt,
+    ToggleThinking,
     Submit,
     ClearInput,
     Backspace,
@@ -68,6 +69,7 @@ impl App {
         match action {
             Action::Nothing => KeyAction::None,
             Action::Interrupt => KeyAction::Interrupt,
+            Action::ToggleThinking => self.toggle_thinking(),
             Action::Quit => KeyAction::Quit,
             Action::Submit => self.take_submit(),
             Action::ClearInput => self.clear_input(),

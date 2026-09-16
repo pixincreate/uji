@@ -7,6 +7,7 @@ pub enum Block<'a> {
     Message(&'a StoredMessage),
     Pending(&'a str),
     Queued(&'a str),
+    Thinking(&'a str),
 }
 
 pub trait BlockRenderer {

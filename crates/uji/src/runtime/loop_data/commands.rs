@@ -143,6 +143,11 @@ impl Context for LoopData {
         self.control = Control::Reload;
     }
 
+    fn toggle_thinking(&mut self) {
+        self.app.toggle_thinking();
+        self.dirty = true;
+    }
+
     fn compact(&mut self) -> bool {
         let keep = self.keep_recent_now();
         self.run_compaction(keep)

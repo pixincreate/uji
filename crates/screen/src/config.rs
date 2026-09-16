@@ -30,6 +30,7 @@ pub struct ThemeConfig {
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]
 pub struct UiConfig {
+    pub show_thinking: Option<bool>,
     pub theme: ThemeConfig,
     pub compaction: CompactionConfig,
     pub input: InputConfig,

@@ -1,4 +1,4 @@
-use crate::cmd::{Action, Compact, EffortPick, Help, Login, Models, Reload, Sync};
+use crate::cmd::{Action, Compact, EffortPick, Help, Login, Models, Reload, Sync, Thinking};
 
 pub(crate) struct Builtin {
     pub(crate) name: &'static str,
@@ -26,6 +26,11 @@ pub(crate) const BUILTINS: &[Builtin] = &[
         name: "effort",
         desc: "how hard the model should think",
         make: || Box::new(EffortPick),
+    },
+    Builtin {
+        name: "thinking",
+        desc: "show or hide model reasoning",
+        make: || Box::new(Thinking),
     },
     Builtin {
         name: "compact",

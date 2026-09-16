@@ -36,6 +36,7 @@ impl Render for Messages<'_> {
                 conversation: &conversation,
                 notices: ctx.app.overlay().notices(),
                 queued: ctx.app.overlay().queued(),
+                thinking: ctx.state.opts().show_thinking,
                 pending: committed,
                 width,
                 palette,
@@ -121,6 +122,16 @@ fn push_builtin(lines: &mut Vec<Line<'static>>, block: Block<'_>, width: usize, 
         ),
         Block::Message(stored) => push_message(lines, stored, width, palette),
         Block::Pending(text) => push_markdown(lines, text, width, palette),
+        Block::Thinking(text) => push_wrapped(
+            lines,
+            text,
+            width,
+            Style::default()
+                .fg(palette.muted)
+                .add_modifier(Modifier::ITALIC | Modifier::DIM),
+            " │ ",
+            Fill::Line,
+        ),
         Block::Queued(text) => push_wrapped(
             lines,
             text,

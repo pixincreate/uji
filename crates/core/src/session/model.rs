@@ -90,6 +90,15 @@ impl Message {
             Message::Compaction { summary, .. } => summary,
         }
     }
+
+    pub fn reasoning(&self) -> Option<&str> {
+        match self {
+            Message::Assistant {
+                reasoning_content, ..
+            } => reasoning_content.as_deref().filter(|text| !text.is_empty()),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

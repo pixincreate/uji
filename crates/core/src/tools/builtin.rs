@@ -37,21 +37,45 @@ fn schema(props: &Value, required: &[&str]) -> Value {
 }
 
 #[derive(Clone, Default)]
+/// Where file tools may reach. Unconfined by default: the whole filesystem is
+/// reachable. Turning confinement on restricts tools to the working directory
+/// plus any explicitly granted roots.
 pub struct Roots {
     extra: Arc<[PathBuf]>,
+    confined: bool,
 }
 
 impl Roots {
     pub fn new(extra: Vec<PathBuf>) -> Self {
         Self {
             extra: extra.into(),
+            confined: false,
         }
     }
 
+    pub fn confined(extra: Vec<PathBuf>) -> Self {
+        Self {
+            extra: extra.into(),
+            confined: true,
+        }
+    }
+
+    pub fn set_confined(&mut self, confined: bool) {
+        self.confined = confined;
+    }
+
     fn candidates<'a>(&'a self, cwd: &'a Path) -> impl Iterator<Item = &'a Path> {
-        std::iter::once(cwd).chain(self.extra.iter().map(PathBuf::as_path))
+        let anywhere = (!self.confined).then(|| Path::new(ROOT));
+        std::iter::once(cwd)
+            .chain(self.extra.iter().map(PathBuf::as_path))
+            .chain(anywhere)
     }
 }
+
+#[cfg(windows)]
+const ROOT: &str = "\\";
+#[cfg(not(windows))]
+const ROOT: &str = "/";
 
 struct Confined {
     dir: Dir,

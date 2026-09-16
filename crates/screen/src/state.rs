@@ -115,6 +115,15 @@ impl UiState {
         self.opts.suggest_max_height = max_height;
     }
 
+    pub fn show_thinking(&self) -> bool {
+        self.opts.show_thinking
+    }
+
+    pub fn toggle_thinking(&mut self) -> bool {
+        self.opts.show_thinking = !self.opts.show_thinking;
+        self.opts.show_thinking
+    }
+
     pub fn set_agent_system_prompt(&mut self, prompt: Option<String>) {
         self.opts.agent_system_prompt = prompt;
     }
@@ -151,6 +160,7 @@ impl UiState {
 
     pub fn apply_config(&mut self, config: &UiConfig) {
         self.apply_theme(&config.theme);
+        overlay(&mut self.opts.show_thinking, config.show_thinking);
         overlay(&mut self.opts.compaction.enabled, config.compaction.enabled);
         overlay(
             &mut self.opts.compaction.reserve,

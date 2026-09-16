@@ -6,6 +6,7 @@ pub(crate) mod lua;
 pub mod models;
 pub mod reload;
 pub mod sync;
+pub mod thinking;
 
 pub use compact::Compact;
 pub use effort::EffortPick;
@@ -15,6 +16,7 @@ pub(crate) use lua::LuaAction;
 pub use models::Models;
 pub use reload::Reload;
 pub use sync::Sync;
+pub use thinking::Thinking;
 
 pub struct Args {
     pub raw: String,
@@ -41,6 +43,7 @@ pub trait Context {
     fn resolve_llm(&mut self);
     fn reload(&mut self);
     fn compact(&mut self) -> bool;
+    fn toggle_thinking(&mut self);
     fn sync_packs(&mut self);
     fn start_oauth(&mut self, provider_id: &str);
     fn notify(&mut self, message: &str);

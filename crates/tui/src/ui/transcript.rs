@@ -83,6 +83,7 @@ pub struct Input<'a> {
     pub conversation: &'a Conversation,
     pub notices: &'a [String],
     pub queued: &'a [String],
+    pub thinking: bool,
     pub pending: &'a str,
     pub width: usize,
     pub palette: Palette,
@@ -98,6 +99,7 @@ pub struct Rendered<'a> {
 #[derive(Default)]
 pub struct Transcript {
     width: usize,
+    thinking: bool,
     palette: Palette,
     folded: usize,
     last_seq: i64,
@@ -114,16 +116,20 @@ impl Transcript {
         input: &Input<'_>,
         render: impl Fn(&mut Vec<Line<'static>>, Block<'_>, usize),
     ) -> Rendered<'_> {
-        if self.width != input.width || self.palette != input.palette {
+        if self.width != input.width
+            || self.palette != input.palette
+            || self.thinking != input.thinking
+        {
             self.width = input.width;
             self.palette = input.palette;
+            self.thinking = input.thinking;
             self.reset();
             self.notices.clear();
             self.queued.clear();
             self.pending.clear();
         }
         let width = input.width;
-        self.fold(input.conversation, width, &render);
+        self.fold(input.conversation, width, input.thinking, &render);
         self.notices.get(input.notices, |lines| {
             for notice in input.notices {
                 render(lines, Block::Notice(notice), width);
@@ -149,6 +155,7 @@ impl Transcript {
         &mut self,
         conversation: &Conversation,
         width: usize,
+        thinking: bool,
         render: &impl Fn(&mut Vec<Line<'static>>, Block<'_>, usize),
     ) {
         let messages = conversation.messages();
@@ -158,6 +165,9 @@ impl Transcript {
         for stored in &messages[self.folded..] {
             if self.grouping.separates(stored) {
                 self.lines.push(Line::from(""));
+            }
+            if thinking && let Some(reasoning) = stored.message.reasoning() {
+                render(&mut self.lines, Block::Thinking(reasoning), width);
             }
             render(&mut self.lines, Block::Message(stored), width);
             self.last_seq = stored.seq;

@@ -257,6 +257,7 @@ impl Default for CompactionOpts {
 #[derive(Debug, Clone, PartialEq)]
 pub struct GlobalOpts {
     pub cursor_blink: bool,
+    pub show_thinking: bool,
     pub input_color: Option<Color>,
     pub suggest_enabled: bool,
     pub suggest_max_height: u16,
@@ -272,6 +273,7 @@ impl Default for GlobalOpts {
     fn default() -> Self {
         Self {
             cursor_blink: true,
+            show_thinking: false,
             input_color: None,
             suggest_enabled: true,
             suggest_max_height: 5,

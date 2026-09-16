@@ -60,6 +60,7 @@ pub struct Api {
     modal: RefCell<Option<modal::ModalRequest>>,
     answers: RefCell<Vec<modal::Answer>>,
     tool_roots: RefCell<Vec<PathBuf>>,
+    tool_confined: Cell<bool>,
     segments: Registry,
     agent_context: Registry,
     actions: Actions,
@@ -86,6 +87,7 @@ impl Api {
             modal: RefCell::default(),
             answers: RefCell::default(),
             tool_roots: RefCell::default(),
+            tool_confined: Cell::new(false),
             segments: Registry::default(),
             agent_context: Registry::default(),
             actions: Actions::default(),
@@ -202,6 +204,14 @@ impl Api {
         &self.tool_roots
     }
 
+    pub fn tool_confined(&self) -> bool {
+        self.tool_confined.get()
+    }
+
+    pub fn set_tool_confined(&self, confined: bool) {
+        self.tool_confined.set(confined);
+    }
+
     pub fn has_handler(&self, event: &str) -> bool {
         self.handlers.borrow().has(event)
     }
@@ -277,6 +287,7 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     tool.set("unregister", tools::unregister(lua, api)?)?;
     tool.set("roots", tools::roots(lua, api)?)?;
     tool.set("list_roots", tools::list_roots(lua, api)?)?;
+    tool.set("confine", tools::confine(lua, api)?)?;
     uji.set("tool", tool)?;
 
     uji.set("agent", agent::register(lua, api)?)?;
