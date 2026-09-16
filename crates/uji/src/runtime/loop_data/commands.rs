@@ -174,7 +174,9 @@ impl Context for LoopData {
     }
 
     fn notify(&mut self, message: &str) {
-        self.app.push_notices(vec![message.to_string()]);
+        self.app
+            .overlay_mut()
+            .push_notices(vec![message.to_string()]);
         self.dirty = true;
     }
 

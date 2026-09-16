@@ -1,32 +1,21 @@
-use crossterm::event::{Event as TermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEventKind};
+use crossterm::event::{Event as TermEvent, KeyCode, KeyEvent, KeyModifiers};
 use uji_screen::keymap::{Binding, Chord, Key, describe};
 use uji_tui::app::{Action, KeyAction};
 
 use super::{Control, LoopData, ModalInput};
 
-const SCROLL_LINES: usize = 3;
-
 impl LoopData {
     pub(crate) fn on_term_event(&mut self, event: &TermEvent) {
         match event {
             TermEvent::Key(key) => self.on_key(*key),
-            TermEvent::Mouse(mouse) => match mouse.kind {
-                MouseEventKind::ScrollUp => {
-                    self.app.scroll_up(SCROLL_LINES);
-                    self.dirty = true;
-                }
-                MouseEventKind::ScrollDown => {
-                    self.app.scroll_down(SCROLL_LINES);
-                    self.dirty = true;
-                }
-                _ => {}
-            },
+            TermEvent::Mouse(mouse) => self.on_mouse(*mouse),
             TermEvent::Resize(..) => self.dirty = true,
             _ => {}
         }
     }
 
     fn on_key(&mut self, key: KeyEvent) {
+        self.clear_selection();
         let Some(action) = self.dispatch_key(key) else {
             self.dirty = true;
             return;

@@ -5,6 +5,7 @@ mod compact;
 mod drains;
 mod input;
 mod model;
+mod mouse;
 
 use std::collections::VecDeque;
 use std::path::PathBuf;

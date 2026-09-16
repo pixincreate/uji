@@ -24,7 +24,7 @@ impl LoopData {
             self.enqueue(text);
             return;
         }
-        self.app.clear_notices();
+        self.app.overlay_mut().clear_notices();
         self.app.reset_scroll();
         self.inner
             .emit(events::MESSAGE_SUBMITTED, &[("text", text.to_string())]);
@@ -436,7 +436,7 @@ impl LoopData {
             &[("count", queued.len().to_string())],
         );
         self.inner.state().borrow_mut().set_queued(queued.clone());
-        self.app.set_queued(queued);
+        self.app.overlay_mut().set_queued(queued);
     }
 
     fn fail_assistant(&mut self, error: &str) {

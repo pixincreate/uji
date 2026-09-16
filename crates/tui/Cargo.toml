@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+base64 = "0.22"
+arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
 nucleo-matcher = "0.3"
 uji-core = { path = "../core" }
 uji-screen = { path = "../screen" }

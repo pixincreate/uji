@@ -129,7 +129,7 @@ impl LoopData {
     pub(super) fn drain_diagnostics(&mut self) {
         let notices = self.inner.take_diagnostics();
         if !notices.is_empty() {
-            self.app.push_notices(notices);
+            self.app.overlay_mut().push_notices(notices);
             self.dirty = true;
         }
     }

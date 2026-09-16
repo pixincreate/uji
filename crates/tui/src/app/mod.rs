@@ -2,8 +2,10 @@ pub mod action;
 pub mod composer;
 pub mod keys;
 pub mod mode;
+pub mod overlay;
 pub mod renderer;
 pub mod scroll;
+pub mod selection;
 pub mod stream;
 
 pub use action::{Action, KeyAction, rank_items};
@@ -30,8 +32,7 @@ pub struct App {
     scroll: Scroll,
     mode: Mode,
     suggest_pool: Vec<SuggestItem>,
-    notices: Vec<String>,
-    queued: Vec<String>,
+    overlay: overlay::Overlay,
     transcript: RefCell<crate::ui::transcript::Transcript>,
     renderer: Option<Rc<dyn renderer::BlockRenderer>>,
 }
@@ -47,8 +48,7 @@ impl App {
             scroll: Scroll::default(),
             mode: Mode::Normal,
             suggest_pool: Vec::new(),
-            notices: Vec::new(),
-            queued: Vec::new(),
+            overlay: overlay::Overlay::default(),
             transcript: RefCell::default(),
             renderer: None,
         }
@@ -155,24 +155,12 @@ impl App {
         &self.mode
     }
 
-    pub fn queued(&self) -> &[String] {
-        &self.queued
+    pub fn overlay(&self) -> &overlay::Overlay {
+        &self.overlay
     }
 
-    pub fn set_queued(&mut self, queued: Vec<String>) {
-        self.queued = queued;
-    }
-
-    pub fn notices(&self) -> &[String] {
-        &self.notices
-    }
-
-    pub fn push_notices(&mut self, notices: Vec<String>) {
-        self.notices.extend(notices);
-    }
-
-    pub fn clear_notices(&mut self) {
-        self.notices.clear();
+    pub fn overlay_mut(&mut self) -> &mut overlay::Overlay {
+        &mut self.overlay
     }
 
     pub fn open_select(&mut self, title: String, items: Vec<String>) {

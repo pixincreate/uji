@@ -34,8 +34,8 @@ impl Render for Messages<'_> {
         let parts = transcript.frame(
             &transcript::Input {
                 conversation: &conversation,
-                notices: ctx.app.notices(),
-                queued: ctx.app.queued(),
+                notices: ctx.app.overlay().notices(),
+                queued: ctx.app.overlay().queued(),
                 pending: committed,
                 width,
                 palette,

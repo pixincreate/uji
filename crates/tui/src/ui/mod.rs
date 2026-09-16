@@ -9,6 +9,7 @@ use uji_screen::state::UiState;
 use crate::app::App;
 
 pub mod buffer;
+pub mod highlight;
 pub mod input;
 pub mod layout;
 pub mod markdown;
@@ -103,6 +104,8 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
     let area = modal_rect.unwrap_or_else(|| above(frame.area(), input_rect));
     let mut surface = Surface::new(area, frame.buffer_mut());
     modal::Modal.render(&ctx, &mut surface);
+
+    highlight::overlay(frame.buffer_mut(), app);
 }
 
 const MAX_INPUT_ROWS: u16 = 10;
