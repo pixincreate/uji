@@ -435,6 +435,7 @@ impl LoopData {
             events::QUEUE_CHANGED,
             &[("count", queued.len().to_string())],
         );
+        self.inner.state().borrow_mut().set_queued(queued.clone());
         self.app.set_queued(queued);
     }
 

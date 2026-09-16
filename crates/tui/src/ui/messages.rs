@@ -78,14 +78,16 @@ impl Render for Messages<'_> {
             queued.extend(parts.queued.iter().cloned());
         }
 
+        let body_height = height.saturating_sub(queued.len());
         let total = above
             .saturating_add(lead.len())
             .saturating_add(parts.pending.len())
-            .saturating_add(tail.len())
-            .saturating_add(queued.len());
-        let start = ctx.app.resolve_scroll(total.saturating_sub(height), height);
-        let end = start.saturating_add(height).min(total);
-        let window: Vec<Line<'static>> = parts
+            .saturating_add(tail.len());
+        let start = ctx
+            .app
+            .resolve_scroll(total.saturating_sub(body_height), body_height);
+        let end = start.saturating_add(body_height).min(total);
+        let mut window: Vec<Line<'static>> = parts
             .notices
             .iter()
             .chain(gap.iter())
@@ -93,11 +95,11 @@ impl Render for Messages<'_> {
             .chain(lead.iter())
             .chain(parts.pending.iter())
             .chain(tail.iter())
-            .chain(queued.iter())
             .skip(start)
             .take(end.saturating_sub(start))
             .cloned()
             .collect();
+        window.extend(queued);
         let paragraph = Paragraph::new(window);
         let paragraph = match block {
             Some(block) => paragraph.block(block),

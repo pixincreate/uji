@@ -66,6 +66,17 @@ pub fn effort(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     lua.create_function(move |_, ()| Ok(state.borrow().current_effort().map(str::to_string)))
 }
 
+pub fn queue(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    let state = api.state();
+    lua.create_function(move |lua, ()| {
+        let out = lua.create_table()?;
+        for text in state.borrow().queued() {
+            out.push(text.clone())?;
+        }
+        Ok(out)
+    })
+}
+
 pub fn context(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     let api = Rc::clone(api);
     lua.create_function(move |lua, ()| {

@@ -13,6 +13,7 @@ pub struct UiState {
     current_model: Option<String>,
     current_effort: Option<String>,
     context_window: Option<u64>,
+    queued: Vec<String>,
     next_window_id: u32,
     run_state: RunState,
     turn_started: Option<Instant>,
@@ -214,6 +215,14 @@ impl UiState {
 
     pub fn set_current_provider(&mut self, provider: String) {
         self.current_provider = Some(provider);
+    }
+
+    pub fn queued(&self) -> &[String] {
+        &self.queued
+    }
+
+    pub fn set_queued(&mut self, queued: Vec<String>) {
+        self.queued = queued;
     }
 
     pub fn context_window(&self) -> Option<u64> {

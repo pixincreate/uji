@@ -257,6 +257,7 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     status.set("model", status::model(lua, api)?)?;
     status.set("effort", status::effort(lua, api)?)?;
     status.set("context", status::context(lua, api)?)?;
+    status.set("queue", status::queue(lua, api)?)?;
     status.set("state", status::state(lua, api)?)?;
     status.set("elapsed", status::elapsed(lua, api)?)?;
     status.set("loader_frame", status::loader_frame(lua, api)?)?;
