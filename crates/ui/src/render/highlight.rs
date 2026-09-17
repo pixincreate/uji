@@ -10,8 +10,7 @@ pub fn overlay(buf: &mut Buffer, app: &App) {
         return;
     }
     let mut screen = app.overlay().screen().borrow_mut();
-    {
-        let rows = screen.rows(usize::from(buf.area.height));
+    screen.sync(usize::from(buf.area.height), |rows| {
         for (row, cells) in rows.iter_mut().zip(buf.content.chunks_exact(width)) {
             row.clear();
             row.reserve(width);
@@ -19,7 +18,7 @@ pub fn overlay(buf: &mut Buffer, app: &App) {
                 row.push_str(cell.symbol());
             }
         }
-    }
+    });
     let Some(selection) = screen.selection() else {
         return;
     };

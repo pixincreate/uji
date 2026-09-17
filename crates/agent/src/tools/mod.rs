@@ -45,7 +45,7 @@ pub struct ToolRegistry {
 
 impl ToolRegistry {
     pub fn register(&mut self, tool: Arc<dyn Tool>) {
-        self.tools.insert(tool.spec().name.clone(), tool);
+        self.tools.insert(tool.spec().name, tool);
     }
 
     pub fn specs(&self) -> Vec<ToolSpec> {

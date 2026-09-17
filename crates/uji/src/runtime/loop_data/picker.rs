@@ -92,7 +92,7 @@ impl LoopData {
         let item = item.to_string();
         let hook = self.inner.api.pick().borrow().preview();
         let lines = match hook {
-            Some(hook) => match hook.call::<Vec<String>>(item.clone()) {
+            Some(hook) => match hook.call::<Vec<String>>(item) {
                 Ok(lines) => lines,
                 Err(err) => {
                     self.inner.report(format!("preview: {err}"));

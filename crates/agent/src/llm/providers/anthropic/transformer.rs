@@ -50,19 +50,19 @@ impl SystemBlock {
 }
 
 #[derive(Serialize)]
-pub struct AnthropicRequest {
-    pub model: String,
+pub struct AnthropicRequest<'a> {
+    pub model: &'a str,
     pub max_tokens: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking: Option<Thinking>,
     pub system: Vec<SystemBlock>,
-    pub messages: Vec<AnthropicMessage>,
+    pub messages: Vec<AnthropicMessage<'a>>,
     pub stream: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub tools: Vec<AnthropicTool>,
+    pub tools: Vec<AnthropicTool<'a>>,
 }
 
-impl AnthropicRequest {
+impl AnthropicRequest<'_> {
     fn cached(mut self, retention: Retention) -> Self {
         let Some(control) = CacheControl::new(retention) else {
             return self;
@@ -93,30 +93,30 @@ impl AnthropicRequest {
 }
 
 #[derive(Serialize)]
-pub struct AnthropicTool {
-    pub name: String,
-    pub description: String,
-    pub input_schema: serde_json::Value,
+pub struct AnthropicTool<'a> {
+    pub name: &'a str,
+    pub description: &'a str,
+    pub input_schema: &'a serde_json::Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_control: Option<CacheControl>,
 }
 
 #[derive(Serialize)]
-pub struct AnthropicMessage {
+pub struct AnthropicMessage<'a> {
     pub role: &'static str,
-    pub content: Vec<Block>,
+    pub content: Vec<Block<'a>>,
 }
 
 #[derive(Serialize)]
-pub struct Block {
+pub struct Block<'a> {
     #[serde(flatten)]
-    pub body: AnthropicBlock,
+    pub body: AnthropicBlock<'a>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_control: Option<CacheControl>,
 }
 
-impl From<AnthropicBlock> for Block {
-    fn from(body: AnthropicBlock) -> Self {
+impl<'a> From<AnthropicBlock<'a>> for Block<'a> {
+    fn from(body: AnthropicBlock<'a>) -> Self {
         Self {
             body,
             cache_control: None,
@@ -126,46 +126,56 @@ impl From<AnthropicBlock> for Block {
 
 #[derive(Serialize)]
 #[serde(tag = "type")]
-pub enum AnthropicBlock {
+pub enum AnthropicBlock<'a> {
     #[serde(rename = "text")]
-    Text { text: String },
+    Text { text: &'a str },
     #[serde(rename = "tool_use")]
     ToolUse {
-        id: String,
-        name: String,
+        id: &'a str,
+        name: &'a str,
         input: serde_json::Value,
     },
     #[serde(rename = "tool_result")]
     ToolResult {
-        tool_use_id: String,
-        content: String,
+        tool_use_id: &'a str,
+        content: &'a str,
     },
 }
 
-impl From<&LlmRequest> for AnthropicRequest {
-    fn from(request: &LlmRequest) -> Self {
-        let mut system = request.system.clone().unwrap_or_default();
+impl<'a> From<&'a LlmRequest<'a>> for AnthropicRequest<'a> {
+    fn from(request: &'a LlmRequest<'a>) -> Self {
+        let mut system = request.system.unwrap_or_default().to_string();
         let mut messages = Vec::with_capacity(request.messages.len());
-        for item in &request.messages {
+        for item in request.messages {
             match item {
                 Message::User { text } => messages.push(AnthropicMessage {
                     role: "user",
-                    content: vec![AnthropicBlock::Text { text: text.clone() }.into()],
+                    content: vec![
+                        AnthropicBlock::Text {
+                            text: text.as_str(),
+                        }
+                        .into(),
+                    ],
                 }),
                 Message::Assistant {
                     text, tool_calls, ..
                 } => {
                     let mut blocks = Vec::new();
                     if !text.is_empty() {
-                        blocks.push(AnthropicBlock::Text { text: text.clone() }.into());
+                        blocks.push(
+                            AnthropicBlock::Text {
+                                text: text.as_str(),
+                            }
+                            .into(),
+                        );
                     }
                     for call in tool_calls {
                         let input = serde_json::from_str(&call.arguments)
                             .unwrap_or(serde_json::Value::Null);
                         blocks.push(
                             AnthropicBlock::ToolUse {
-                                id: call.id.clone(),
-                                name: call.name.clone(),
+                                id: &call.id,
+                                name: &call.name,
                                 input,
                             }
                             .into(),
@@ -184,8 +194,8 @@ impl From<&LlmRequest> for AnthropicRequest {
                     role: "user",
                     content: vec![
                         AnthropicBlock::ToolResult {
-                            tool_use_id: tool_call_id.clone(),
-                            content: content.clone(),
+                            tool_use_id: tool_call_id,
+                            content,
                         }
                         .into(),
                     ],
@@ -203,15 +213,15 @@ impl From<&LlmRequest> for AnthropicRequest {
             .tools
             .iter()
             .map(|tool| AnthropicTool {
-                name: tool.name.clone(),
-                description: tool.description.clone(),
-                input_schema: tool.parameters.clone(),
+                name: &tool.name,
+                description: &tool.description,
+                input_schema: &tool.parameters,
                 cache_control: None,
             })
             .collect();
         let (max_tokens, budget) = crate::llm::fit_thinking(request.effort, request.max_output);
         Self {
-            model: request.model.clone(),
+            model: request.model,
             max_tokens,
             thinking: (budget > 0).then_some(Thinking {
                 kind: "enabled",

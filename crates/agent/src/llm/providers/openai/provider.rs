@@ -25,7 +25,7 @@ impl OpenAi {
     async fn post(
         &self,
         client: &reqwest::Client,
-        request: &OpenAiRequest,
+        request: &OpenAiRequest<'_>,
     ) -> Result<reqwest::Response, LlmError> {
         let url = format!("{}/chat/completions", self.base_url);
         let mut builder = client.post(&url);
@@ -48,7 +48,7 @@ impl Protocol for OpenAi {
     async fn call(
         &self,
         client: &reqwest::Client,
-        request: &LlmRequest,
+        request: &LlmRequest<'_>,
         on_delta: &mut (dyn FnMut(String) + Send),
     ) -> Result<LlmResponse, LlmError> {
         let mut provider_request = OpenAiRequest::from(request);

@@ -38,7 +38,7 @@ pub trait Protocol: Send + Sync {
     async fn call(
         &self,
         client: &reqwest::Client,
-        request: &LlmRequest,
+        request: &LlmRequest<'_>,
         on_delta: &mut (dyn FnMut(String) + Send),
     ) -> Result<LlmResponse, LlmError>;
 }
@@ -61,7 +61,7 @@ impl Protocol for Llm {
     async fn call(
         &self,
         client: &reqwest::Client,
-        request: &LlmRequest,
+        request: &LlmRequest<'_>,
         on_delta: &mut (dyn FnMut(String) + Send),
     ) -> Result<LlmResponse, LlmError> {
         match self {

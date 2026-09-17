@@ -5,16 +5,16 @@ use crate::llm::providers::acc::ToolAcc;
 use crate::session::model::{Message, ToolCall};
 
 #[derive(Serialize)]
-pub struct OpenAiRequest {
+pub struct OpenAiRequest<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<&'static str>,
-    pub model: String,
-    pub messages: Vec<OpenAiMessage>,
+    pub model: &'a str,
+    pub messages: Vec<OpenAiMessage<'a>>,
     pub stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stream_options: Option<StreamOptions>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub tools: Vec<OpenAiTool>,
+    pub tools: Vec<OpenAiTool<'a>>,
 }
 
 #[derive(Serialize)]
@@ -23,27 +23,27 @@ pub struct StreamOptions {
 }
 
 #[derive(Serialize)]
-pub struct OpenAiTool {
+pub struct OpenAiTool<'a> {
     #[serde(rename = "type")]
     pub kind: &'static str,
-    pub function: OpenAiToolFunction,
+    pub function: OpenAiToolFunction<'a>,
 }
 
 #[derive(Serialize)]
-pub struct OpenAiToolFunction {
-    pub name: String,
-    pub description: String,
-    pub parameters: serde_json::Value,
+pub struct OpenAiToolFunction<'a> {
+    pub name: &'a str,
+    pub description: &'a str,
+    pub parameters: &'a serde_json::Value,
 }
 
 #[derive(Serialize)]
-pub struct OpenAiMessage {
+pub struct OpenAiMessage<'a> {
     pub role: &'static str,
-    pub content: Option<String>,
+    pub content: Option<&'a str>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tool_calls: Vec<OpenAiCall>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_call_id: Option<String>,
+    pub tool_call_id: Option<&'a str>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -60,7 +60,7 @@ pub struct OpenAiCallFunction {
     pub arguments: String,
 }
 
-fn message(role: &'static str, content: Option<String>) -> OpenAiMessage {
+fn message<'a>(role: &'static str, content: Option<&'a str>) -> OpenAiMessage<'a> {
     OpenAiMessage {
         role,
         content,
@@ -69,24 +69,20 @@ fn message(role: &'static str, content: Option<String>) -> OpenAiMessage {
     }
 }
 
-impl From<&LlmRequest> for OpenAiRequest {
-    fn from(request: &LlmRequest) -> Self {
+impl<'a> From<&'a LlmRequest<'a>> for OpenAiRequest<'a> {
+    fn from(request: &'a LlmRequest<'a>) -> Self {
         let mut messages = Vec::with_capacity(request.messages.len() + 1);
-        if let Some(system) = &request.system {
-            messages.push(message("system", Some(system.clone())));
+        if let Some(system) = request.system {
+            messages.push(message("system", Some(system)));
         }
-        for item in &request.messages {
+        for item in request.messages {
             match item {
-                Message::User { text } => messages.push(message("user", Some(text.clone()))),
+                Message::User { text } => messages.push(message("user", Some(text.as_str()))),
                 Message::Assistant {
                     text, tool_calls, ..
                 } => messages.push(OpenAiMessage {
                     role: "assistant",
-                    content: if text.is_empty() {
-                        None
-                    } else {
-                        Some(text.clone())
-                    },
+                    content: (!text.is_empty()).then_some(text.as_str()),
                     tool_calls: tool_calls
                         .iter()
                         .map(|call| OpenAiCall {
@@ -106,12 +102,12 @@ impl From<&LlmRequest> for OpenAiRequest {
                     ..
                 } => messages.push(OpenAiMessage {
                     role: "tool",
-                    content: Some(content.clone()),
+                    content: Some(content.as_str()),
                     tool_calls: Vec::new(),
-                    tool_call_id: Some(tool_call_id.clone()),
+                    tool_call_id: Some(tool_call_id.as_str()),
                 }),
                 Message::System { text } => {
-                    messages.push(message("system", Some(text.clone())));
+                    messages.push(message("system", Some(text.as_str())));
                 }
                 Message::Error { .. } | Message::Compaction { .. } => {}
             }
@@ -122,9 +118,9 @@ impl From<&LlmRequest> for OpenAiRequest {
             .map(|tool| OpenAiTool {
                 kind: "function",
                 function: OpenAiToolFunction {
-                    name: tool.name.clone(),
-                    description: tool.description.clone(),
-                    parameters: tool.parameters.clone(),
+                    name: &tool.name,
+                    description: &tool.description,
+                    parameters: &tool.parameters,
                 },
             })
             .collect();
@@ -136,7 +132,7 @@ impl From<&LlmRequest> for OpenAiRequest {
                 crate::llm::Effort::Medium => Some("medium"),
                 crate::llm::Effort::High => Some("high"),
             },
-            model: request.model.clone(),
+            model: request.model,
             messages,
             stream: false,
             stream_options: None,

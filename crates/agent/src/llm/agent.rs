@@ -46,7 +46,7 @@ pub struct LuaToolSpec {
 
 async fn generate<P: Protocol + ?Sized>(
     config: &AgentConfig<'_, P>,
-    request: &LlmRequest,
+    request: &LlmRequest<'_>,
     on_event: &mut (dyn FnMut(StreamEvent) + Send),
 ) -> Option<LlmResponse> {
     let mut attempt = 0;
@@ -157,10 +157,10 @@ pub async fn run_agent<P: Protocol + ?Sized>(
         }
         steer(&mut messages, on_event).await;
         let request = LlmRequest {
-            model: config.model.clone(),
-            system: config.system.clone(),
-            messages: messages.clone(),
-            tools: tool_specs.clone(),
+            model: &config.model,
+            system: config.system.as_deref(),
+            messages: &messages,
+            tools: &tool_specs,
             effort: config.effort,
             max_output: config.max_output,
             cache: config.cache,

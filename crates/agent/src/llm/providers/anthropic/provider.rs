@@ -65,7 +65,7 @@ impl Anthropic {
     async fn post(
         &self,
         client: &reqwest::Client,
-        request: &AnthropicRequest,
+        request: &AnthropicRequest<'_>,
     ) -> Result<reqwest::Response, LlmError> {
         let url = format!("{}/messages", self.base_url);
         let mut builder = client.post(&url).header("anthropic-version", "2023-06-01");
@@ -85,7 +85,7 @@ impl Anthropic {
         send(builder, request).await
     }
 
-    fn build(&self, request: &LlmRequest) -> AnthropicRequest {
+    fn build<'a>(&self, request: &'a LlmRequest<'a>) -> AnthropicRequest<'a> {
         let mut provider_request = AnthropicRequest::from(request);
         if let Some(prompt) = self
             .session()
@@ -102,7 +102,7 @@ impl Protocol for Anthropic {
     async fn call(
         &self,
         client: &reqwest::Client,
-        request: &LlmRequest,
+        request: &LlmRequest<'_>,
         on_delta: &mut (dyn FnMut(String) + Send),
     ) -> Result<LlmResponse, LlmError> {
         let mut provider_request = self.build(request);

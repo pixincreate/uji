@@ -5,11 +5,11 @@ use crate::session::model::{Message, ToolCall};
 
 use super::tuning::{Effort, Retention};
 
-pub struct LlmRequest {
-    pub model: String,
-    pub system: Option<String>,
-    pub messages: Vec<Message>,
-    pub tools: Vec<ToolSpec>,
+pub struct LlmRequest<'a> {
+    pub model: &'a str,
+    pub system: Option<&'a str>,
+    pub messages: &'a [Message],
+    pub tools: &'a [ToolSpec],
     pub effort: Effort,
     pub max_output: u32,
     pub cache: Retention,

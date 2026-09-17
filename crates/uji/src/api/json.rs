@@ -6,8 +6,7 @@ use crate::api::Api;
 use crate::api::bind::bind;
 
 pub(crate) fn encode(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    bind(lua, api, move |_, lua, value: Value| {
-        let value: serde_json::Value = lua.from_value(value)?;
+    bind(lua, api, move |_, _, value: Value| {
         serde_json::to_string(&value).map_err(mlua::Error::external)
     })
 }

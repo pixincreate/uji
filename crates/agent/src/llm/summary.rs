@@ -64,11 +64,13 @@ pub async fn generate<P: Protocol + ?Sized>(
         ),
         None => (PROMPT, transcript),
     };
+    let system = format!("{instructions}{FORMAT}");
+    let messages = [Message::User { text }];
     let request = LlmRequest {
-        model,
-        system: Some(format!("{instructions}{FORMAT}")),
-        messages: vec![Message::User { text }],
-        tools: Vec::new(),
+        model: &model,
+        system: Some(&system),
+        messages: &messages,
+        tools: &[],
         effort: Effort::Off,
         cache: Retention::Off,
         max_output: DEFAULT_MAX_OUTPUT,

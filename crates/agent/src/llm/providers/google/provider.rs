@@ -28,7 +28,7 @@ impl Gemini {
         &self,
         client: &reqwest::Client,
         model: &str,
-        request: &GeminiRequest,
+        request: &GeminiRequest<'_>,
     ) -> Result<reqwest::Response, LlmError> {
         let url = format!(
             "{}/models/{model}:streamGenerateContent?alt=sse",
@@ -47,11 +47,11 @@ impl Protocol for Gemini {
     async fn call(
         &self,
         client: &reqwest::Client,
-        request: &LlmRequest,
+        request: &LlmRequest<'_>,
         on_delta: &mut (dyn FnMut(String) + Send),
     ) -> Result<LlmResponse, LlmError> {
         let provider_request = GeminiRequest::from(request);
-        let response = self.post(client, &request.model, &provider_request).await?;
+        let response = self.post(client, request.model, &provider_request).await?;
         if !response.status().is_success() {
             return Err(status_error(response).await);
         }

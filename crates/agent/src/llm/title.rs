@@ -21,13 +21,14 @@ pub async fn generate(
     model: String,
     first_message: &str,
 ) -> Option<Titled> {
+    let messages = [Message::User {
+        text: clip(first_message, MAX_INPUT),
+    }];
     let request = LlmRequest {
-        model,
-        system: Some(PROMPT.to_string()),
-        messages: vec![Message::User {
-            text: clip(first_message, MAX_INPUT),
-        }],
-        tools: Vec::new(),
+        model: &model,
+        system: Some(PROMPT),
+        messages: &messages,
+        tools: &[],
         effort: Effort::Off,
         cache: Retention::Off,
         max_output: DEFAULT_MAX_OUTPUT,

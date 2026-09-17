@@ -9,7 +9,7 @@ impl Protocol for NotConfigured {
     async fn call(
         &self,
         _client: &reqwest::Client,
-        _request: &LlmRequest,
+        _request: &LlmRequest<'_>,
         _on_delta: &mut (dyn FnMut(String) + Send),
     ) -> Result<LlmResponse, LlmError> {
         Ok(LlmResponse {
