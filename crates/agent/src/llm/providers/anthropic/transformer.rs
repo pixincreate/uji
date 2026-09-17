@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::llm::providers::acc::ToolAcc;
+use crate::llm::providers::acc::{ToolAcc, arguments_of};
 use crate::llm::{LlmRequest, Retention};
 use crate::session::model::{Message, ToolCall};
 
@@ -170,8 +170,7 @@ impl<'a> From<&'a LlmRequest<'a>> for AnthropicRequest<'a> {
                         );
                     }
                     for call in tool_calls {
-                        let input = serde_json::from_str(&call.arguments)
-                            .unwrap_or(serde_json::Value::Null);
+                        let input = arguments_of(&call.arguments);
                         blocks.push(
                             AnthropicBlock::ToolUse {
                                 id: &call.id,
@@ -425,7 +424,7 @@ impl AnthropicToolAcc {
         }
     }
 
-    pub fn finish(self) -> Vec<ToolCall> {
+    pub fn finish(self) -> Result<Vec<ToolCall>, crate::llm::error::LlmError> {
         self.acc.finish()
     }
 }

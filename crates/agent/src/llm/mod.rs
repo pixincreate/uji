@@ -16,8 +16,9 @@ use async_trait::async_trait;
 pub use agent::{AgentConfig, LuaToolSpec, MAX_TOOL_ITERATIONS, run_agent};
 pub use cancel::CancelToken;
 pub use catalog::{
-    Budget, Catalog, LlmConfig, MAX_RESERVE, Model, OAuthSession, Provider, Selection, Wire,
-    authenticated, resolve, resolve_from_storage,
+    Budget, Catalog, Compat, CompatOverrides, LlmConfig, MAX_RESERVE, MaxTokensField, Model,
+    OAuthSession, Provider, Selection, ThinkingFormat, Wire, authenticated, resolve,
+    resolve_from_storage,
 };
 pub use error::{HttpError, LlmError};
 pub(crate) use error::{RETRY_ATTEMPTS, backoff, clip, response_lines, send, status_error};

@@ -89,11 +89,10 @@ impl ToolPolicy {
         let Some(rules) = self.tools.get(tool) else {
             return self.default;
         };
-        for rule in &rules.rules {
-            if rule.matcher.matches(subject) {
-                return rule.action;
-            }
-        }
-        rules.default
+        rules
+            .rules
+            .iter()
+            .find(|rule| rule.matcher.matches(subject))
+            .map_or(rules.default, |rule| rule.action)
     }
 }

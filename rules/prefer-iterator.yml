@@ -1,9 +1,25 @@
 id: prefer-iterator
 language: rust
 severity: error
-message: Build collections with iterator chains (`map`/`filter`/`collect`) rather than pushing in a `for` loop.
+message: >-
+  Say what the loop is for with an iterator: `map`/`filter`/`collect` to build a
+  collection, `find`/`any`/`position` to search.
 rule:
-  pattern: |
-    for $X in $ITER {
-      $OUT.push($VALUE);
-    }
+  any:
+    # building a collection
+    - pattern: |
+        for $X in $ITER {
+          $OUT.push($VALUE);
+        }
+    # searching: the whole body is one conditional exit
+    - pattern: |
+        for $X in $ITER {
+          if $COND { return $RET; }
+        }
+    - pattern: |
+        for $X in $ITER {
+          if $COND {
+            $BODY
+            break;
+          }
+        }

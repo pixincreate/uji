@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use serde::{Deserialize, Serialize};
 
 use crate::llm::LlmRequest;
-use crate::llm::providers::acc::ToolAcc;
+use crate::llm::providers::acc::{ToolAcc, arguments_of};
 use crate::session::model::{Message, ToolCall};
 
 const MAX_TOKENS: &str = "MAX_TOKENS";
@@ -105,8 +105,7 @@ impl<'a> From<&'a LlmRequest<'a>> for GeminiRequest<'a> {
                         });
                     }
                     for call in tool_calls {
-                        let args = serde_json::from_str(&call.arguments)
-                            .unwrap_or(serde_json::Value::Null);
+                        let args = arguments_of(&call.arguments);
                         parts.push(GeminiPart::FunctionCall {
                             function_call: GeminiFunctionCall {
                                 name: Cow::Borrowed(&call.name),
@@ -282,7 +281,7 @@ impl GeminiToolAcc {
         }
     }
 
-    pub fn finish(self) -> Vec<ToolCall> {
+    pub fn finish(self) -> Result<Vec<ToolCall>, crate::llm::error::LlmError> {
         self.acc.finish()
     }
 }

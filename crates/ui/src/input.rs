@@ -3,7 +3,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crossterm::event::{
-    Event as TermEvent, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    Event as TermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent,
+    MouseEventKind,
 };
 
 use crate::app::selection::Point;
@@ -28,6 +29,9 @@ pub enum MouseKind {
 }
 
 fn chord_of(key: KeyEvent) -> Option<Chord> {
+    if key.kind == KeyEventKind::Release {
+        return None;
+    }
     let mapped = match key.code {
         KeyCode::Char(c) => Key::Char(c),
         KeyCode::Enter => Key::Enter,

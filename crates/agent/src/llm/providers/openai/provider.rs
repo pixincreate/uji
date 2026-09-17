@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 
 use crate::llm::{
-    LlmConfig, LlmError, LlmRequest, LlmResponse, Protocol, response_lines, send, status_error,
+    Compat, LlmConfig, LlmError, LlmRequest, LlmResponse, Protocol, response_lines, send,
+    status_error,
 };
 
 use super::transformer::{OpenAiChunk, OpenAiRequest, OpenAiToolAcc};
@@ -9,16 +10,19 @@ use super::transformer::{OpenAiChunk, OpenAiRequest, OpenAiToolAcc};
 pub struct OpenAi {
     pub base_url: String,
     pub api_key: Option<String>,
+    pub compat: Compat,
 }
 
 impl OpenAi {
     pub fn new(config: &LlmConfig) -> Self {
+        let base_url = config
+            .base_url
+            .clone()
+            .unwrap_or_else(|| "https://api.openai.com/v1".into());
         Self {
-            base_url: config
-                .base_url
-                .clone()
-                .unwrap_or_else(|| "https://api.openai.com/v1".into()),
             api_key: config.resolve_key(),
+            compat: Compat::resolve(&base_url, config.compat),
+            base_url,
         }
     }
 
@@ -51,7 +55,7 @@ impl Protocol for OpenAi {
         request: &LlmRequest<'_>,
         on_delta: &mut (dyn FnMut(String) + Send),
     ) -> Result<LlmResponse, LlmError> {
-        let mut provider_request = OpenAiRequest::from(request);
+        let mut provider_request = OpenAiRequest::build(request, self.compat);
         provider_request.stream = true;
         provider_request.stream_options = Some(super::transformer::StreamOptions {
             include_usage: true,
@@ -94,10 +98,12 @@ impl Protocol for OpenAi {
             }
         })
         .await?;
-        if !complete {
+        // An endpoint that never says why it stopped leaves nothing to check:
+        // a stream that simply ended is the only signal it finished.
+        if !complete && self.compat.finish_reason {
             return Err(LlmError::truncated_stream());
         }
-        let tool_calls = acc.finish();
+        let tool_calls = acc.finish()?;
         if tool_calls.is_empty() {
             truncated(finish_reason.as_deref())?;
             if full.is_empty() {

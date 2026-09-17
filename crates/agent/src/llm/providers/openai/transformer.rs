@@ -1,13 +1,25 @@
 use serde::{Deserialize, Serialize};
 
-use crate::llm::LlmRequest;
-use crate::llm::providers::acc::ToolAcc;
+use crate::llm::providers::acc::{ToolAcc, arguments_of};
+use crate::llm::{Compat, LlmRequest, MaxTokensField, ThinkingFormat};
 use crate::session::model::{Message, ToolCall};
 
 #[derive(Serialize)]
 pub struct OpenAiRequest<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<&'static str>,
+    /// The output limit, under whichever name this endpoint answers to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_completion_tokens: Option<u32>,
+    /// Endpoint-specific spellings of "think this hard".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<Reasoning>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<Thinking>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enable_thinking: Option<bool>,
     pub model: &'a str,
     pub messages: Vec<OpenAiMessage<'a>>,
     pub stream: bool,
@@ -15,6 +27,17 @@ pub struct OpenAiRequest<'a> {
     pub stream_options: Option<StreamOptions>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tools: Vec<OpenAiTool<'a>>,
+}
+
+#[derive(Serialize)]
+pub struct Reasoning {
+    pub effort: &'static str,
+}
+
+#[derive(Serialize)]
+pub struct Thinking {
+    #[serde(rename = "type")]
+    pub kind: &'static str,
 }
 
 #[derive(Serialize)]
@@ -44,6 +67,8 @@ pub struct OpenAiMessage<'a> {
     pub tool_calls: Vec<OpenAiCall>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<&'a str>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -66,11 +91,12 @@ fn message<'a>(role: &'static str, content: Option<&'a str>) -> OpenAiMessage<'a
         content,
         tool_calls: Vec::new(),
         tool_call_id: None,
+        name: None,
     }
 }
 
-impl<'a> From<&'a LlmRequest<'a>> for OpenAiRequest<'a> {
-    fn from(request: &'a LlmRequest<'a>) -> Self {
+impl<'a> OpenAiRequest<'a> {
+    pub fn build(request: &'a LlmRequest<'a>, compat: Compat) -> Self {
         let mut messages = Vec::with_capacity(request.messages.len() + 1);
         if let Some(system) = request.system {
             messages.push(message("system", Some(system)));
@@ -90,21 +116,23 @@ impl<'a> From<&'a LlmRequest<'a>> for OpenAiRequest<'a> {
                             kind: String::from("function"),
                             function: OpenAiCallFunction {
                                 name: call.name.clone(),
-                                arguments: call.arguments.clone(),
+                                arguments: arguments_of(&call.arguments).to_string(),
                             },
                         })
                         .collect(),
                     tool_call_id: None,
+                    name: None,
                 }),
                 Message::Tool {
                     tool_call_id,
                     content,
-                    ..
+                    name,
                 } => messages.push(OpenAiMessage {
                     role: "tool",
                     content: Some(content.as_str()),
                     tool_calls: Vec::new(),
                     tool_call_id: Some(tool_call_id.as_str()),
+                    name: compat.tool_result_name.then_some(name.as_str()),
                 }),
                 Message::System { text } => {
                     messages.push(message("system", Some(text.as_str())));
@@ -124,14 +152,39 @@ impl<'a> From<&'a LlmRequest<'a>> for OpenAiRequest<'a> {
                 },
             })
             .collect();
+        let effort = match request.effort {
+            crate::llm::Effort::Off => None,
+            crate::llm::Effort::Minimal => Some("minimal"),
+            crate::llm::Effort::Low => Some("low"),
+            crate::llm::Effort::Medium => Some("medium"),
+            crate::llm::Effort::High => Some("high"),
+        };
+        let (limit, _) = crate::llm::fit_thinking(request.effort, request.max_output);
         Self {
-            reasoning_effort: match request.effort {
-                crate::llm::Effort::Off => None,
-                crate::llm::Effort::Minimal => Some("minimal"),
-                crate::llm::Effort::Low => Some("low"),
-                crate::llm::Effort::Medium => Some("medium"),
-                crate::llm::Effort::High => Some("high"),
+            reasoning_effort: match compat.thinking {
+                ThinkingFormat::OpenAi => effort,
+                _ => None,
             },
+            reasoning: match (compat.thinking, effort) {
+                (ThinkingFormat::OpenRouter, Some(effort)) => Some(Reasoning { effort }),
+                _ => None,
+            },
+            thinking: match (compat.thinking, effort) {
+                (ThinkingFormat::DeepSeek | ThinkingFormat::Zai, Some(_)) => {
+                    Some(Thinking { kind: "enabled" })
+                }
+                (ThinkingFormat::DeepSeek | ThinkingFormat::Zai, None) => {
+                    Some(Thinking { kind: "disabled" })
+                }
+                _ => None,
+            },
+            enable_thinking: match compat.thinking {
+                ThinkingFormat::Qwen => Some(effort.is_some()),
+                _ => None,
+            },
+            max_tokens: (compat.max_tokens_field == MaxTokensField::MaxTokens).then_some(limit),
+            max_completion_tokens: (compat.max_tokens_field == MaxTokensField::MaxCompletionTokens)
+                .then_some(limit),
             model: request.model,
             messages,
             stream: false,
@@ -317,7 +370,7 @@ impl OpenAiToolAcc {
         }
     }
 
-    pub fn finish(self) -> Vec<ToolCall> {
+    pub fn finish(self) -> Result<Vec<ToolCall>, crate::llm::error::LlmError> {
         self.acc.finish()
     }
 }

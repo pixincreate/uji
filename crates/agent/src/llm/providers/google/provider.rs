@@ -83,7 +83,7 @@ impl Protocol for Gemini {
         if !complete {
             return Err(LlmError::truncated_stream());
         }
-        let tool_calls = acc.finish();
+        let tool_calls = acc.finish()?;
         if tool_calls.is_empty() && hit_limit {
             return Err(LlmError::output_limit());
         }

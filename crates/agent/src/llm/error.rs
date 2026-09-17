@@ -78,6 +78,12 @@ impl LlmError {
         }
     }
 
+    pub(crate) fn truncated_call(name: &str) -> Self {
+        Self::Provider(format!(
+            "the reply was cut off while calling `{name}`, so its arguments are incomplete - raise the model's max output"
+        ))
+    }
+
     pub(crate) fn output_limit() -> Self {
         Self::Provider("response hit the model's output limit and was cut off".into())
     }

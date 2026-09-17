@@ -62,12 +62,7 @@ impl Chord {
     }
 
     pub fn new(key: Key, ctrl: bool, alt: bool, shift: bool) -> Self {
-        let key = match key {
-            Key::Char(c) => Key::Char(c.to_ascii_lowercase()),
-            other => other,
-        };
         let shift = match key {
-            Key::Char(_) => false,
             Key::BackTab => true,
             _ => shift,
         };
@@ -76,6 +71,22 @@ impl Chord {
             ctrl,
             alt,
             shift,
+        }
+    }
+
+    /// The form bindings are keyed by.
+    ///
+    /// A binding names a key, not a character: `<C-a>` and `<C-A>` are the same
+    /// chord. The pressed character is kept on the chord itself, because that is
+    /// what gets typed into the input.
+    fn normalised(self) -> Self {
+        match self.key {
+            Key::Char(c) => Self {
+                key: Key::Char(c.to_ascii_lowercase()),
+                shift: false,
+                ..self
+            },
+            _ => self,
         }
     }
 
@@ -176,11 +187,11 @@ impl Default for Keymap {
 
 impl Keymap {
     pub fn set(&mut self, mode: Mode, chord: Chord, binding: Binding) {
-        self.map.insert((mode, chord), binding);
+        self.map.insert((mode, chord.normalised()), binding);
     }
 
     pub fn get(&self, mode: Mode, chord: Chord) -> Option<&Binding> {
-        self.map.get(&(mode, chord))
+        self.map.get(&(mode, chord.normalised()))
     }
 
     pub fn reset(&mut self) {
