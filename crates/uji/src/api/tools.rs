@@ -12,6 +12,7 @@ use crate::api::bind::bind;
 pub struct Access {
     roots: Vec<PathBuf>,
     confined: bool,
+    disabled: std::collections::BTreeSet<String>,
 }
 
 impl Access {
@@ -29,6 +30,18 @@ impl Access {
 
     pub fn set_confined(&mut self, confined: bool) {
         self.confined = confined;
+    }
+
+    pub fn disabled(&self) -> &std::collections::BTreeSet<String> {
+        &self.disabled
+    }
+
+    pub fn disable(&mut self, names: Vec<String>) {
+        self.disabled.extend(names);
+    }
+
+    pub fn enable(&mut self, names: &[String]) {
+        self.disabled.retain(|name| !names.contains(name));
     }
 }
 
@@ -96,6 +109,20 @@ pub fn list_roots(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
             out.set(at + 1, root.display().to_string())?;
         }
         Ok(out)
+    })
+}
+
+pub fn disable(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    bind(lua, api, move |api, _, names: Vec<String>| {
+        api.access().borrow_mut().disable(names);
+        Ok(())
+    })
+}
+
+pub fn enable(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    bind(lua, api, move |api, _, names: Vec<String>| {
+        api.access().borrow_mut().enable(&names);
+        Ok(())
     })
 }
 

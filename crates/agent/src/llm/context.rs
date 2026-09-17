@@ -129,9 +129,7 @@ pub fn sanitize(stored: &[StoredMessage]) -> Vec<Message> {
                     .iter()
                     .all(|call| has_result.contains(call.id.as_str()));
                 if complete {
-                    for call in tool_calls {
-                        requested.insert(call.id.as_str());
-                    }
+                    requested.extend(tool_calls.iter().map(|call| call.id.as_str()));
                     out.push(message.clone());
                 } else if !text.is_empty() {
                     out.push(Message::Assistant {

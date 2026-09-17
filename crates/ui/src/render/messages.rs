@@ -326,10 +326,10 @@ fn push_tool_output(lines: &mut Vec<Line<'static>>, content: &str, width: usize,
         Style::default().fg(palette.muted)
     };
     let available = width.saturating_sub(5).max(1);
-    let mut wrapped: Vec<String> = Vec::new();
-    for raw in content.lines() {
-        wrapped.extend(wrap_text(raw, available));
-    }
+    let wrapped: Vec<String> = content
+        .lines()
+        .flat_map(|raw| wrap_text(raw, available))
+        .collect();
     let omitted = wrapped.len().saturating_sub(MAX_TOOL_PREVIEW_LINES);
     for (index, chunk) in wrapped.iter().take(MAX_TOOL_PREVIEW_LINES).enumerate() {
         let prefix = if index == 0 { "   └ " } else { "     " };

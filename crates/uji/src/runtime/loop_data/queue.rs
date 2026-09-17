@@ -11,7 +11,7 @@ impl LoopData {
     pub(super) fn sync_queue(&mut self) {
         let queued: Vec<String> = self.queued.iter().cloned().collect();
         self.inner.emit(
-            events::QUEUE_CHANGED,
+            events::Event::QueueChanged.name(),
             &[("count", queued.len().to_string())],
         );
         self.inner.state().borrow_mut().set_queued(queued.clone());

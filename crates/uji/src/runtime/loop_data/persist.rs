@@ -32,11 +32,12 @@ impl LoopData {
         };
         self.app.conversation().borrow_mut().push(stored);
         self.inner.emit(
-            events::MESSAGE_APPENDED,
+            events::Event::MessageAppended.name(),
             &[("type", kind.to_string()), ("text", text.clone())],
         );
         if kind == "error" {
-            self.inner.emit(events::ERROR, &[("text", text)]);
+            self.inner
+                .emit(events::Event::Error.name(), &[("text", text)]);
         }
         self.dirty = true;
     }
@@ -52,7 +53,8 @@ impl LoopData {
                 .map(|call| call.name.as_str())
                 .collect::<Vec<_>>()
                 .join(",");
-            self.inner.emit(events::TOOL_STARTED, &[("tools", names)]);
+            self.inner
+                .emit(events::Event::ToolStarted.name(), &[("tools", names)]);
         }
         self.append(Message::Assistant {
             text,
@@ -70,7 +72,7 @@ impl LoopData {
         let content = self
             .inner
             .ask(
-                events::TOOL_FINISHED,
+                events::Event::ToolFinished.name(),
                 &[("name", name.clone()), ("content", content.clone())],
             )
             .and_then(replacement_content)

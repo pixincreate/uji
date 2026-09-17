@@ -152,7 +152,7 @@ impl Runtime {
             data.pump(&loop_handle)?;
         }
 
-        data.inner.emit(events::QUIT, &[]);
+        data.inner.emit(events::Event::Quit.name(), &[]);
         data.frontend.stop()
     }
 }

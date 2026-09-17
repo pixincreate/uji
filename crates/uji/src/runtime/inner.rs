@@ -192,7 +192,7 @@ impl Inner {
         );
         drop(state);
         self.emit(
-            events::MODEL_CHANGED,
+            events::Event::ModelChanged.name(),
             &[
                 ("provider", self.llm_provider.borrow().clone()),
                 ("model", self.llm_model.borrow().clone()),

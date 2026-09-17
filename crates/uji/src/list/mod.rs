@@ -32,7 +32,7 @@ pub fn run(mut storage: Box<dyn SessionStorage>) -> Result<(), Box<dyn Error>> {
 
     let session = sessions[index].clone();
     runtime.emit(
-        events::SESSION_RESUMED,
+        events::Event::SessionResumed.name(),
         &[("session_id", session.id.to_string())],
     );
     runtime.run(session, storage)?;

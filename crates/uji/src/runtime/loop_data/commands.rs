@@ -136,7 +136,7 @@ impl Context for LoopData {
 
     fn resolve_llm(&mut self) {
         self.inner.resolve_llm(&mut *self.storage);
-        self.inner.emit(events::STATUS_CHANGED, &[]);
+        self.inner.emit(events::Event::StatusChanged.name(), &[]);
         self.dirty = true;
     }
 

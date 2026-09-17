@@ -24,7 +24,7 @@ impl LoopData {
     pub(crate) fn bootstrap(&mut self) -> std::io::Result<()> {
         self.frontend.draw(&self.app)?;
         self.inner.resolve_llm(&mut *self.storage);
-        self.inner.emit(events::STATUS_CHANGED, &[]);
+        self.inner.emit(events::Event::StatusChanged.name(), &[]);
         self.refresh_suggestions();
         self.frontend.draw(&self.app)?;
         self.dirty = false;
@@ -85,7 +85,7 @@ impl LoopData {
 
     pub(crate) fn on_timer(&mut self) {
         if self.inner.state().borrow().run_state() == RunState::Working {
-            self.inner.emit(events::TICK, &[]);
+            self.inner.emit(events::Event::Tick.name(), &[]);
             self.dirty = true;
         }
     }
@@ -233,7 +233,7 @@ impl LoopData {
         self.inner.resolve_llm(&mut *self.storage);
         self.refresh_suggestions();
         self.drain_diagnostics();
-        self.inner.emit(events::STATUS_CHANGED, &[]);
+        self.inner.emit(events::Event::StatusChanged.name(), &[]);
         self.dirty = true;
     }
 

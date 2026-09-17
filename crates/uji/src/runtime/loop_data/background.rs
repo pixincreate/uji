@@ -29,7 +29,8 @@ impl LoopData {
             .conversation()
             .borrow_mut()
             .set_title(title.clone());
-        self.inner.emit(events::SESSION_TITLED, &[("title", title)]);
+        self.inner
+            .emit(events::Event::SessionTitled.name(), &[("title", title)]);
         self.dirty = true;
     }
 
@@ -69,7 +70,7 @@ impl LoopData {
             AuthEvent::Done { provider_id } => {
                 self.inner.report(format!("signed in to {provider_id}"));
                 self.inner.resolve_llm(&mut *self.storage);
-                self.inner.emit(events::STATUS_CHANGED, &[]);
+                self.inner.emit(events::Event::StatusChanged.name(), &[]);
             }
             AuthEvent::Failed { message } => {
                 self.inner.report(format!("sign-in failed: {message}"));

@@ -50,7 +50,7 @@ impl LoopData {
         let _ = event.set("name", tool.name.clone());
         let _ = event.set("arguments", args_table.clone());
 
-        let decision = self.inner.api.ask(events::TOOL_CALL, &event);
+        let decision = self.inner.api.ask(events::Event::ToolCall.name(), &event);
         let approval = if let Some(approval) = parse_tool_decision(decision) {
             approval
         } else {

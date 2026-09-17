@@ -54,7 +54,7 @@ fn handle_new() -> Result<(), Box<dyn Error>> {
     let session = storage.create_session(uji::session::model::UNTITLED)?;
     let runtime = Runtime::boot()?;
     runtime.emit(
-        events::SESSION_CREATED,
+        events::Event::SessionCreated.name(),
         &[("session_id", session.id.to_string())],
     );
     runtime.run(session, storage)?;
@@ -79,7 +79,7 @@ fn handle_resume(id: Option<String>) -> Result<(), Box<dyn Error>> {
     };
     let runtime = Runtime::boot()?;
     runtime.emit(
-        events::SESSION_RESUMED,
+        events::Event::SessionResumed.name(),
         &[("session_id", session.id.to_string())],
     );
     runtime.run(session, storage)?;

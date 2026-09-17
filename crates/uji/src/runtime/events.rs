@@ -1,17 +1,29 @@
-pub const SESSION_CREATED: &str = "session_created";
-pub const SESSION_RESUMED: &str = "session_resumed";
-pub const SESSION_TITLED: &str = "session_titled";
-pub const MESSAGE_SUBMITTED: &str = "message_submitted";
-pub const QUEUE_CHANGED: &str = "queue_changed";
-pub const MESSAGE_APPENDED: &str = "message_appended";
-pub const RENDER_MESSAGE: &str = "render_message";
-pub const TOOL_CALL: &str = "tool_call";
-pub const TOOL_STARTED: &str = "tool_started";
-pub const TOOL_FINISHED: &str = "tool_finished";
-pub const TURN_FINISHED: &str = "turn_finished";
-pub const MODEL_CHANGED: &str = "model_changed";
-pub const COMPACTED: &str = "compacted";
-pub const ERROR: &str = "error";
-pub const STATUS_CHANGED: &str = "status_changed";
-pub const TICK: &str = "tick";
-pub const QUIT: &str = "quit";
+use strum::IntoStaticStr;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum Event {
+    SessionCreated,
+    SessionResumed,
+    SessionTitled,
+    MessageSubmitted,
+    QueueChanged,
+    MessageAppended,
+    RenderMessage,
+    ToolCall,
+    ToolStarted,
+    ToolFinished,
+    TurnFinished,
+    ModelChanged,
+    Compacted,
+    Error,
+    StatusChanged,
+    Tick,
+    Quit,
+}
+
+impl Event {
+    pub fn name(self) -> &'static str {
+        self.into()
+    }
+}

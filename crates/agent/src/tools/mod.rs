@@ -3,7 +3,7 @@ pub mod policy;
 pub mod progress;
 pub mod prompt;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -54,6 +54,10 @@ impl ToolRegistry {
 
     pub fn get(&self, name: &str) -> Option<&Arc<dyn Tool>> {
         self.tools.get(name)
+    }
+
+    pub fn disable(&mut self, names: &BTreeSet<String>) {
+        self.tools.retain(|name, _| !names.contains(name));
     }
 }
 

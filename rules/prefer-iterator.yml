@@ -4,12 +4,15 @@ severity: error
 message: >-
   Say what the loop is for with an iterator: `map`/`filter`/`collect` to build a
   collection, `find`/`any`/`position` to search.
+constraints:
+  EDIT:
+    regex: "^(push|insert|remove|extend|push_str)$"
 rule:
   any:
     # building a collection
     - pattern: |
         for $X in $ITER {
-          $OUT.push($VALUE);
+          $OUT.$EDIT($VALUE);
         }
     # searching: the whole body is one conditional exit
     - pattern: |

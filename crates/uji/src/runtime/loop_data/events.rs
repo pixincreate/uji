@@ -104,7 +104,7 @@ impl LoopData {
             }
             StreamEvent::Usage(usage) => {
                 self.inner.api.session().add_usage(usage);
-                self.inner.emit(events::STATUS_CHANGED, &[]);
+                self.inner.emit(events::Event::StatusChanged.name(), &[]);
             }
             StreamEvent::Cancelled => {
                 self.app.take_pending();

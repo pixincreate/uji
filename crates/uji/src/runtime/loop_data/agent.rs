@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use mlua::Value as LuaValue;
+
 use uji_agent::llm::{AgentConfig, CancelToken, StreamEvent, run_agent};
 use uji_agent::session::model::Message;
 use uji_ui::model::RunState;
@@ -21,8 +23,10 @@ impl LoopData {
         }
         self.app.overlay_mut().clear_notices();
         self.app.reset_scroll();
-        self.inner
-            .emit(events::MESSAGE_SUBMITTED, &[("text", text.to_string())]);
+        self.inner.emit(
+            events::Event::MessageSubmitted.name(),
+            &[("text", text.to_string())],
+        );
 
         self.append(Message::User {
             text: text.to_string(),
@@ -36,6 +40,7 @@ impl LoopData {
             let conversation = self.app.messages();
             uji_agent::llm::context::build(conversation.messages())
         };
+
         let system = {
             let state_rc = self.inner.state();
             let state = state_rc.borrow();
@@ -44,8 +49,11 @@ impl LoopData {
                 &self.app.session().directory,
             )
         };
-        let system = self.with_agent_context(system);
+        let mut system = system;
+        let mut context = context;
+        self.gather_context(&mut system, &mut context);
         let lua_tools = self.gather_lua_tools();
+        let disabled = self.inner.api.access().borrow().disabled().clone();
         let roots = {
             let access = self.inner.api.access().borrow();
             let extra = access.roots().to_vec();
@@ -70,9 +78,10 @@ impl LoopData {
             state.set_run_state(RunState::Working);
             state.set_turn_started(Some(Instant::now()));
         }
-        self.inner.emit(events::STATUS_CHANGED, &[]);
+        self.inner.emit(events::Event::StatusChanged.name(), &[]);
         self.runtime.spawn(async move {
-            let tools = uji_agent::tools::builtin_registry(roots);
+            let mut tools = uji_agent::tools::builtin_registry(roots);
+            tools.disable(&disabled);
             let config = AgentConfig {
                 client: &client,
                 provider: provider.as_ref(),
@@ -104,18 +113,31 @@ impl LoopData {
         true
     }
 
-    fn with_agent_context(&self, mut system: String) -> String {
+    fn gather_context(&self, system: &mut String, messages: &mut Vec<Message>) {
         for (name, call) in self.inner.api.agent_context().calls() {
-            match call.call::<Option<String>>(()) {
-                Ok(Some(extra)) if !extra.trim().is_empty() => {
-                    system.push_str("\n\n");
-                    system.push_str(extra.trim());
+            let (text, at_turn) = match call.call::<LuaValue>(()) {
+                Ok(LuaValue::String(text)) => (text.to_string_lossy(), false),
+                Ok(LuaValue::Table(table)) => {
+                    let text = table.get::<Option<String>>("text").unwrap_or_default();
+                    let at = table.get::<Option<String>>("at").unwrap_or_default();
+                    (text.unwrap_or_default(), at.as_deref() == Some("turn"))
                 }
-                Ok(_) => {}
-                Err(err) => self.inner.report(format!("agent context {name}: {err}")),
+                Ok(_) => continue,
+                Err(err) => {
+                    self.inner.report(format!("agent context {name}: {err}"));
+                    continue;
+                }
+            };
+            if text.trim().is_empty() {
+                continue;
+            }
+            if at_turn {
+                messages.push(Message::User { text });
+            } else {
+                system.push_str("\n\n");
+                system.push_str(&text);
             }
         }
-        system
     }
 
     pub(super) fn stop_working(&mut self) {
@@ -127,7 +149,7 @@ impl LoopData {
             state.set_run_state(RunState::Idle);
             state.set_turn_started(None);
         }
-        self.inner.emit(events::STATUS_CHANGED, &[]);
-        self.inner.emit(events::TURN_FINISHED, &[]);
+        self.inner.emit(events::Event::StatusChanged.name(), &[]);
+        self.inner.emit(events::Event::TurnFinished.name(), &[]);
     }
 }

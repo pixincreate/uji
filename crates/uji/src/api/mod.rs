@@ -263,6 +263,8 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     tool.set("unregister", tools::unregister(lua, api)?)?;
     tool.set("roots", tools::roots(lua, api)?)?;
     tool.set("list_roots", tools::list_roots(lua, api)?)?;
+    tool.set("disable", tools::disable(lua, api)?)?;
+    tool.set("enable", tools::enable(lua, api)?)?;
     tool.set("confine", tools::confine(lua, api)?)?;
     uji.set("tool", tool)?;
 

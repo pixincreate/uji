@@ -78,7 +78,7 @@ impl LoopData {
             state.set_run_state(RunState::Working);
             state.set_turn_started(Some(Instant::now()));
         }
-        self.inner.emit(events::STATUS_CHANGED, &[]);
+        self.inner.emit(events::Event::StatusChanged.name(), &[]);
         background::compact(
             &self.runtime,
             background::CompactRequest {
@@ -113,8 +113,10 @@ impl LoopData {
                 });
                 self.inner
                     .report(format!("compacted {} earlier messages", cut.span()));
-                self.inner
-                    .emit(events::COMPACTED, &[("count", cut.span().to_string())]);
+                self.inner.emit(
+                    events::Event::Compacted.name(),
+                    &[("count", cut.span().to_string())],
+                );
             }
             CompactEvent::Failed => self
                 .inner

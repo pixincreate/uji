@@ -14,9 +14,7 @@ pub fn overlay(buf: &mut Buffer, app: &App) {
         for (row, cells) in rows.iter_mut().zip(buf.content.chunks_exact(width)) {
             row.clear();
             row.reserve(width);
-            for cell in cells {
-                row.push_str(cell.symbol());
-            }
+            row.extend(cells.iter().map(ratatui::buffer::Cell::symbol));
         }
     });
     let Some(selection) = screen.selection() else {

@@ -63,7 +63,9 @@ impl LuaRenderer {
 
 impl BlockRenderer for LuaRenderer {
     fn overrides(&self) -> bool {
-        self.inner.api.has_handler(events::RENDER_MESSAGE)
+        self.inner
+            .api
+            .has_handler(events::Event::RenderMessage.name())
     }
 
     fn render(&self, block: Block<'_>) -> Option<Vec<Line>> {
@@ -71,7 +73,10 @@ impl BlockRenderer for LuaRenderer {
             return None;
         }
         let table = self.payload(block)?;
-        let value = self.inner.api.ask(events::RENDER_MESSAGE, &table)?;
+        let value = self
+            .inner
+            .api
+            .ask(events::Event::RenderMessage.name(), &table)?;
         match crate::api::window::lines_from_lua(value) {
             Ok(lines) => Some(lines),
             Err(err) => {
