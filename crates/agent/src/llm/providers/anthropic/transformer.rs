@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::llm::providers::acc::{ToolAcc, arguments_of};
 use crate::llm::{LlmRequest, Retention};
-use crate::session::model::{Message, ToolCall};
+use crate::session::model::{self as session, ToolCall};
 
 const MAX_TOKENS: &str = "max_tokens";
 
@@ -50,19 +50,19 @@ impl SystemBlock {
 }
 
 #[derive(Serialize)]
-pub struct AnthropicRequest<'a> {
+pub struct Request<'a> {
     pub model: &'a str,
     pub max_tokens: u32,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking: Option<Thinking>,
     pub system: Vec<SystemBlock>,
-    pub messages: Vec<AnthropicMessage<'a>>,
+    pub messages: Vec<Message<'a>>,
     pub stream: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub tools: Vec<AnthropicTool<'a>>,
+    pub tools: Vec<Tool<'a>>,
 }
 
-impl AnthropicRequest<'_> {
+impl Request<'_> {
     fn cached(mut self, retention: Retention) -> Self {
         let Some(control) = CacheControl::new(retention) else {
             return self;
@@ -93,7 +93,7 @@ impl AnthropicRequest<'_> {
 }
 
 #[derive(Serialize)]
-pub struct AnthropicTool<'a> {
+pub struct Tool<'a> {
     pub name: &'a str,
     pub description: &'a str,
     pub input_schema: &'a serde_json::Value,
@@ -102,7 +102,7 @@ pub struct AnthropicTool<'a> {
 }
 
 #[derive(Serialize)]
-pub struct AnthropicMessage<'a> {
+pub struct Message<'a> {
     pub role: &'static str,
     pub content: Vec<Block<'a>>,
 }
@@ -110,13 +110,13 @@ pub struct AnthropicMessage<'a> {
 #[derive(Serialize)]
 pub struct Block<'a> {
     #[serde(flatten)]
-    pub body: AnthropicBlock<'a>,
+    pub body: Content<'a>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_control: Option<CacheControl>,
 }
 
-impl<'a> From<AnthropicBlock<'a>> for Block<'a> {
-    fn from(body: AnthropicBlock<'a>) -> Self {
+impl<'a> From<Content<'a>> for Block<'a> {
+    fn from(body: Content<'a>) -> Self {
         Self {
             body,
             cache_control: None,
@@ -126,7 +126,7 @@ impl<'a> From<AnthropicBlock<'a>> for Block<'a> {
 
 #[derive(Serialize)]
 #[serde(tag = "type")]
-pub enum AnthropicBlock<'a> {
+pub enum Content<'a> {
     #[serde(rename = "text")]
     Text { text: &'a str },
     #[serde(rename = "tool_use")]
@@ -142,28 +142,28 @@ pub enum AnthropicBlock<'a> {
     },
 }
 
-impl<'a> From<&'a LlmRequest<'a>> for AnthropicRequest<'a> {
+impl<'a> From<&'a LlmRequest<'a>> for Request<'a> {
     fn from(request: &'a LlmRequest<'a>) -> Self {
         let mut system = request.system.unwrap_or_default().to_string();
         let mut messages = Vec::with_capacity(request.messages.len());
         for item in request.messages {
             match item {
-                Message::User { text } => messages.push(AnthropicMessage {
+                session::Message::User { text } => messages.push(Message {
                     role: "user",
                     content: vec![
-                        AnthropicBlock::Text {
+                        Content::Text {
                             text: text.as_str(),
                         }
                         .into(),
                     ],
                 }),
-                Message::Assistant {
+                session::Message::Assistant {
                     text, tool_calls, ..
                 } => {
                     let mut blocks = Vec::new();
                     if !text.is_empty() {
                         blocks.push(
-                            AnthropicBlock::Text {
+                            Content::Text {
                                 text: text.as_str(),
                             }
                             .into(),
@@ -172,7 +172,7 @@ impl<'a> From<&'a LlmRequest<'a>> for AnthropicRequest<'a> {
                     for call in tool_calls {
                         let input = arguments_of(&call.arguments);
                         blocks.push(
-                            AnthropicBlock::ToolUse {
+                            Content::ToolUse {
                                 id: &call.id,
                                 name: &call.name,
                                 input,
@@ -180,38 +180,38 @@ impl<'a> From<&'a LlmRequest<'a>> for AnthropicRequest<'a> {
                             .into(),
                         );
                     }
-                    messages.push(AnthropicMessage {
+                    messages.push(Message {
                         role: "assistant",
                         content: blocks,
                     });
                 }
-                Message::Tool {
+                session::Message::Tool {
                     tool_call_id,
                     content,
                     ..
-                } => messages.push(AnthropicMessage {
+                } => messages.push(Message {
                     role: "user",
                     content: vec![
-                        AnthropicBlock::ToolResult {
+                        Content::ToolResult {
                             tool_use_id: tool_call_id,
                             content,
                         }
                         .into(),
                     ],
                 }),
-                Message::System { text } => {
+                session::Message::System { text } => {
                     if !system.is_empty() {
                         system.push('\n');
                     }
                     system.push_str(text);
                 }
-                Message::Error { .. } | Message::Compaction { .. } => {}
+                session::Message::Error { .. } | session::Message::Compaction { .. } => {}
             }
         }
         let tools = request
             .tools
             .iter()
-            .map(|tool| AnthropicTool {
+            .map(|tool| Tool {
                 name: &tool.name,
                 description: &tool.description,
                 input_schema: &tool.parameters,
@@ -240,16 +240,16 @@ impl<'a> From<&'a LlmRequest<'a>> for AnthropicRequest<'a> {
 }
 
 #[derive(Deserialize)]
-pub struct AnthropicResponse {
-    pub content: Vec<AnthropicOutBlock>,
+pub struct Response {
+    pub content: Vec<OutBlock>,
     #[serde(default)]
     pub stop_reason: Option<String>,
     #[serde(default)]
-    pub usage: Option<AnthropicUsage>,
+    pub usage: Option<Usage>,
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
-pub struct AnthropicUsage {
+pub struct Usage {
     #[serde(default, rename = "input_tokens")]
     pub input: u64,
     #[serde(default, rename = "output_tokens")]
@@ -260,8 +260,8 @@ pub struct AnthropicUsage {
     pub cache_write: u64,
 }
 
-impl From<AnthropicUsage> for crate::llm::Usage {
-    fn from(usage: AnthropicUsage) -> Self {
+impl From<Usage> for crate::llm::Usage {
+    fn from(usage: Usage) -> Self {
         Self {
             input: usage.input,
             output: usage.output,
@@ -273,7 +273,7 @@ impl From<AnthropicUsage> for crate::llm::Usage {
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
-pub enum AnthropicOutBlock {
+pub enum OutBlock {
     #[serde(rename = "text")]
     Text { text: String },
     #[serde(rename = "tool_use")]
@@ -284,7 +284,7 @@ pub enum AnthropicOutBlock {
     },
 }
 
-impl AnthropicResponse {
+impl Response {
     pub fn truncated(&self) -> bool {
         self.stop_reason.as_deref() == Some(MAX_TOKENS)
     }
@@ -293,8 +293,8 @@ impl AnthropicResponse {
         self.content
             .iter()
             .filter_map(|block| match block {
-                AnthropicOutBlock::Text { text } => Some(text.as_str()),
-                AnthropicOutBlock::ToolUse { .. } => None,
+                OutBlock::Text { text } => Some(text.as_str()),
+                OutBlock::ToolUse { .. } => None,
             })
             .collect()
     }
@@ -303,38 +303,38 @@ impl AnthropicResponse {
         self.content
             .iter()
             .filter_map(|block| match block {
-                AnthropicOutBlock::ToolUse { id, name, input } => Some(ToolCall {
+                OutBlock::ToolUse { id, name, input } => Some(ToolCall {
                     id: id.clone(),
                     name: name.clone(),
                     arguments: input.to_string(),
                 }),
-                AnthropicOutBlock::Text { .. } => None,
+                OutBlock::Text { .. } => None,
             })
             .collect()
     }
 }
 
 #[derive(Deserialize)]
-pub struct AnthropicStreamEvent {
+pub struct StreamEvent {
     #[serde(rename = "type")]
     pub kind: String,
     pub index: Option<usize>,
-    pub content_block: Option<AnthropicStreamBlock>,
-    pub delta: Option<AnthropicStreamDelta>,
+    pub content_block: Option<StreamBlock>,
+    pub delta: Option<StreamDelta>,
     #[serde(default)]
-    pub message: Option<AnthropicStreamMessage>,
+    pub message: Option<StreamMessage>,
     #[serde(default)]
-    pub usage: Option<AnthropicUsage>,
+    pub usage: Option<Usage>,
 }
 
 #[derive(Deserialize)]
-pub struct AnthropicStreamMessage {
+pub struct StreamMessage {
     #[serde(default)]
-    pub usage: Option<AnthropicUsage>,
+    pub usage: Option<Usage>,
 }
 
 #[derive(Deserialize)]
-pub struct AnthropicStreamBlock {
+pub struct StreamBlock {
     #[serde(rename = "type")]
     pub kind: String,
     #[serde(default)]
@@ -344,7 +344,7 @@ pub struct AnthropicStreamBlock {
 }
 
 #[derive(Deserialize)]
-pub struct AnthropicStreamDelta {
+pub struct StreamDelta {
     #[serde(rename = "type", default)]
     pub kind: String,
     #[serde(default)]
@@ -355,7 +355,7 @@ pub struct AnthropicStreamDelta {
     pub stop_reason: Option<String>,
 }
 
-impl AnthropicStreamEvent {
+impl StreamEvent {
     pub fn truncated(&self) -> bool {
         self.delta
             .as_ref()
@@ -392,39 +392,30 @@ impl AnthropicStreamEvent {
     }
 }
 
-#[derive(Default)]
-pub struct AnthropicToolAcc {
-    acc: ToolAcc,
-}
-
-impl AnthropicToolAcc {
-    pub fn apply(&mut self, event: &AnthropicStreamEvent) {
-        let Some(index) = event.index else {
+impl StreamEvent {
+    pub fn accumulate(&self, acc: &mut ToolAcc) {
+        let Some(index) = self.index else {
             return;
         };
-        match event.kind.as_str() {
+        match self.kind.as_str() {
             "content_block_start" => {
-                if let Some(block) = &event.content_block
+                if let Some(block) = &self.content_block
                     && block.kind == "tool_use"
                 {
-                    let entry = self.acc.entry(index);
+                    let entry = acc.entry(index);
                     entry.id = block.id.clone().unwrap_or_default();
                     entry.name = block.name.clone().unwrap_or_default();
                 }
             }
             "content_block_delta" => {
-                if let Some(delta) = &event.delta
+                if let Some(delta) = &self.delta
                     && delta.kind == "input_json_delta"
                     && let Some(fragment) = &delta.partial_json
                 {
-                    self.acc.entry(index).arguments.push_str(fragment);
+                    acc.entry(index).arguments.push_str(fragment);
                 }
             }
             _ => {}
         }
-    }
-
-    pub fn finish(self) -> Result<Vec<ToolCall>, crate::llm::error::LlmError> {
-        self.acc.finish()
     }
 }

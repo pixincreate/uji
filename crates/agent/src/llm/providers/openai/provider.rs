@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 
-use crate::llm::{
-    Compat, LlmConfig, LlmError, LlmRequest, LlmResponse, Protocol, response_lines, send,
-    status_error,
-};
+use crate::llm::providers::stream::{Api, Parts, stream};
+use crate::session::model::ToolCall;
 
-use super::transformer::{OpenAiChunk, OpenAiRequest, OpenAiToolAcc};
+use crate::llm::{Compat, LlmConfig, LlmError, LlmRequest, LlmResponse, Protocol, send};
+
+use super::transformer::{Chunk, Request, StreamOptions};
 
 pub struct OpenAi {
     pub base_url: String,
@@ -29,7 +29,7 @@ impl OpenAi {
     async fn post(
         &self,
         client: &reqwest::Client,
-        request: &OpenAiRequest<'_>,
+        request: &Request<'_>,
     ) -> Result<reqwest::Response, LlmError> {
         let url = format!("{}/chat/completions", self.base_url);
         let mut builder = client.post(&url);
@@ -48,6 +48,61 @@ fn truncated(finish_reason: Option<&str>) -> Result<(), LlmError> {
 }
 
 #[async_trait]
+impl Api for OpenAi {
+    type Event = Chunk;
+
+    async fn send(
+        &self,
+        client: &reqwest::Client,
+        request: &LlmRequest<'_>,
+    ) -> Result<reqwest::Response, LlmError> {
+        let mut provider_request = Request::build(request, self.compat);
+        provider_request.stream = true;
+        provider_request.stream_options = Some(StreamOptions {
+            include_usage: true,
+        });
+        self.post(client, &provider_request).await
+    }
+
+    fn read(&self, event: Chunk, parts: &mut Parts, on_delta: &mut (dyn FnMut(String) + Send)) {
+        if let Some(delta) = event.delta_text() {
+            on_delta(delta.to_string());
+            parts.text.push_str(delta);
+        }
+        if let Some(delta) = event.delta_reasoning() {
+            parts.reasoning.push_str(delta);
+        }
+        if let Some(reason) = event.finish_reason() {
+            parts.finish_reason = Some(reason.to_string());
+            parts.complete = true;
+        }
+        if let Some(reported) = event.usage {
+            parts.usage = reported.into();
+        }
+        event.accumulate(&mut parts.acc);
+    }
+
+    fn finished(&self, parts: &Parts) -> Result<(), LlmError> {
+        if parts.complete || !self.compat.finish_reason {
+            Ok(())
+        } else {
+            Err(LlmError::truncated_stream())
+        }
+    }
+
+    fn settle(&self, parts: &Parts, tool_calls: &[ToolCall]) -> Result<(), LlmError> {
+        if !tool_calls.is_empty() {
+            return Ok(());
+        }
+        truncated(parts.finish_reason.as_deref())?;
+        if parts.text.is_empty() {
+            return Err(LlmError::empty_response());
+        }
+        Ok(())
+    }
+}
+
+#[async_trait]
 impl Protocol for OpenAi {
     async fn call(
         &self,
@@ -55,66 +110,6 @@ impl Protocol for OpenAi {
         request: &LlmRequest<'_>,
         on_delta: &mut (dyn FnMut(String) + Send),
     ) -> Result<LlmResponse, LlmError> {
-        let mut provider_request = OpenAiRequest::build(request, self.compat);
-        provider_request.stream = true;
-        provider_request.stream_options = Some(super::transformer::StreamOptions {
-            include_usage: true,
-        });
-        let response = self.post(client, &provider_request).await?;
-        if !response.status().is_success() {
-            return Err(status_error(response).await);
-        }
-
-        let mut full = String::new();
-        let mut reasoning = String::new();
-        let mut finish_reason = None;
-        let mut complete = false;
-        let mut usage = None;
-        let mut acc = OpenAiToolAcc::default();
-        response_lines(response, |line| {
-            let Some(data) = line.strip_prefix("data: ") else {
-                return;
-            };
-            if data == "[DONE]" {
-                complete = true;
-                return;
-            }
-            if let Ok(chunk) = serde_json::from_str::<OpenAiChunk>(data) {
-                if let Some(delta) = chunk.delta_text() {
-                    on_delta(delta.to_string());
-                    full.push_str(delta);
-                }
-                if let Some(delta) = chunk.delta_reasoning() {
-                    reasoning.push_str(delta);
-                }
-                if let Some(reason) = chunk.finish_reason() {
-                    finish_reason = Some(reason.to_string());
-                    complete = true;
-                }
-                if let Some(reported) = chunk.usage {
-                    usage = Some(reported.into());
-                }
-                acc.apply(&chunk);
-            }
-        })
-        .await?;
-        // An endpoint that never says why it stopped leaves nothing to check:
-        // a stream that simply ended is the only signal it finished.
-        if !complete && self.compat.finish_reason {
-            return Err(LlmError::truncated_stream());
-        }
-        let tool_calls = acc.finish()?;
-        if tool_calls.is_empty() {
-            truncated(finish_reason.as_deref())?;
-            if full.is_empty() {
-                return Err(LlmError::empty_response());
-            }
-        }
-        Ok(LlmResponse {
-            text: full,
-            tool_calls,
-            reasoning_content: (!reasoning.is_empty()).then_some(reasoning),
-            usage,
-        })
+        stream(self, client, request, on_delta).await
     }
 }

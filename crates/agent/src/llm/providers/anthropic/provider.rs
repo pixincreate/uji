@@ -1,14 +1,13 @@
 use async_trait::async_trait;
+
+use crate::llm::providers::stream::{Api, Parts, stream};
 use tokio::sync::Mutex;
 
 use crate::auth::{self, Tokens};
 use crate::credential::{self, Credential};
-use crate::llm::{
-    LlmConfig, LlmError, LlmRequest, LlmResponse, OAuthSession, Protocol, Usage, response_lines,
-    send, status_error,
-};
+use crate::llm::{LlmConfig, LlmError, LlmRequest, LlmResponse, OAuthSession, Protocol, send};
 
-use super::transformer::{AnthropicRequest, AnthropicStreamEvent, AnthropicToolAcc};
+use super::transformer::{Request, StreamEvent};
 
 pub struct Anthropic {
     pub base_url: String,
@@ -65,7 +64,7 @@ impl Anthropic {
     async fn post(
         &self,
         client: &reqwest::Client,
-        request: &AnthropicRequest<'_>,
+        request: &Request<'_>,
     ) -> Result<reqwest::Response, LlmError> {
         let url = format!("{}/messages", self.base_url);
         let mut builder = client.post(&url).header("anthropic-version", "2023-06-01");
@@ -85,8 +84,8 @@ impl Anthropic {
         send(builder, request).await
     }
 
-    fn build<'a>(&self, request: &'a LlmRequest<'a>) -> AnthropicRequest<'a> {
-        let mut provider_request = AnthropicRequest::from(request);
+    fn build<'a>(&self, request: &'a LlmRequest<'a>) -> Request<'a> {
+        let mut provider_request = Request::from(request);
         if let Some(prompt) = self
             .session()
             .and_then(|session| session.config.identity_prompt.as_deref())
@@ -98,6 +97,44 @@ impl Anthropic {
 }
 
 #[async_trait]
+impl Api for Anthropic {
+    type Event = StreamEvent;
+
+    async fn send(
+        &self,
+        client: &reqwest::Client,
+        request: &LlmRequest<'_>,
+    ) -> Result<reqwest::Response, LlmError> {
+        let mut provider_request = self.build(request);
+        provider_request.stream = true;
+        self.post(client, &provider_request).await
+    }
+
+    fn read(
+        &self,
+        event: StreamEvent,
+        parts: &mut Parts,
+        on_delta: &mut (dyn FnMut(String) + Send),
+    ) {
+        if let Some(delta) = event.text_delta() {
+            on_delta(delta.to_string());
+            parts.text.push_str(delta);
+        }
+        if let Some(input) = event.input_usage() {
+            parts.usage.input = input.input;
+            parts.usage.cache_read = input.cache_read;
+            parts.usage.cache_write = input.cache_write;
+        }
+        if let Some(output) = event.output_tokens() {
+            parts.usage.output = output;
+        }
+        parts.hit_limit |= event.truncated();
+        parts.complete |= event.kind == "message_stop";
+        event.accumulate(&mut parts.acc);
+    }
+}
+
+#[async_trait]
 impl Protocol for Anthropic {
     async fn call(
         &self,
@@ -105,53 +142,6 @@ impl Protocol for Anthropic {
         request: &LlmRequest<'_>,
         on_delta: &mut (dyn FnMut(String) + Send),
     ) -> Result<LlmResponse, LlmError> {
-        let mut provider_request = self.build(request);
-        provider_request.stream = true;
-        let response = self.post(client, &provider_request).await?;
-        if !response.status().is_success() {
-            return Err(status_error(response).await);
-        }
-
-        let mut full = String::new();
-        let mut acc = AnthropicToolAcc::default();
-        let mut usage = Usage::default();
-        let mut hit_limit = false;
-        let mut complete = false;
-        response_lines(response, |line| {
-            let Some(data) = line.strip_prefix("data: ") else {
-                return;
-            };
-            if let Ok(event) = serde_json::from_str::<AnthropicStreamEvent>(data) {
-                if let Some(delta) = event.text_delta() {
-                    on_delta(delta.to_string());
-                    full.push_str(delta);
-                }
-                if let Some(input) = event.input_usage() {
-                    usage.input = input.input;
-                    usage.cache_read = input.cache_read;
-                    usage.cache_write = input.cache_write;
-                }
-                if let Some(output) = event.output_tokens() {
-                    usage.output = output;
-                }
-                hit_limit |= event.truncated();
-                complete |= event.kind == "message_stop";
-                acc.apply(&event);
-            }
-        })
-        .await?;
-        if !complete {
-            return Err(LlmError::truncated_stream());
-        }
-        let tool_calls = acc.finish()?;
-        if tool_calls.is_empty() && hit_limit {
-            return Err(LlmError::output_limit());
-        }
-        Ok(LlmResponse {
-            text: full,
-            tool_calls,
-            reasoning_content: None,
-            usage: (usage.total() > 0).then_some(usage),
-        })
+        stream(self, client, request, on_delta).await
     }
 }

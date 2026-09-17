@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::llm::LlmRequest;
 use crate::llm::providers::acc::{ToolAcc, arguments_of};
-use crate::session::model::{Message, ToolCall};
+use crate::session::model::{self as session, ToolCall};
 
 const MAX_TOKENS: &str = "MAX_TOKENS";
 
@@ -21,126 +21,126 @@ pub struct ThinkingConfig {
 }
 
 #[derive(Serialize)]
-pub struct GeminiRequest<'a> {
+pub struct Request<'a> {
     #[serde(rename = "generationConfig", skip_serializing_if = "Option::is_none")]
     pub generation_config: Option<GenerationConfig>,
     #[serde(rename = "systemInstruction", skip_serializing_if = "Option::is_none")]
-    pub system_instruction: Option<GeminiInstruction<'a>>,
-    pub contents: Vec<GeminiContent<'a>>,
+    pub system_instruction: Option<Instruction<'a>>,
+    pub contents: Vec<Content<'a>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub tools: Vec<GeminiTool<'a>>,
+    pub tools: Vec<Tool<'a>>,
 }
 
 #[derive(Serialize)]
-pub struct GeminiTool<'a> {
+pub struct Tool<'a> {
     #[serde(rename = "functionDeclarations")]
-    pub function_declarations: Vec<GeminiFunctionDecl<'a>>,
+    pub function_declarations: Vec<FunctionDecl<'a>>,
 }
 
 #[derive(Serialize)]
-pub struct GeminiFunctionDecl<'a> {
+pub struct FunctionDecl<'a> {
     pub name: &'a str,
     pub description: &'a str,
     pub parameters: &'a serde_json::Value,
 }
 
 #[derive(Serialize)]
-pub struct GeminiInstruction<'a> {
-    pub parts: Vec<GeminiPart<'a>>,
+pub struct Instruction<'a> {
+    pub parts: Vec<Part<'a>>,
 }
 
 #[derive(Serialize)]
-pub struct GeminiContent<'a> {
+pub struct Content<'a> {
     pub role: &'static str,
-    pub parts: Vec<GeminiPart<'a>>,
+    pub parts: Vec<Part<'a>>,
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum GeminiPart<'a> {
+pub enum Part<'a> {
     Text {
         text: Cow<'a, str>,
     },
     FunctionCall {
         #[serde(rename = "functionCall")]
-        function_call: GeminiFunctionCall<'a>,
+        function_call: FunctionCall<'a>,
     },
     FunctionResponse {
         #[serde(rename = "functionResponse")]
-        function_response: GeminiFunctionResponse<'a>,
+        function_response: FunctionResponse<'a>,
     },
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct GeminiFunctionCall<'a> {
+pub struct FunctionCall<'a> {
     pub name: Cow<'a, str>,
     pub args: serde_json::Value,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct GeminiFunctionResponse<'a> {
+pub struct FunctionResponse<'a> {
     pub name: Cow<'a, str>,
     pub response: serde_json::Value,
 }
 
-impl<'a> From<&'a LlmRequest<'a>> for GeminiRequest<'a> {
+impl<'a> From<&'a LlmRequest<'a>> for Request<'a> {
     fn from(request: &'a LlmRequest<'a>) -> Self {
         let mut system = request.system.unwrap_or_default().to_string();
         let mut contents = Vec::with_capacity(request.messages.len());
         for item in request.messages {
             match item {
-                Message::User { text } => contents.push(GeminiContent {
+                session::Message::User { text } => contents.push(Content {
                     role: "user",
-                    parts: vec![GeminiPart::Text {
+                    parts: vec![Part::Text {
                         text: Cow::Borrowed(text),
                     }],
                 }),
-                Message::Assistant {
+                session::Message::Assistant {
                     text, tool_calls, ..
                 } => {
                     let mut parts = Vec::new();
                     if !text.is_empty() {
-                        parts.push(GeminiPart::Text {
+                        parts.push(Part::Text {
                             text: Cow::Borrowed(text),
                         });
                     }
                     for call in tool_calls {
                         let args = arguments_of(&call.arguments);
-                        parts.push(GeminiPart::FunctionCall {
-                            function_call: GeminiFunctionCall {
+                        parts.push(Part::FunctionCall {
+                            function_call: FunctionCall {
                                 name: Cow::Borrowed(&call.name),
                                 args,
                             },
                         });
                     }
-                    contents.push(GeminiContent {
+                    contents.push(Content {
                         role: "model",
                         parts,
                     });
                 }
-                Message::Tool { name, content, .. } => contents.push(GeminiContent {
+                session::Message::Tool { name, content, .. } => contents.push(Content {
                     role: "function",
-                    parts: vec![GeminiPart::FunctionResponse {
-                        function_response: GeminiFunctionResponse {
+                    parts: vec![Part::FunctionResponse {
+                        function_response: FunctionResponse {
                             name: Cow::Borrowed(name),
                             response: serde_json::json!({ "result": content }),
                         },
                     }],
                 }),
-                Message::System { text } => {
+                session::Message::System { text } => {
                     if !system.is_empty() {
                         system.push('\n');
                     }
                     system.push_str(text);
                 }
-                Message::Error { .. } | Message::Compaction { .. } => {}
+                session::Message::Error { .. } | session::Message::Compaction { .. } => {}
             }
         }
         let system_instruction = if system.is_empty() {
             None
         } else {
-            Some(GeminiInstruction {
-                parts: vec![GeminiPart::Text {
+            Some(Instruction {
+                parts: vec![Part::Text {
                     text: Cow::Owned(system),
                 }],
             })
@@ -148,8 +148,8 @@ impl<'a> From<&'a LlmRequest<'a>> for GeminiRequest<'a> {
         let tools = request
             .tools
             .iter()
-            .map(|tool| GeminiTool {
-                function_declarations: vec![GeminiFunctionDecl {
+            .map(|tool| Tool {
+                function_declarations: vec![FunctionDecl {
                     name: &tool.name,
                     description: &tool.description,
                     parameters: &tool.parameters,
@@ -172,24 +172,24 @@ impl<'a> From<&'a LlmRequest<'a>> for GeminiRequest<'a> {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GeminiResponse {
+pub struct Response {
     #[serde(default)]
-    pub candidates: Vec<GeminiCandidate>,
+    pub candidates: Vec<Candidate>,
     #[serde(default)]
-    pub usage_metadata: Option<GeminiUsage>,
+    pub usage_metadata: Option<Usage>,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GeminiCandidate {
+pub struct Candidate {
     #[serde(default)]
-    pub content: Option<GeminiResponseContent>,
+    pub content: Option<ResponseContent>,
     #[serde(default)]
     pub finish_reason: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
-pub struct GeminiUsage {
+pub struct Usage {
     #[serde(default, rename = "promptTokenCount")]
     pub prompt: u64,
     #[serde(default, rename = "candidatesTokenCount")]
@@ -198,8 +198,8 @@ pub struct GeminiUsage {
     pub cached: u64,
 }
 
-impl From<GeminiUsage> for crate::llm::Usage {
-    fn from(usage: GeminiUsage) -> Self {
+impl From<Usage> for crate::llm::Usage {
+    fn from(usage: Usage) -> Self {
         Self {
             input: usage.prompt.saturating_sub(usage.cached),
             output: usage.candidates,
@@ -210,11 +210,11 @@ impl From<GeminiUsage> for crate::llm::Usage {
 }
 
 #[derive(Deserialize)]
-pub struct GeminiResponseContent {
-    pub parts: Vec<GeminiPart<'static>>,
+pub struct ResponseContent {
+    pub parts: Vec<Part<'static>>,
 }
 
-impl GeminiResponse {
+impl Response {
     pub fn finished(&self) -> bool {
         self.candidates
             .iter()
@@ -227,7 +227,7 @@ impl GeminiResponse {
             .any(|candidate| candidate.finish_reason.as_deref() == Some(MAX_TOKENS))
     }
 
-    fn parts(&self) -> impl Iterator<Item = &GeminiPart<'static>> {
+    fn parts(&self) -> impl Iterator<Item = &Part<'static>> {
         self.candidates
             .iter()
             .filter_map(|candidate| candidate.content.as_ref())
@@ -237,7 +237,7 @@ impl GeminiResponse {
     pub fn text(&self) -> String {
         self.parts()
             .filter_map(|part| match part {
-                GeminiPart::Text { text } => Some(text.as_ref()),
+                Part::Text { text } => Some(text.as_ref()),
                 _ => None,
             })
             .collect()
@@ -246,7 +246,7 @@ impl GeminiResponse {
     pub fn tool_calls(&self) -> Vec<ToolCall> {
         self.parts()
             .filter_map(|part| match part {
-                GeminiPart::FunctionCall { function_call } => Some(ToolCall {
+                Part::FunctionCall { function_call } => Some(ToolCall {
                     id: function_call.name.to_string(),
                     name: function_call.name.to_string(),
                     arguments: function_call.args.to_string(),
@@ -257,14 +257,9 @@ impl GeminiResponse {
     }
 }
 
-#[derive(Default)]
-pub struct GeminiToolAcc {
-    acc: ToolAcc,
-}
-
-impl GeminiToolAcc {
-    pub fn apply(&mut self, response: &GeminiResponse) {
-        let Some(content) = response
+impl Response {
+    pub fn accumulate(&self, acc: &mut ToolAcc) {
+        let Some(content) = self
             .candidates
             .first()
             .and_then(|candidate| candidate.content.as_ref())
@@ -272,16 +267,12 @@ impl GeminiToolAcc {
             return;
         };
         for (index, part) in content.parts.iter().enumerate() {
-            if let GeminiPart::FunctionCall { function_call } = part {
-                let entry = self.acc.entry(index);
-                entry.id = function_call.name.to_string();
+            if let Part::FunctionCall { function_call } = part {
+                let entry = acc.entry(index);
                 entry.name = function_call.name.to_string();
+                entry.id.clone_from(&entry.name);
                 entry.arguments = function_call.args.to_string();
             }
         }
-    }
-
-    pub fn finish(self) -> Result<Vec<ToolCall>, crate::llm::error::LlmError> {
-        self.acc.finish()
     }
 }
