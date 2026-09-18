@@ -2,6 +2,8 @@ id: no-panic-macros
 language: rust
 severity: error
 message: Do not use panic macros; return a Result or handle the case explicitly.
+ignores:
+  - "crates/tests/tests/**"
 rule:
   any:
     - pattern: panic!($$$)

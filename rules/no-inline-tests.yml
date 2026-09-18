@@ -1,0 +1,14 @@
+id: no-inline-tests
+language: rust
+severity: error
+message: >-
+  Tests belong in crates/tests/tests, exercising the public API. A test beside
+  the code it tests reaches for internals and pins the shape of the code
+  instead of what it does.
+ignores:
+  - "crates/tests/tests/**"
+rule:
+  any:
+    - pattern: "#[cfg(test)]"
+    - pattern: "#[test]"
+    - pattern: "#[tokio::test]"

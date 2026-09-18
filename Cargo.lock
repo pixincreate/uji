@@ -3782,6 +3782,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "uji-tests"
+version = "0.1.0"
+dependencies = [
+ "ratatui",
+ "tokio",
+ "uji-agent",
+ "uji-ui",
+]
+
+[[package]]
 name = "uji-ui"
 version = "0.1.0"
 dependencies = [
