@@ -8,64 +8,26 @@
 use std::path::PathBuf;
 
 use uji_agent::llm::CancelToken;
+use uji_agent::process::{self, Capture, Exit, Spec};
 use uji_agent::session::model::Message;
 
 use super::LoopData;
 use crate::runtime::events;
-use crate::runtime::job::{self, JobEvent};
 use crate::runtime::signal::Signal;
 
-/// Jobs the user starts from Lua are numbered from zero, so the shell takes the
-/// far end of the range and can never collide with one.
-const SHELL_JOB: u64 = u64::MAX;
-const MAX_LINES: usize = 500;
-const MAX_BYTES: usize = 64 * 1024;
+/// A runaway command must not be able to push the transcript out of memory.
+const MAX_OUTPUT: usize = 64 * 1024;
 const FALLBACK_SHELL: &str = "/bin/sh";
+
+pub(crate) enum ShellEvent {
+    Line(String),
+    Done(Exit),
+}
 
 pub(crate) struct Running {
     command: String,
-    output: Vec<String>,
-    bytes: usize,
-    truncated: bool,
-    cancelled: bool,
+    output: Capture,
     cancel: CancelToken,
-}
-
-impl Running {
-    fn new(command: String, cancel: CancelToken) -> Self {
-        Self {
-            command,
-            output: Vec::new(),
-            bytes: 0,
-            truncated: false,
-            cancelled: false,
-            cancel,
-        }
-    }
-
-    /// Keep the output bounded: a runaway command must not be able to push the
-    /// whole transcript out of memory.
-    fn push(&mut self, line: &str) {
-        if self.truncated {
-            return;
-        }
-        if self.output.len() >= MAX_LINES || self.bytes.saturating_add(line.len()) > MAX_BYTES {
-            self.truncated = true;
-            return;
-        }
-        self.bytes = self.bytes.saturating_add(line.len()).saturating_add(1);
-        self.output.push(line.to_string());
-    }
-
-    fn finish(mut self) -> (String, String) {
-        if self.truncated {
-            self.output.push(String::from("… output truncated"));
-        }
-        if self.cancelled {
-            self.output.push(String::from("… interrupted"));
-        }
-        (self.command, self.output.join("\n"))
-    }
 }
 
 impl LoopData {
@@ -78,24 +40,24 @@ impl LoopData {
             return;
         }
         let cancel = CancelToken::new();
-        let (stdin, writes) = tokio::sync::mpsc::unbounded_channel();
-        // Nothing writes to the child, and dropping the sender closes its stdin
-        // so a command that reads gets an EOF instead of hanging the UI.
-        drop(stdin);
         let sender = self.signals.clone();
         let argv = vec![shell_program(), String::from("-c"), command.to_string()];
         let cwd = PathBuf::from(&self.app.session().directory);
-        self.runtime.spawn(job::run(
-            SHELL_JOB,
-            argv,
-            Some(cwd),
-            cancel.clone(),
-            writes,
-            move |event| {
-                let _ = sender.send(Signal::Shell(event));
-            },
-        ));
-        self.shell = Some(Running::new(command.to_string(), cancel));
+        let token = cancel.clone();
+        self.runtime.spawn(async move {
+            let spec = Spec::argv(&argv).in_dir(&cwd);
+            let exit = process::stream(spec, &token, |_, line| {
+                let _ = sender.send(Signal::Shell(ShellEvent::Line(line)));
+            })
+            .await;
+            let exit = exit.unwrap_or(Exit::Code(-1));
+            let _ = sender.send(Signal::Shell(ShellEvent::Done(exit)));
+        });
+        self.shell = Some(Running {
+            command: command.to_string(),
+            output: Capture::new(MAX_OUTPUT),
+            cancel,
+        });
         // Whatever it prints is the point of running it, so follow the
         // transcript down to it.
         self.app.reset_scroll();
@@ -109,22 +71,33 @@ impl LoopData {
         self.dirty = true;
     }
 
-    pub(crate) fn on_shell_event(&mut self, event: &JobEvent) {
+    pub(crate) fn on_shell_event(&mut self, event: ShellEvent) {
         match event {
-            JobEvent::Stdout { line, .. } | JobEvent::Stderr { line, .. } => {
+            ShellEvent::Line(line) => {
                 let Some(running) = self.shell.as_mut() else {
                     return;
                 };
-                running.push(line);
-                let progress = (progress_name(&running.command), line.clone());
+                running.output.push(&line);
+                let progress = (progress_name(&running.command), line);
                 self.app.overlay_mut().set_running(Some(progress));
             }
-            JobEvent::Exit { code, .. } => {
+            ShellEvent::Done(exit) => {
                 let Some(running) = self.shell.take() else {
                     return;
                 };
-                let code = if running.cancelled { 130 } else { *code };
-                let (command, output) = running.finish();
+                let code = match exit {
+                    Exit::Code(code) => code,
+                    Exit::Cancelled => 130,
+                    Exit::TimedOut => 124,
+                };
+                let command = running.command;
+                let mut output = running.output.finish();
+                if exit == Exit::Cancelled {
+                    if !output.is_empty() {
+                        output.push('\n');
+                    }
+                    output.push_str("… interrupted");
+                }
                 // A tool may have claimed the activity line in the meantime;
                 // only take it back if what it shows is still this command.
                 let ours = self
@@ -152,10 +125,9 @@ impl LoopData {
     /// Stop a running command. Interrupting reaches for this before the agent,
     /// because the command is what the user is watching.
     pub(crate) fn cancel_shell(&mut self) -> bool {
-        let Some(running) = self.shell.as_mut() else {
+        let Some(running) = self.shell.as_ref() else {
             return false;
         };
-        running.cancelled = true;
         running.cancel.cancel();
         self.dirty = true;
         true

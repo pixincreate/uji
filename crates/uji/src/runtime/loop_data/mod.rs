@@ -13,7 +13,7 @@ mod picker;
 
 pub(crate) use picker::LiveQuery;
 mod queue;
-mod shell;
+pub(crate) mod shell;
 
 use std::collections::VecDeque;
 use std::path::PathBuf;

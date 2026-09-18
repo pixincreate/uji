@@ -9,8 +9,8 @@ use cap_std::fs::Dir;
 use serde_json::{Value, json};
 
 use crate::llm::ToolSpec;
+use crate::process;
 
-use super::progress::Progress;
 use super::{Invocation, Tool};
 
 const MAX_READ_LINES: usize = 2_000;
@@ -636,108 +636,41 @@ impl Tool for RunCommand {
     }
 
     async fn run(&self, args: &Value, call: &Invocation<'_>) -> Result<String, String> {
-        let cwd = call.cwd;
         let command = required(args, "command")?;
         let timeout = args
             .get("timeout")
             .and_then(Value::as_u64)
             .unwrap_or(120)
             .max(1);
-        let output = tokio::time::timeout(
-            Duration::from_secs(timeout),
-            stream_command(&command, cwd, call.progress),
-        )
+        let mut capture = process::Capture::new(MAX_TOOL_OUTPUT);
+        let spec = process::Spec::shell(&command)
+            .in_dir(call.cwd)
+            .within(Duration::from_secs(timeout));
+        let exit = process::stream(spec, call.cancel, |_, line| {
+            capture.push(&line);
+            call.progress.send(line);
+        })
         .await
-        .map_err(|_| format!("command timed out after {timeout}s"))?
         .map_err(|err| format!("spawn command: {err}"))?;
 
-        let mut text = String::new();
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        if !stdout.is_empty() {
-            text.push_str(&stdout);
-        }
-        if !stderr.is_empty() {
-            if !text.is_empty() {
-                text.push('\n');
+        let mut text = capture.finish();
+        match exit {
+            process::Exit::TimedOut => return Err(format!("command timed out after {timeout}s")),
+            process::Exit::Cancelled => return Err(String::from("command interrupted")),
+            process::Exit::Code(0) => {
+                if text.trim().is_empty() {
+                    text.push_str("(no output, exit code 0)");
+                }
             }
-            text.push_str(&stderr);
-        }
-        if output.status.success() {
-            if text.trim().is_empty() {
-                text.push_str("(no output, exit code 0)");
+            process::Exit::Code(code) => {
+                if !text.is_empty() {
+                    text.push('\n');
+                }
+                let _ = write!(text, "(exit code {code})");
             }
-        } else {
-            let code = output
-                .status
-                .code()
-                .map_or_else(|| String::from("signal"), |code| code.to_string());
-            if !text.is_empty() {
-                text.push('\n');
-            }
-            let _ = write!(text, "(exit code {code})");
         }
-        Ok(cap(text, MAX_TOOL_OUTPUT))
+        Ok(text)
     }
-}
-
-/// Run a command, reporting output as it arrives rather than only at the end.
-async fn stream_command(
-    command: &str,
-    cwd: &Path,
-    progress: &Progress,
-) -> std::io::Result<std::process::Output> {
-    use tokio::io::{AsyncBufReadExt, BufReader};
-
-    let mut child = tokio::process::Command::new("sh")
-        .arg("-c")
-        .arg(command)
-        .current_dir(cwd)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()?;
-
-    let mut stdout = BufReader::new(child.stdout.take().ok_or_else(broken_pipe)?).lines();
-    let mut stderr = BufReader::new(child.stderr.take().ok_or_else(broken_pipe)?).lines();
-    let mut out = String::new();
-    let mut err = String::new();
-
-    loop {
-        tokio::select! {
-            line = stdout.next_line() => match line? {
-                Some(line) => collect(&mut out, &line, progress),
-                None => break,
-            },
-            line = stderr.next_line() => match line? {
-                Some(line) => collect(&mut err, &line, progress),
-                None => break,
-            },
-        }
-    }
-    while let Some(line) = stdout.next_line().await? {
-        collect(&mut out, &line, progress);
-    }
-    while let Some(line) = stderr.next_line().await? {
-        collect(&mut err, &line, progress);
-    }
-
-    let status = child.wait().await?;
-    Ok(std::process::Output {
-        status,
-        stdout: out.into_bytes(),
-        stderr: err.into_bytes(),
-    })
-}
-
-fn collect(buffer: &mut String, line: &str, progress: &Progress) {
-    buffer.push_str(line);
-    buffer.push('\n');
-    progress.send(line.to_string());
-}
-
-fn broken_pipe() -> std::io::Error {
-    std::io::Error::other("command produced no output stream")
 }
 
 /// Read `lines` of context centred on `line`, for previewing a search hit.

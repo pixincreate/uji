@@ -8,6 +8,7 @@ pub mod auth;
 pub mod config;
 pub mod credential;
 pub mod llm;
+pub mod process;
 pub mod session;
 pub mod storage;
 pub mod tools;
