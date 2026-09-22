@@ -11,6 +11,8 @@ use crate::render::transcript;
 use crate::render::wrap::text as wrap_text;
 use uji_agent::session::model::{Message, StoredMessage};
 
+const TRAILING_GAP: u16 = 1;
+
 pub(crate) struct Messages<'a> {
     pub(crate) window: &'a WindowSpec,
 }
@@ -19,9 +21,10 @@ impl Render for Messages<'_> {
     fn render(&self, ctx: &Context<'_>, surface: &mut Surface<'_>) {
         let palette = ctx.palette;
         let block = block_for(self.window, palette);
-        let inner = block
+        let mut inner = block
             .as_ref()
             .map_or(surface.area(), |b| b.inner(surface.area()));
+        inner.height = inner.height.saturating_sub(TRAILING_GAP);
         let width = usize::from(inner.width);
         let height = usize::from(inner.height);
 
