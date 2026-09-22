@@ -11,8 +11,13 @@ pub enum ToolDecision {
     Deny { reason: String },
 }
 
+pub enum Delta {
+    Text(String),
+    Reasoning(String),
+}
+
 pub enum StreamEvent {
-    Delta(String),
+    Delta(Delta),
     SteerRequest {
         reply: oneshot::Sender<Option<String>>,
     },

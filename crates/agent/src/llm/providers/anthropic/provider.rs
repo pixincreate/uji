@@ -1,12 +1,13 @@
 use async_trait::async_trait;
 
-use crate::llm::Progress;
 use crate::llm::providers::stream::{Api, Parts, stream};
 use tokio::sync::Mutex;
 
 use crate::auth::{self, Tokens};
 use crate::credential::{self, Credential};
-use crate::llm::{LlmConfig, LlmError, LlmRequest, LlmResponse, OAuthSession, Protocol, send};
+use crate::llm::{
+    Delta, LlmConfig, LlmError, LlmRequest, LlmResponse, OAuthSession, Protocol, Usage, send,
+};
 
 use super::transformer::{Request, StreamEvent};
 
@@ -111,34 +112,27 @@ impl Api for Anthropic {
         self.post(client, &provider_request).await
     }
 
-    fn read(
-        &self,
-        event: StreamEvent,
-        parts: &mut Parts,
-        on_delta: &mut (dyn FnMut(String) + Send),
-    ) -> Progress {
-        let mut moved = false;
+    fn read(&self, event: StreamEvent, parts: &mut Parts<'_>) {
+        if let Some(delta) = event.thinking_delta() {
+            parts.push_reasoning(delta);
+        }
         if let Some(delta) = event.text_delta() {
-            on_delta(delta.to_string());
-            parts.text.push_str(delta);
-            moved = true;
+            parts.push_text(delta);
         }
         if let Some(input) = event.input_usage() {
-            parts.usage.input = input.input;
-            parts.usage.cache_read = input.cache_read;
-            parts.usage.cache_write = input.cache_write;
-            moved = true;
+            parts.usage = Usage {
+                output: parts.usage.output,
+                ..input
+            };
         }
         if let Some(output) = event.output_tokens() {
             parts.usage.output = output;
-            moved = true;
         }
-        let stopped = event.kind == "message_stop";
         parts.hit_limit |= event.truncated();
-        parts.complete |= stopped;
-        moved |= stopped;
-        moved |= event.accumulate(&mut parts.acc);
-        Progress::from(moved)
+        if event.kind == "message_stop" {
+            parts.finish(None);
+        }
+        event.accumulate(&mut parts.acc);
     }
 }
 
@@ -148,7 +142,7 @@ impl Protocol for Anthropic {
         &self,
         client: &reqwest::Client,
         request: &LlmRequest<'_>,
-        on_delta: &mut (dyn FnMut(String) + Send),
+        on_delta: &mut (dyn FnMut(Delta) + Send),
     ) -> Result<LlmResponse, LlmError> {
         stream(self, client, request, on_delta).await
     }

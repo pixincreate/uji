@@ -22,10 +22,12 @@ impl Partial {
 #[derive(Default)]
 pub struct ToolAcc {
     calls: Vec<Partial>,
+    touched: bool,
 }
 
 impl ToolAcc {
     pub fn entry(&mut self, index: usize) -> &mut Partial {
+        self.touched = true;
         let position = self
             .calls
             .iter()
@@ -35,6 +37,10 @@ impl ToolAcc {
             self.calls.push(Partial::new(index));
         }
         &mut self.calls[position]
+    }
+
+    pub fn take_touched(&mut self) -> bool {
+        std::mem::take(&mut self.touched)
     }
 
     pub fn finish(self) -> Result<Vec<ToolCall>, LlmError> {

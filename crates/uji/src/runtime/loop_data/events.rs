@@ -25,7 +25,10 @@ impl LoopData {
 
     pub(super) fn apply_llm_event(&mut self, event: StreamEvent) {
         match event {
-            StreamEvent::Delta(delta) => self.app.append_pending(&delta),
+            StreamEvent::Delta(delta) => {
+                self.app.push_delta(delta);
+                self.dirty = true;
+            }
             StreamEvent::Compacted { summary, usage } => {
                 let _ = summary;
                 if let Some(usage) = usage {

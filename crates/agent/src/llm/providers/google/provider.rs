@@ -1,9 +1,8 @@
 use async_trait::async_trait;
 
-use crate::llm::Progress;
 use crate::llm::providers::stream::{Api, Parts, stream};
 
-use crate::llm::{LlmConfig, LlmError, LlmRequest, LlmResponse, Protocol, send};
+use crate::llm::{Delta, LlmConfig, LlmError, LlmRequest, LlmResponse, Protocol, send};
 
 use super::transformer::{Request, Response};
 
@@ -55,29 +54,23 @@ impl Api for Gemini {
         self.post(client, request.model, &provider_request).await
     }
 
-    fn read(
-        &self,
-        event: Response,
-        parts: &mut Parts,
-        on_delta: &mut (dyn FnMut(String) + Send),
-    ) -> Progress {
-        let mut moved = false;
+    fn read(&self, event: Response, parts: &mut Parts<'_>) {
+        let thoughts = event.thoughts();
+        if !thoughts.is_empty() {
+            parts.push_reasoning(&thoughts);
+        }
         let text = event.text();
         if !text.is_empty() {
-            on_delta(text.clone());
-            parts.text.push_str(&text);
-            moved = true;
+            parts.push_text(&text);
         }
         if let Some(reported) = event.usage_metadata {
             parts.usage = reported.into();
-            moved = true;
         }
-        let finished = event.finished();
         parts.hit_limit |= event.truncated();
-        parts.complete |= finished;
-        moved |= finished;
-        moved |= event.accumulate(&mut parts.acc);
-        Progress::from(moved)
+        if event.finished() {
+            parts.finish(None);
+        }
+        event.accumulate(&mut parts.acc);
     }
 }
 
@@ -87,7 +80,7 @@ impl Protocol for Gemini {
         &self,
         client: &reqwest::Client,
         request: &LlmRequest<'_>,
-        on_delta: &mut (dyn FnMut(String) + Send),
+        on_delta: &mut (dyn FnMut(Delta) + Send),
     ) -> Result<LlmResponse, LlmError> {
         stream(self, client, request, on_delta).await
     }

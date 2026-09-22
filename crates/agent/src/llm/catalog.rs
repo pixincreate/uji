@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use strum::IntoStaticStr;
 
 use crate::credential;
 use crate::llm::discover;
@@ -94,13 +95,20 @@ pub enum Origin {
 }
 
 /// Which field an OpenAI-compatible endpoint wants the output limit in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize, IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum MaxTokensField {
     #[default]
     MaxTokens,
     MaxCompletionTokens,
     None,
+}
+
+impl MaxTokensField {
+    pub fn name(self) -> &'static str {
+        self.into()
+    }
 }
 
 /// How an OpenAI-compatible endpoint wants reasoning effort expressed.

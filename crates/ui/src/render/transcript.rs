@@ -136,6 +136,7 @@ pub struct Input<'a> {
     pub queued: &'a [String],
     pub thinking: bool,
     pub pending: &'a str,
+    pub reasoning: &'a str,
     pub width: usize,
     pub palette: Palette,
 }
@@ -144,13 +145,23 @@ pub struct Rendered<'a> {
     pub notices: &'a [Line<'static>],
     pub queued: &'a [Line<'static>],
     pub folded: &'a [Line<'static>],
+    pub reasoning: &'a [Line<'static>],
+    pub reasoning_open: &'a [Line<'static>],
     pub settled: &'a [Line<'static>],
     pub open: &'a [Line<'static>],
 }
 
 impl Rendered<'_> {
     pub fn pending_len(&self) -> usize {
-        self.settled.len().saturating_add(self.open.len())
+        self.live().count()
+    }
+
+    pub fn live(&self) -> impl Iterator<Item = &Line<'static>> {
+        self.reasoning
+            .iter()
+            .chain(self.reasoning_open)
+            .chain(self.settled)
+            .chain(self.open)
     }
 }
 
@@ -166,6 +177,7 @@ pub struct Transcript {
     notices: CachedList,
     queued: CachedList,
     pending: Streamed,
+    reasoning: Streamed,
 }
 
 impl Transcript {
@@ -186,6 +198,7 @@ impl Transcript {
             self.notices.clear();
             self.queued.clear();
             self.pending.clear();
+            self.reasoning.clear();
         }
         let width = input.width;
         self.fold(input.conversation, width, input.thinking, &render);
@@ -198,6 +211,10 @@ impl Transcript {
             for queued in input.queued {
                 render(lines, Block::Queued(queued), width);
             }
+        });
+        let reasoning = if input.thinking { input.reasoning } else { "" };
+        self.reasoning.update(reasoning, split, |lines, chunk, _| {
+            render(lines, Block::Thinking(chunk), width);
         });
         self.pending
             .update(input.pending, split, |lines, chunk, continuing| {
@@ -214,6 +231,8 @@ impl Transcript {
             notices: &self.notices.lines,
             queued: &self.queued.lines,
             folded: &self.lines,
+            reasoning: &self.reasoning.lines,
+            reasoning_open: &self.reasoning.open,
             settled: &self.pending.lines,
             open: &self.pending.open,
         }

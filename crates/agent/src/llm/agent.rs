@@ -12,7 +12,7 @@ use crate::tools::{Invocation, Tool, ToolRegistry};
 use super::cancel::CancelToken;
 use super::catalog::Budget;
 use super::context;
-use super::event::{StreamEvent, ToolDecision};
+use super::event::{Delta, StreamEvent, ToolDecision};
 use super::request::{LlmRequest, LlmResponse, ToolSpec, Usage};
 use super::tuning::{Effort, Retention};
 use super::{Protocol, RETRY_ATTEMPTS, backoff, clip, summary};
@@ -51,7 +51,7 @@ async fn generate<P: Protocol + ?Sized>(
 ) -> Option<LlmResponse> {
     let mut attempt = 0;
     loop {
-        let mut on_delta = |delta: String| on_event(StreamEvent::Delta(delta));
+        let mut on_delta = |delta: Delta| on_event(StreamEvent::Delta(delta));
         let streaming = config.provider.call(config.client, request, &mut on_delta);
         let outcome = tokio::select! {
             result = streaming => result,

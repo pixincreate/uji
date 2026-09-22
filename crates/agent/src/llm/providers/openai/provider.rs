@@ -1,12 +1,11 @@
 use async_trait::async_trait;
 
-use crate::llm::Progress;
 use crate::llm::providers::stream::{Api, Parts, stream};
 use crate::session::model::ToolCall;
 
-use crate::llm::{Compat, LlmConfig, LlmError, LlmRequest, LlmResponse, Protocol, send};
+use crate::llm::{Compat, Delta, LlmConfig, LlmError, LlmRequest, LlmResponse, Protocol, send};
 
-use super::transformer::{Chunk, Request, StreamOptions};
+use super::transformer::{Chunk, Request};
 
 pub struct OpenAi {
     pub base_url: String,
@@ -57,44 +56,27 @@ impl Api for OpenAi {
         client: &reqwest::Client,
         request: &LlmRequest<'_>,
     ) -> Result<reqwest::Response, LlmError> {
-        let mut provider_request = Request::build(request, self.compat);
-        provider_request.stream = true;
-        provider_request.stream_options = Some(StreamOptions {
-            include_usage: true,
-        });
-        self.post(client, &provider_request).await
+        self.post(client, &Request::build(request, self.compat))
+            .await
     }
 
-    fn read(
-        &self,
-        event: Chunk,
-        parts: &mut Parts,
-        on_delta: &mut (dyn FnMut(String) + Send),
-    ) -> Progress {
-        let mut moved = false;
-        if let Some(delta) = event.delta_text() {
-            on_delta(delta.to_string());
-            parts.text.push_str(delta);
-            moved = true;
-        }
+    fn read(&self, event: Chunk, parts: &mut Parts<'_>) {
         if let Some(delta) = event.delta_reasoning() {
-            parts.reasoning.push_str(delta);
-            moved = true;
+            parts.push_reasoning(delta);
+        }
+        if let Some(delta) = event.delta_text() {
+            parts.push_text(delta);
         }
         if let Some(reason) = event.finish_reason() {
-            parts.finish_reason = Some(reason.to_string());
-            parts.complete = true;
-            moved = true;
+            parts.finish(Some(reason));
         }
         if let Some(reported) = event.usage {
             parts.usage = reported.into();
-            moved = true;
         }
-        moved |= event.accumulate(&mut parts.acc);
-        Progress::from(moved)
+        event.accumulate(&mut parts.acc);
     }
 
-    fn finished(&self, parts: &Parts) -> Result<(), LlmError> {
+    fn finished(&self, parts: &Parts<'_>) -> Result<(), LlmError> {
         if parts.complete || !self.compat.finish_reason {
             Ok(())
         } else {
@@ -102,7 +84,7 @@ impl Api for OpenAi {
         }
     }
 
-    fn settle(&self, parts: &Parts, tool_calls: &[ToolCall]) -> Result<(), LlmError> {
+    fn settle(&self, parts: &Parts<'_>, tool_calls: &[ToolCall]) -> Result<(), LlmError> {
         if !tool_calls.is_empty() {
             return Ok(());
         }
@@ -120,7 +102,7 @@ impl Protocol for OpenAi {
         &self,
         client: &reqwest::Client,
         request: &LlmRequest<'_>,
-        on_delta: &mut (dyn FnMut(String) + Send),
+        on_delta: &mut (dyn FnMut(Delta) + Send),
     ) -> Result<LlmResponse, LlmError> {
         stream(self, client, request, on_delta).await
     }

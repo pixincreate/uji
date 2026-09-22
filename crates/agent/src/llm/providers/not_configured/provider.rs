@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 
-use crate::llm::{LlmError, LlmRequest, LlmResponse, Protocol};
+use crate::llm::{Delta, LlmError, LlmRequest, LlmResponse, Protocol};
 
 pub struct NotConfigured;
 
@@ -10,7 +10,7 @@ impl Protocol for NotConfigured {
         &self,
         _client: &reqwest::Client,
         _request: &LlmRequest<'_>,
-        _on_delta: &mut (dyn FnMut(String) + Send),
+        _on_delta: &mut (dyn FnMut(Delta) + Send),
     ) -> Result<LlmResponse, LlmError> {
         Ok(LlmResponse {
             text: "Please run /login to configure a provider".into(),

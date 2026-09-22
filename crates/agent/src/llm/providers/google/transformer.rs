@@ -18,6 +18,8 @@ pub struct GenerationConfig {
 pub struct ThinkingConfig {
     #[serde(rename = "thinkingBudget")]
     pub thinking_budget: u32,
+    #[serde(rename = "includeThoughts")]
+    pub include_thoughts: bool,
 }
 
 #[derive(Serialize)]
@@ -58,6 +60,10 @@ pub struct Content<'a> {
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Part<'a> {
+    Thought {
+        text: Cow<'a, str>,
+        thought: bool,
+    },
     Text {
         text: Cow<'a, str>,
     },
@@ -163,6 +169,7 @@ impl<'a> From<&'a LlmRequest<'a>> for Request<'a> {
             generation_config: (budget > 0).then_some(GenerationConfig {
                 thinking_config: ThinkingConfig {
                     thinking_budget: budget,
+                    include_thoughts: true,
                 },
             }),
             system_instruction,
@@ -241,7 +248,23 @@ impl Response {
     pub fn text(&self) -> String {
         self.parts()
             .filter_map(|part| match part {
-                Part::Text { text } => Some(text.as_ref()),
+                Part::Text { text }
+                | Part::Thought {
+                    text,
+                    thought: false,
+                } => Some(text.as_ref()),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub fn thoughts(&self) -> String {
+        self.parts()
+            .filter_map(|part| match part {
+                Part::Thought {
+                    text,
+                    thought: true,
+                } => Some(text.as_ref()),
                 _ => None,
             })
             .collect()
@@ -262,24 +285,21 @@ impl Response {
 }
 
 impl Response {
-    pub fn accumulate(&self, acc: &mut ToolAcc) -> bool {
+    pub fn accumulate(&self, acc: &mut ToolAcc) {
         let Some(content) = self
             .candidates
             .first()
             .and_then(|candidate| candidate.content.as_ref())
         else {
-            return false;
+            return;
         };
-        let mut took = false;
         for (index, part) in content.parts.iter().enumerate() {
             if let Part::FunctionCall { function_call } = part {
                 let entry = acc.entry(index);
                 entry.name = function_call.name.to_string();
                 entry.id.clone_from(&entry.name);
                 entry.arguments = function_call.args.to_string();
-                took = true;
             }
         }
-        took
     }
 }

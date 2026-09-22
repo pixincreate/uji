@@ -353,6 +353,7 @@ pub struct StreamDelta {
     pub text: Option<String>,
     #[serde(default)]
     pub partial_json: Option<String>,
+    pub thinking: Option<String>,
     #[serde(default)]
     pub stop_reason: Option<String>,
 }
@@ -380,49 +381,41 @@ impl StreamEvent {
     }
 
     pub fn text_delta(&self) -> Option<&str> {
-        if self.kind == "content_block_delta" {
-            self.delta.as_ref().and_then(|delta| {
-                if delta.kind == "text_delta" {
-                    delta.text.as_deref()
-                } else {
-                    None
-                }
-            })
-        } else {
-            None
+        self.block_delta("text_delta")?.text.as_deref()
+    }
+
+    pub fn thinking_delta(&self) -> Option<&str> {
+        self.block_delta("thinking_delta")?.thinking.as_deref()
+    }
+
+    fn block_delta(&self, kind: &str) -> Option<&StreamDelta> {
+        if self.kind != "content_block_delta" {
+            return None;
         }
+        self.delta.as_ref().filter(|delta| delta.kind == kind)
     }
 }
 
 impl StreamEvent {
-    pub fn accumulate(&self, acc: &mut ToolAcc) -> bool {
+    pub fn accumulate(&self, acc: &mut ToolAcc) {
         let Some(index) = self.index else {
-            return false;
+            return;
         };
-        match self.kind.as_str() {
-            "content_block_start" => {
-                let Some(block) = self.content_block.as_ref().filter(|b| b.kind == "tool_use")
-                else {
-                    return false;
-                };
-                let entry = acc.entry(index);
-                entry.id = block.id.clone().unwrap_or_default();
-                entry.name = block.name.clone().unwrap_or_default();
-                true
-            }
-            "content_block_delta" => {
-                let Some(fragment) = self
-                    .delta
-                    .as_ref()
-                    .filter(|delta| delta.kind == "input_json_delta")
-                    .and_then(|delta| delta.partial_json.as_ref())
-                else {
-                    return false;
-                };
-                acc.entry(index).arguments.push_str(fragment);
-                true
-            }
-            _ => false,
+        if self.kind == "content_block_start"
+            && let Some(block) = self
+                .content_block
+                .as_ref()
+                .filter(|block| block.kind == "tool_use")
+        {
+            let entry = acc.entry(index);
+            entry.id = block.id.clone().unwrap_or_default();
+            entry.name = block.name.clone().unwrap_or_default();
+        }
+        if let Some(fragment) = self
+            .block_delta("input_json_delta")
+            .and_then(|delta| delta.partial_json.as_ref())
+        {
+            acc.entry(index).arguments.push_str(fragment);
         }
     }
 }

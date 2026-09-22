@@ -1,3 +1,4 @@
+mod dialect;
 pub mod provider;
 pub mod transformer;
 

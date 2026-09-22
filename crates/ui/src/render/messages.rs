@@ -41,6 +41,7 @@ impl Render for Messages<'_> {
                 queued: ctx.app.overlay().queued(),
                 thinking: ctx.state.opts().show_thinking,
                 pending: committed,
+                reasoning: ctx.app.reasoning(),
                 width,
                 palette,
             },
@@ -51,20 +52,6 @@ impl Render for Messages<'_> {
             },
         );
 
-        let mut gap = Vec::new();
-        if !parts.notices.is_empty() {
-            gap.push(Line::from(""));
-        }
-        let above = parts
-            .notices
-            .len()
-            .saturating_add(gap.len())
-            .saturating_add(parts.folded.len());
-
-        let mut lead = Vec::new();
-        if !pending.is_empty() && above > 0 {
-            lead.push(Line::from(""));
-        }
         let mut tail = Vec::new();
         if !partial.is_empty() {
             push_wrapped(
@@ -75,6 +62,10 @@ impl Render for Messages<'_> {
                 " ",
                 Fill::Line,
             );
+        }
+        let mut lead = Vec::new();
+        if (parts.pending_len() > 0 || !tail.is_empty()) && !parts.folded.is_empty() {
+            lead.push(Line::from(""));
         }
 
         let mut queued = Vec::new();
@@ -95,9 +86,18 @@ impl Render for Messages<'_> {
             queued.push(Line::from(""));
             queued.extend(parts.queued.iter().cloned());
         }
+        let mut notices = Vec::new();
+        if !parts.notices.is_empty() {
+            notices.push(Line::from(""));
+            notices.extend(parts.notices.iter().cloned());
+        }
 
-        let body_height = height.saturating_sub(queued.len());
-        let total = above
+        let body_height = height
+            .saturating_sub(queued.len())
+            .saturating_sub(notices.len());
+        let total = parts
+            .folded
+            .len()
             .saturating_add(lead.len())
             .saturating_add(parts.pending_len())
             .saturating_add(tail.len());
@@ -109,16 +109,14 @@ impl Render for Messages<'_> {
             surface.render_widget(block);
         }
         let visible = parts
-            .notices
+            .folded
             .iter()
-            .chain(gap.iter())
-            .chain(parts.folded.iter())
             .chain(lead.iter())
-            .chain(parts.settled.iter())
-            .chain(parts.open.iter())
+            .chain(parts.live())
             .chain(tail.iter())
             .skip(start)
             .take(end.saturating_sub(start))
+            .chain(notices.iter())
             .chain(queued.iter());
         crate::render::write_lines(surface, inner, visible);
     }

@@ -24,7 +24,7 @@ pub use catalog::{
 };
 pub use error::{HttpError, LlmError};
 pub(crate) use error::{RETRY_ATTEMPTS, backoff, clip, send, status_error};
-pub use event::{StreamEvent, ToolDecision};
+pub use event::{Delta, StreamEvent, ToolDecision};
 pub use prompt::{DEFAULT_SYSTEM_PROMPT, system_prompt};
 pub use providers::anthropic::Anthropic;
 pub use providers::google::Gemini;
@@ -45,12 +45,12 @@ pub trait Protocol: Send + Sync {
         &self,
         client: &reqwest::Client,
         request: &LlmRequest<'_>,
-        on_delta: &mut (dyn FnMut(String) + Send),
+        on_delta: &mut (dyn FnMut(Delta) + Send),
     ) -> Result<LlmResponse, LlmError>;
 }
 
 /// A delta sink for callers that only want the final response.
-pub fn silent() -> impl FnMut(String) + Send {
+pub fn silent() -> impl FnMut(Delta) + Send {
     |_| {}
 }
 
@@ -68,7 +68,7 @@ impl Protocol for Llm {
         &self,
         client: &reqwest::Client,
         request: &LlmRequest<'_>,
-        on_delta: &mut (dyn FnMut(String) + Send),
+        on_delta: &mut (dyn FnMut(Delta) + Send),
     ) -> Result<LlmResponse, LlmError> {
         match self {
             Self::Anthropic(llm) => llm.call(client, request, on_delta).await,

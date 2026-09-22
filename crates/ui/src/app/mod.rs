@@ -23,6 +23,7 @@ use std::rc::Rc;
 use crate::keymap;
 use crate::state::UiState;
 
+use uji_agent::llm::Delta;
 use uji_agent::session::conversation::{Conversation, Shared};
 use uji_agent::session::model::Session;
 
@@ -32,6 +33,7 @@ pub struct App {
     state: Rc<RefCell<UiState>>,
     composer: Composer,
     stream: Stream,
+    reasoning: String,
     scroll: Scroll,
     mode: Mode,
     suggest_pool: Vec<SuggestItem>,
@@ -49,6 +51,7 @@ impl App {
             state,
             composer: Composer::default(),
             stream: Stream::default(),
+            reasoning: String::new(),
             scroll: Scroll::default(),
             mode: Mode::Normal,
             suggest_pool: Vec::new(),
@@ -146,12 +149,20 @@ impl App {
         Some(self.stream.visible()).filter(|text| !text.is_empty())
     }
 
-    pub fn append_pending(&mut self, delta: &str) {
-        self.stream.push(delta);
+    pub fn reasoning(&self) -> &str {
+        &self.reasoning
+    }
+
+    pub fn push_delta(&mut self, delta: Delta) {
+        match delta {
+            Delta::Text(text) => self.stream.push(&text),
+            Delta::Reasoning(text) => self.reasoning.push_str(&text),
+        }
     }
 
     pub fn take_pending(&mut self) {
         self.stream.clear();
+        self.reasoning.clear();
     }
 
     pub fn revealing(&self) -> bool {
