@@ -20,14 +20,19 @@ impl Render for Suggest<'_> {
             return;
         }
         let max = usize::from(ctx.state.opts().suggest_max_height).max(1);
-        let visible = self.items.len().min(max);
+        let visible = self
+            .items
+            .len()
+            .min(max)
+            .min(usize::from(area.height))
+            .max(1);
         let start = if self.cursor >= visible {
-            self.cursor.saturating_sub(visible - 1)
+            self.cursor.saturating_sub(visible.saturating_sub(1))
         } else {
             0
         };
-        let window = &self.items[start..(start + visible).min(self.items.len())];
-        let cursor_in_window = self.cursor - start;
+        let window = &self.items[start..start.saturating_add(visible).min(self.items.len())];
+        let cursor_in_window = self.cursor.saturating_sub(start);
 
         let height = u16::try_from(window.len()).unwrap_or(1).min(area.height);
         let popup = Rect {
@@ -57,7 +62,10 @@ impl Render for Suggest<'_> {
                     },
                 );
                 let desc = Span::styled(item.desc.clone(), Style::default().fg(ctx.palette.muted));
-                Line::from(vec![name, desc]).style(row)
+                let used = name.content.chars().count() + desc.content.chars().count();
+                let rest = usize::from(area.width).saturating_sub(used);
+                let pad = Span::raw(" ".repeat(rest));
+                Line::from(vec![name, desc, pad]).style(row)
             })
             .collect();
         surface.render_at(popup, Paragraph::new(lines));
