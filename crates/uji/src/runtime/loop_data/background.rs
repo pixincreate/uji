@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use super::LoopData;
 use crate::runtime::auth::AuthEvent;
-use crate::runtime::background::TitleEvent;
+use uji_agent::llm::Origin;
+
+use crate::runtime::background::{self, ModelsEvent, TitleEvent};
 use crate::runtime::events;
 use crate::runtime::signal::Signal;
 
@@ -15,6 +17,7 @@ impl LoopData {
             Signal::Auth(event) => self.on_auth_event(event),
             Signal::Title(event) => self.on_title_event(event),
             Signal::Compacted(event) => self.on_compacted(event),
+            Signal::Models(event) => self.on_models(&event),
         }
     }
 
@@ -42,7 +45,7 @@ impl LoopData {
         if self.app.conversation().borrow().messages().len() != 1 {
             return;
         }
-        crate::runtime::background::title(
+        background::title(
             &self.runtime,
             Arc::clone(&self.inner.client),
             self.inner.llm.borrow().clone(),
@@ -77,6 +80,46 @@ impl LoopData {
                 self.inner.report(format!("sign-in failed: {message}"));
             }
         }
+        self.drain_diagnostics();
+        self.dirty = true;
+    }
+}
+
+impl LoopData {
+    pub(super) fn discover_model_windows(&mut self) {
+        let registered: Vec<_> = self
+            .inner
+            .api
+            .providers()
+            .borrow()
+            .all()
+            .iter()
+            .filter(|provider| {
+                provider.origin == Origin::Registered && !provider.base_url.is_empty()
+            })
+            .cloned()
+            .collect();
+        if registered.is_empty() {
+            return;
+        }
+        background::model_windows(&self.runtime, &self.inner.client, registered, &self.signals);
+    }
+
+    pub(super) fn on_models(&mut self, event: &ModelsEvent) {
+        let changed = self
+            .inner
+            .api
+            .providers()
+            .borrow_mut()
+            .set_windows(&event.provider, &event.windows);
+        if changed == 0 {
+            return;
+        }
+        self.inner.report(format!(
+            "{}: corrected {changed} model window{} from the endpoint",
+            event.provider,
+            if changed == 1 { "" } else { "s" }
+        ));
         self.drain_diagnostics();
         self.dirty = true;
     }

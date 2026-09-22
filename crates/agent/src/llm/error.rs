@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use futures_util::StreamExt;
 use serde::Serialize;
 
 pub(crate) async fn send<T: Serialize + ?Sized>(
@@ -52,6 +51,13 @@ impl HttpError {
 }
 
 impl LlmError {
+    pub(crate) fn stalled(after: Duration) -> Self {
+        Self::transport(format!(
+            "the provider sent nothing for {}s",
+            after.as_secs()
+        ))
+    }
+
     pub(crate) fn truncated_stream() -> Self {
         Self::transport("the provider closed the stream before the reply finished")
     }
@@ -137,22 +143,4 @@ pub(crate) fn backoff(attempt: u32) -> Duration {
     let capped = step.min(RETRY_CEILING);
     let jitter = 1.0 + RETRY_JITTER * (rand::random::<f64>() * 2.0 - 1.0);
     capped.mul_f64(jitter.max(0.0))
-}
-
-pub(crate) async fn response_lines(
-    response: reqwest::Response,
-    mut on_line: impl FnMut(&str) + Send,
-) -> Result<(), LlmError> {
-    let mut buf = String::new();
-    let mut stream = response.bytes_stream();
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(LlmError::transport)?;
-        buf.push_str(&String::from_utf8_lossy(&chunk));
-        while let Some(pos) = buf.find('\n') {
-            let line = buf[..pos].trim_end_matches('\r').to_string();
-            buf.drain(..=pos);
-            on_line(&line);
-        }
-    }
-    Ok(())
 }

@@ -11,9 +11,11 @@ use uji_ui::state::UiState;
 use super::events;
 use super::policy;
 use crate::pack;
+use std::collections::BTreeSet;
 use uji_agent::config::{self, DEFAULT_LUA};
 use uji_agent::llm::{Llm, NotConfigured};
 use uji_agent::session::store::SessionStorage;
+
 use uji_agent::tools::policy::ToolPolicy;
 
 use super::loader;
@@ -93,11 +95,20 @@ impl Inner {
     }
 
     pub(crate) fn compile_policy(&self) {
-        let (policy, notices) = policy::compile(&self.lua);
+        let known = self.tool_names();
+        let (policy, notices) = policy::compile(&self.lua, &known);
         *self.policy.borrow_mut() = policy;
         for notice in notices {
             self.report(notice);
         }
+    }
+
+    fn tool_names(&self) -> BTreeSet<String> {
+        ToolPolicy::default()
+            .names()
+            .map(str::to_string)
+            .chain(self.api.lua_tools().borrow().keys().cloned())
+            .collect()
     }
 
     pub(crate) fn state(&self) -> Rc<RefCell<UiState>> {

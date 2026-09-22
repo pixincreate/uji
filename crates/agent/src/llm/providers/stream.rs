@@ -3,7 +3,7 @@ use serde::de::DeserializeOwned;
 
 use crate::llm::providers::acc::ToolAcc;
 use crate::llm::request::{LlmRequest, LlmResponse, Usage};
-use crate::llm::{LlmError, response_lines, status_error};
+use crate::llm::{LlmError, Progress, response_lines, status_error};
 use crate::session::model::ToolCall;
 
 const DATA: &str = "data: ";
@@ -35,7 +35,7 @@ pub trait Api: Send + Sync {
         event: Self::Event,
         parts: &mut Parts,
         on_delta: &mut (dyn FnMut(String) + Send),
-    );
+    ) -> Progress;
 
     fn finished(&self, parts: &Parts) -> Result<(), LlmError> {
         if parts.complete {
@@ -67,14 +67,15 @@ pub async fn stream<A: Api>(
     let mut parts = Parts::default();
     response_lines(response, |line| {
         let Some(data) = line.strip_prefix(DATA) else {
-            return;
+            return Progress::Keepalive;
         };
         if data == DONE {
             parts.complete = true;
-            return;
+            return Progress::Made;
         }
-        if let Ok(event) = serde_json::from_str::<A::Event>(data) {
-            api.read(event, &mut parts, on_delta);
+        match serde_json::from_str::<A::Event>(data) {
+            Ok(event) => api.read(event, &mut parts, on_delta),
+            Err(_) => Progress::Keepalive,
         }
     })
     .await?;

@@ -1,4 +1,5 @@
 pub mod builtin;
+pub mod lines;
 pub mod policy;
 pub mod progress;
 pub mod prompt;
@@ -75,7 +76,9 @@ pub fn builtin_registry(roots: builtin::Roots) -> ToolRegistry {
     registry.register(Arc::new(builtin::ListDir {
         roots: roots.clone(),
     }));
-    registry.register(Arc::new(builtin::Grep { roots }));
-    registry.register(Arc::new(builtin::RunCommand));
+    registry.register(Arc::new(builtin::Grep {
+        roots: roots.clone(),
+    }));
+    registry.register(Arc::new(builtin::RunCommand { roots }));
     registry
 }

@@ -19,6 +19,23 @@ impl Action {
     pub fn parse(value: &str) -> Option<Self> {
         Self::from_str(value).ok()
     }
+
+    fn strictness(self) -> u8 {
+        match self {
+            Self::Allow => 0,
+            Self::Ask => 1,
+            Self::Deny => 2,
+        }
+    }
+
+    #[must_use]
+    pub fn strictest(self, other: Self) -> Self {
+        if other.strictness() > self.strictness() {
+            other
+        } else {
+            self
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -68,7 +85,7 @@ impl Default for ToolPolicy {
                 },
             );
         }
-        for name in ["write_file", "run_command"] {
+        for name in ["edit_file", "write_file", "run_command"] {
             tools.insert(
                 name.to_string(),
                 ToolRules {
@@ -85,6 +102,10 @@ impl Default for ToolPolicy {
 }
 
 impl ToolPolicy {
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.tools.keys().map(String::as_str)
+    }
+
     pub fn evaluate(&self, tool: &str, subject: &str) -> Action {
         let Some(rules) = self.tools.get(tool) else {
             return self.default;
