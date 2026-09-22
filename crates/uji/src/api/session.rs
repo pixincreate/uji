@@ -68,12 +68,8 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
         "usage",
         bind(lua, api, move |api, lua, ()| {
             let tally = api.session().conversation().borrow().tally();
-            let out = lua.create_table()?;
-            out.set("input", tally.usage.input)?;
-            out.set("output", tally.usage.output)?;
-            out.set("cache_read", tally.usage.cache_read)?;
-            out.set("cache_write", tally.usage.cache_write)?;
-            out.set("total", tally.usage.total())?;
+            let out = usage_table(lua, tally.usage)?;
+            out.set("last", usage_table(lua, tally.last)?)?;
             out.set("requests", tally.turns)?;
             Ok(out)
         })?,
@@ -111,4 +107,14 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     )?;
 
     Ok(session)
+}
+
+fn usage_table(lua: &Lua, usage: Usage) -> mlua::Result<Table> {
+    let out = lua.create_table()?;
+    out.set("input", usage.input)?;
+    out.set("output", usage.output)?;
+    out.set("cache_read", usage.cache_read)?;
+    out.set("cache_write", usage.cache_write)?;
+    out.set("total", usage.total())?;
+    Ok(out)
 }

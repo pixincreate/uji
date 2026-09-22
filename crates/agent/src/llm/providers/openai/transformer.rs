@@ -211,24 +211,37 @@ pub struct Usage {
     pub prompt_tokens: u64,
     #[serde(default)]
     pub completion_tokens: u64,
+    pub prompt_tokens_details: Option<PromptDetails>,
     #[serde(default)]
-    pub prompt_tokens_details: PromptDetails,
+    pub prompt_cache_hit_tokens: u64,
+    #[serde(default)]
+    pub cached_tokens: u64,
 }
 
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
 pub struct PromptDetails {
     #[serde(default)]
     pub cached_tokens: u64,
+    #[serde(default)]
+    pub cache_write_tokens: u64,
 }
 
 impl From<Usage> for crate::llm::Usage {
     fn from(usage: Usage) -> Self {
-        let cache_read = usage.prompt_tokens_details.cached_tokens;
+        let details = usage.prompt_tokens_details.unwrap_or_default();
+        let cache_read = details
+            .cached_tokens
+            .max(usage.prompt_cache_hit_tokens)
+            .max(usage.cached_tokens);
+        let cache_write = details.cache_write_tokens;
         Self {
-            input: usage.prompt_tokens.saturating_sub(cache_read),
+            input: usage
+                .prompt_tokens
+                .saturating_sub(cache_read)
+                .saturating_sub(cache_write),
             output: usage.completion_tokens,
             cache_read,
-            cache_write: 0,
+            cache_write,
         }
     }
 }

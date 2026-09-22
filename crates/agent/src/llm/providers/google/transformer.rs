@@ -198,13 +198,15 @@ pub struct Usage {
     pub candidates: u64,
     #[serde(default, rename = "cachedContentTokenCount")]
     pub cached: u64,
+    #[serde(default, rename = "thoughtsTokenCount")]
+    pub thoughts: u64,
 }
 
 impl From<Usage> for crate::llm::Usage {
     fn from(usage: Usage) -> Self {
         Self {
             input: usage.prompt.saturating_sub(usage.cached),
-            output: usage.candidates,
+            output: usage.candidates.saturating_add(usage.thoughts),
             cache_read: usage.cached,
             cache_write: 0,
         }

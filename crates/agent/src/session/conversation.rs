@@ -27,6 +27,7 @@ impl From<&Session> for Info {
 #[derive(Default, Clone, Copy)]
 pub struct Tally {
     pub usage: Usage,
+    pub last: Usage,
     pub turns: u64,
 }
 
@@ -87,6 +88,7 @@ impl Conversation {
             self.reported_input = usage.prefix();
             self.reported_seq = self.messages.last().map_or(0, |stored| stored.seq);
         }
+        self.tally.last = usage;
         self.tally.usage.add(usage);
         self.tally.turns = self.tally.turns.saturating_add(1);
     }
