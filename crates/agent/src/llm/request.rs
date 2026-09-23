@@ -22,7 +22,8 @@ pub struct ToolSpec {
     pub parameters: Value,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Usage {
     pub input: u64,
     pub output: u64,

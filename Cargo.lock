@@ -3741,6 +3741,7 @@ version = "0.1.0"
 dependencies = [
  "calloop",
  "clap",
+ "futures-util",
  "globset",
  "mlua",
  "regex",
@@ -3764,7 +3765,6 @@ dependencies = [
  "chrono",
  "diesel",
  "diesel_migrations",
- "futures-util",
  "globset",
  "keyring",
  "rand 0.9.5",
@@ -3785,8 +3785,11 @@ dependencies = [
 name = "uji-tests"
 version = "0.1.0"
 dependencies = [
+ "calloop",
  "ratatui",
+ "serde_json",
  "tokio",
+ "uji",
  "uji-agent",
  "uji-ui",
 ]

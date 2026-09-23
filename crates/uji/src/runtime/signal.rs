@@ -1,13 +1,16 @@
-use uji_agent::llm::StreamEvent;
+use uji_agent::llm::Call;
 
 use super::auth::AuthEvent;
 use super::background::{CompactEvent, ModelsEvent, TitleEvent};
 use super::job::JobEvent;
 use super::loop_data::shell::ShellEvent;
+use super::reply::Reply;
 
 pub(crate) enum Signal {
-    Llm(StreamEvent),
     Job(JobEvent),
+    Reply(Reply),
+    Line { id: u64, line: String },
+    Wire(Call),
     Shell(ShellEvent),
     Auth(AuthEvent),
     Title(TitleEvent),

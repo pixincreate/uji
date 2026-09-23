@@ -1,21 +1,23 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
-use strum::IntoStaticStr;
+use serde::Deserialize;
+use serde_json::Value;
 
 use crate::credential;
 use crate::llm::discover;
 use crate::session::store::{SessionStorage, Setting};
 
+use super::bridge::{Bridge, Dispatch};
 use super::tuning::{Effort, Retention};
-use super::{Anthropic, Gemini, Llm, NotConfigured, OpenAi};
+use super::{Llm, NotConfigured};
+
+const DEFAULT_WIRE: &str = "openai-chat";
 
 #[derive(Default)]
 pub struct LlmConfig {
     pub provider: String,
     pub model: String,
-    pub compat: CompatOverrides,
+    pub compat: Value,
     pub base_url: Option<String>,
     pub api_key: Option<String>,
     pub auth_env: Vec<String>,
@@ -40,7 +42,7 @@ impl LlmConfig {
             .map(|entry| entry.base_url.clone())
             .filter(|url| !url.is_empty());
         Self {
-            compat: known.map(|entry| entry.compat).unwrap_or_default(),
+            compat: known.map(|entry| entry.compat.clone()).unwrap_or_default(),
             base_url: base_url.filter(|url| !url.is_empty()).or(catalog_url),
             auth_env: known
                 .map(|entry| entry.auth_env.clone())
@@ -57,24 +59,14 @@ impl LlmConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Wire {
-    #[serde(rename = "openai-chat")]
-    OpenAiChat,
-    #[serde(rename = "anthropic")]
-    Anthropic,
-    #[serde(rename = "gemini")]
-    Gemini,
-}
-
 #[derive(Debug, Clone, Deserialize)]
 pub struct Provider {
     pub id: String,
     pub name: String,
-    pub wire: Wire,
+    pub wire: String,
     pub base_url: String,
     #[serde(default)]
-    pub compat: CompatOverrides,
+    pub compat: Value,
     #[serde(default)]
     pub auth_env: Vec<String>,
     #[serde(default)]
@@ -92,115 +84,6 @@ pub enum Origin {
     #[default]
     Builtin,
     Registered,
-}
-
-/// Which field an OpenAI-compatible endpoint wants the output limit in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize, IntoStaticStr)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum MaxTokensField {
-    #[default]
-    MaxTokens,
-    MaxCompletionTokens,
-    None,
-}
-
-impl MaxTokensField {
-    pub fn name(self) -> &'static str {
-        self.into()
-    }
-}
-
-/// How an OpenAI-compatible endpoint wants reasoning effort expressed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ThinkingFormat {
-    #[default]
-    #[serde(rename = "openai")]
-    OpenAi,
-    #[serde(rename = "openrouter")]
-    OpenRouter,
-    #[serde(rename = "deepseek")]
-    DeepSeek,
-    Zai,
-    Qwen,
-    None,
-}
-
-/// Where an endpoint deviates from the `OpenAI` API it claims to speak.
-///
-/// Every field has a default guessed from the base url, so a provider only
-/// spells out what the guess gets wrong.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
-#[serde(default)]
-pub struct CompatOverrides {
-    pub max_tokens_field: Option<MaxTokensField>,
-    pub thinking: Option<ThinkingFormat>,
-    pub tool_result_name: Option<bool>,
-    pub finish_reason: Option<bool>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Compat {
-    pub max_tokens_field: MaxTokensField,
-    pub thinking: ThinkingFormat,
-    /// Whether a tool result must repeat the tool's name.
-    pub tool_result_name: bool,
-    /// Whether the endpoint reports why it stopped. When it does not, a stream
-    /// that simply ends is taken as finished rather than cut short.
-    pub finish_reason: bool,
-}
-
-impl Default for Compat {
-    fn default() -> Self {
-        Self {
-            max_tokens_field: MaxTokensField::MaxTokens,
-            thinking: ThinkingFormat::OpenAi,
-            tool_result_name: false,
-            finish_reason: true,
-        }
-    }
-}
-
-impl Compat {
-    /// What an endpoint at `base_url` wants, with anything the provider spelled
-    /// out taking precedence over the guess.
-    pub fn resolve(base_url: &str, overrides: CompatOverrides) -> Self {
-        let guess = Self::guess(base_url);
-        Self {
-            max_tokens_field: overrides.max_tokens_field.unwrap_or(guess.max_tokens_field),
-            thinking: overrides.thinking.unwrap_or(guess.thinking),
-            tool_result_name: overrides.tool_result_name.unwrap_or(guess.tool_result_name),
-            finish_reason: overrides.finish_reason.unwrap_or(guess.finish_reason),
-        }
-    }
-
-    /// What an endpoint at `base_url` most likely wants.
-    pub fn guess(base_url: &str) -> Self {
-        let url = base_url.to_ascii_lowercase();
-        let has = |needle: &str| url.contains(needle);
-        let thinking = if has("openrouter.ai") {
-            ThinkingFormat::OpenRouter
-        } else if has("deepseek.com") {
-            ThinkingFormat::DeepSeek
-        } else if has("bigmodel.cn") || has("z.ai") {
-            ThinkingFormat::Zai
-        } else if has("dashscope") {
-            ThinkingFormat::Qwen
-        } else {
-            ThinkingFormat::OpenAi
-        };
-        let max_tokens_field = if has("api.openai.com") {
-            MaxTokensField::MaxCompletionTokens
-        } else {
-            MaxTokensField::MaxTokens
-        };
-        Self {
-            max_tokens_field,
-            thinking,
-            ..Self::default()
-        }
-    }
 }
 
 pub const MAX_RESERVE: u64 = 20_000;
@@ -315,28 +198,13 @@ impl Provider {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Catalog {
     providers: Vec<Provider>,
 }
 
-impl Default for Catalog {
-    fn default() -> Self {
-        Self::builtin()
-    }
-}
-
 impl Catalog {
-    pub fn builtin() -> Self {
-        let mut providers: Vec<Provider> =
-            serde_json::from_str(include_str!("providers.json")).unwrap_or_default();
-        let models: HashMap<String, Vec<Model>> =
-            serde_json::from_str(include_str!("models.json")).unwrap_or_default();
-        for provider in &mut providers {
-            if let Some(known) = models.get(&provider.id) {
-                provider.models.clone_from(known);
-            }
-        }
+    pub fn new(providers: Vec<Provider>) -> Self {
         Self { providers }
     }
 
@@ -424,15 +292,16 @@ fn oauth_session(provider_id: &str, known: Option<&Provider>) -> Option<OAuthSes
     })
 }
 
-pub fn resolve(wire: Option<Wire>, config: &LlmConfig) -> Arc<Llm> {
+pub fn resolve(wire: Option<&str>, config: &LlmConfig, dispatch: &Dispatch) -> Arc<Llm> {
     if config.provider.is_empty() {
         return Arc::new(Llm::NotConfigured(NotConfigured));
     }
-    match wire {
-        Some(Wire::Anthropic) => Arc::new(Llm::Anthropic(Box::new(Anthropic::new(config)))),
-        Some(Wire::Gemini) => Arc::new(Llm::Gemini(Gemini::new(config))),
-        Some(Wire::OpenAiChat) | None => Arc::new(Llm::OpenAi(OpenAi::new(config))),
-    }
+    let wire = wire.unwrap_or(DEFAULT_WIRE).to_string();
+    Arc::new(Llm::Wired(Box::new(Bridge::new(
+        wire,
+        config,
+        Arc::clone(dispatch),
+    ))))
 }
 
 pub struct Selection {
@@ -448,7 +317,11 @@ fn setting(storage: &mut dyn SessionStorage, key: &Setting) -> Option<String> {
     storage.get_setting(key).ok().flatten()
 }
 
-pub fn resolve_from_storage(storage: &mut dyn SessionStorage, catalog: &Catalog) -> Selection {
+pub fn resolve_from_storage(
+    storage: &mut dyn SessionStorage,
+    catalog: &Catalog,
+    dispatch: &Dispatch,
+) -> Selection {
     let provider_id = setting(storage, &Setting::Provider).unwrap_or_default();
     let known = catalog.get(&provider_id);
     let stored = setting(storage, &Setting::Model);
@@ -475,7 +348,7 @@ pub fn resolve_from_storage(storage: &mut dyn SessionStorage, catalog: &Catalog)
         Retention::Off
     };
     Selection {
-        llm: resolve(known.map(|entry| entry.wire), &config),
+        llm: resolve(known.map(|entry| entry.wire.as_str()), &config, dispatch),
         name: known.map_or_else(|| provider_id.clone(), |entry| entry.name.clone()),
         id: provider_id,
         model,

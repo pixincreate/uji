@@ -2,9 +2,12 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use mlua::{Function, Lua, Table, Value as LuaValue};
+use uji_agent::fs::Files;
+use uji_agent::tools::policy::Action;
 
 use super::Api;
 use crate::api::bind::bind;
+use crate::api::request::Request;
 
 /// Where file tools may reach: the working directory plus any granted roots,
 /// and whether that set is enforced at all.
@@ -43,20 +46,72 @@ impl Access {
     pub fn enable(&mut self, names: &[String]) {
         self.disabled.retain(|name| !names.contains(name));
     }
+
+    pub fn files(&self, cwd: PathBuf) -> Files {
+        Files::new(cwd, self.roots.clone(), self.confined)
+    }
 }
 
 #[derive(Debug, Clone)]
-pub struct LuaTool {
+pub enum Subject {
+    Name,
+    Label(String),
+    Of(Function),
+}
+
+#[derive(Debug, Clone)]
+pub struct Tool {
     pub description: String,
     pub parameters: LuaValue,
-    pub subject: Option<String>,
+    pub subject: Subject,
+    pub policy: Option<Action>,
     pub defer: bool,
     pub run: Function,
 }
 
-pub(crate) fn completion(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+impl Tool {
+    pub fn subject(&self, name: &str, args: &Table) -> mlua::Result<String> {
+        match &self.subject {
+            Subject::Name => Ok(name.to_string()),
+            Subject::Label(label) => Ok(label.clone()),
+            Subject::Of(of) => of
+                .call::<Option<String>>(args.clone())
+                .map(Option::unwrap_or_default),
+        }
+    }
+}
+
+fn subject(value: LuaValue) -> mlua::Result<Subject> {
+    match value {
+        LuaValue::Nil => Ok(Subject::Name),
+        LuaValue::String(label) => Ok(Subject::Label(label.to_str()?.to_owned())),
+        LuaValue::Function(of) => Ok(Subject::Of(of)),
+        _ => Err(mlua::Error::runtime(
+            "subject must be a string or a function",
+        )),
+    }
+}
+
+fn policy(value: Option<String>) -> mlua::Result<Option<Action>> {
+    value
+        .map(|value| {
+            Action::parse(&value).ok_or_else(|| {
+                mlua::Error::runtime(format!("policy `{value}` is not allow, ask or deny"))
+            })
+        })
+        .transpose()
+}
+
+pub(crate) fn done(lua: &Lua, api: &Rc<Api>, call: u64) -> mlua::Result<Function> {
     bind(lua, api, move |api, _, text: String| {
-        api.request(crate::api::request::Request::ToolResult(text));
+        api.request(Request::ToolResult { call, text });
+        Ok(())
+    })
+}
+
+pub(crate) fn progress(lua: &Lua, api: &Rc<Api>, call: u64) -> mlua::Result<Function> {
+    bind(lua, api, move |api, _, line: String| {
+        api.request(Request::ToolProgress { call, line });
         Ok(())
     })
 }
@@ -67,15 +122,17 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
             .get::<Option<String>>("description")?
             .unwrap_or_default();
         let parameters = opts.get::<LuaValue>("parameters")?;
-        let subject = opts.get::<Option<String>>("subject")?;
+        let subject = subject(opts.get("subject")?)?;
+        let policy = policy(opts.get("policy")?)?;
         let defer = opts.get::<Option<bool>>("defer")?.unwrap_or(false);
         let run: Function = opts.get("run")?;
-        api.lua_tools().borrow_mut().insert(
+        api.tools().borrow_mut().insert(
             name,
-            LuaTool {
+            Tool {
                 description,
                 parameters,
                 subject,
+                policy,
                 defer,
                 run,
             },
@@ -86,7 +143,7 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 
 pub fn unregister(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(lua, api, move |api, _, name: String| {
-        api.lua_tools().borrow_mut().remove(&name);
+        api.tools().borrow_mut().remove(&name);
         Ok(())
     })
 }

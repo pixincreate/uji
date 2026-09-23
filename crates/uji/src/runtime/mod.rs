@@ -1,15 +1,19 @@
 mod auth;
 mod background;
 mod builtin;
+mod bundled;
 mod error;
 pub mod events;
 pub mod frontend;
+mod fs;
+mod http;
 mod inner;
 mod job;
 mod loader;
 mod loop_data;
 mod policy;
 mod renderer;
+mod reply;
 mod signal;
 
 pub use error::RuntimeError;
@@ -29,6 +33,7 @@ use uji_ui::input::Input;
 use uji_ui::state::UiState;
 
 use signal::Signal;
+use uji_agent::llm::Dispatch;
 use uji_agent::session::conversation::{Conversation, Shared};
 use uji_agent::session::model::Session;
 use uji_agent::session::store::SessionStorage;
@@ -40,6 +45,8 @@ pub struct Runtime {
     event_loop: EventLoop<'static, LoopData>,
     config_dir: Option<PathBuf>,
     conversation: Shared,
+    signals: calloop::channel::Sender<Signal>,
+    signal_channel: calloop::channel::Channel<Signal>,
 }
 
 impl Runtime {
@@ -51,7 +58,14 @@ impl Runtime {
         let state = Rc::new(RefCell::new(UiState::new()));
         let conversation = Conversation::shared();
         let client = Arc::new(uji_agent::llm::http_client());
-        let inner = Inner::boot(state, Rc::clone(&conversation), client, config_dir.clone());
+        let (signals, signal_channel) = calloop::channel::channel::<Signal>();
+        let inner = Inner::boot(
+            state,
+            Rc::clone(&conversation),
+            client,
+            config_dir.clone(),
+            dispatch(signals.clone()),
+        );
 
         let event_loop = EventLoop::try_new()?;
         let loop_handle = event_loop.handle();
@@ -62,6 +76,8 @@ impl Runtime {
             event_loop,
             config_dir,
             conversation,
+            signals,
+            signal_channel,
         })
     }
 
@@ -97,6 +113,8 @@ impl Runtime {
             mut event_loop,
             config_dir,
             conversation,
+            signals,
+            signal_channel,
         } = self;
 
         let messages = storage.messages(&session.id).map_err(io::Error::other)?;
@@ -105,7 +123,6 @@ impl Runtime {
         app.set_renderer(Rc::new(renderer::LuaRenderer::new(Rc::clone(&inner))));
 
         let (keys, key_channel) = calloop::channel::channel::<Input>();
-        let (signals, signal_channel) = calloop::channel::channel::<Signal>();
         let mut frontend: Box<dyn Frontend> = Box::new(frontend);
         frontend.start(keys)?;
 
@@ -121,9 +138,10 @@ impl Runtime {
             modal: None,
             action_done: false,
             awaiting: None,
+            turn: None,
+            calls: Vec::new(),
             queued: VecDeque::new(),
             live_query: loop_data::LiveQuery::default(),
-            cancel: None,
             shell: None,
             deferred: VecDeque::new(),
             last_reveal: std::time::Instant::now(),
@@ -156,6 +174,12 @@ impl Runtime {
         data.inner.emit(events::Event::Quit.name(), &[]);
         data.frontend.stop()
     }
+}
+
+fn dispatch(signals: calloop::channel::Sender<Signal>) -> Dispatch {
+    Arc::new(move |call| {
+        let _ = signals.send(Signal::Wire(call));
+    })
 }
 
 fn install_sources(

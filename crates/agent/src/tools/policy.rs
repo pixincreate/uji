@@ -67,45 +67,16 @@ pub struct ToolRules {
     pub default: Action,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ToolPolicy {
     pub tools: HashMap<String, ToolRules>,
     pub default: Action,
 }
 
-const BUILTIN: [(&str, Action); 4] = [
-    ("read_file", Action::Allow),
-    ("edit_file", Action::Ask),
-    ("write_file", Action::Ask),
-    ("run_command", Action::Ask),
-];
-
-impl Default for ToolPolicy {
-    fn default() -> Self {
-        Self {
-            tools: BUILTIN
-                .into_iter()
-                .map(|(name, default)| {
-                    let rules = ToolRules {
-                        default,
-                        ..ToolRules::default()
-                    };
-                    (name.to_string(), rules)
-                })
-                .collect(),
-            default: Action::Ask,
-        }
-    }
-}
-
 impl ToolPolicy {
-    pub fn names(&self) -> impl Iterator<Item = &str> {
-        self.tools.keys().map(String::as_str)
-    }
-
-    pub fn evaluate(&self, tool: &str, subject: &str) -> Action {
+    pub fn evaluate(&self, tool: &str, subject: &str, declared: Option<Action>) -> Action {
         let Some(rules) = self.tools.get(tool) else {
-            return self.default;
+            return declared.unwrap_or(self.default);
         };
         rules
             .rules

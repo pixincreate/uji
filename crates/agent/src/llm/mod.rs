@@ -1,12 +1,11 @@
-pub mod agent;
+pub mod bridge;
 pub mod cancel;
 pub mod catalog;
 pub mod context;
 pub mod discover;
 pub mod error;
 pub mod event;
-pub mod prompt;
-pub mod providers;
+mod not_configured;
 pub mod request;
 pub mod summary;
 pub mod title;
@@ -15,26 +14,18 @@ pub mod wire;
 
 use async_trait::async_trait;
 
-pub use agent::{AgentConfig, LuaToolSpec, MAX_TOOL_ITERATIONS, run_agent};
+pub use bridge::{Answer, Bridge, Call, Dispatch, Failure};
 pub use cancel::CancelToken;
 pub use catalog::{
-    Budget, Catalog, Compat, CompatOverrides, LlmConfig, MAX_RESERVE, MaxTokensField, Model,
-    OAuthSession, Origin, Provider, Selection, ThinkingFormat, Wire, authenticated, resolve,
-    resolve_from_storage,
+    Budget, Catalog, LlmConfig, MAX_RESERVE, Model, OAuthSession, Origin, Provider, Selection,
+    authenticated, resolve, resolve_from_storage,
 };
 pub use error::{HttpError, LlmError};
-pub(crate) use error::{RETRY_ATTEMPTS, backoff, clip, send, status_error};
-pub use event::{Delta, StreamEvent, ToolDecision};
-pub use prompt::{DEFAULT_SYSTEM_PROMPT, system_prompt};
-pub use providers::anthropic::Anthropic;
-pub use providers::google::Gemini;
-pub use providers::not_configured::NotConfigured;
-pub use providers::openai::OpenAi;
+pub use event::Delta;
+pub use not_configured::NotConfigured;
 pub use request::{LlmRequest, LlmResponse, ToolSpec, Usage};
-pub use tuning::{DEFAULT_MAX_OUTPUT, Effort, MIN_ANSWER_TOKENS, Retention, fit_thinking};
-pub use wire::Progress;
-pub use wire::http_client;
-pub(crate) use wire::response_lines;
+pub use tuning::{DEFAULT_MAX_OUTPUT, Effort, Retention};
+pub use wire::{STREAM_IDLE, http_client};
 
 /// A provider's wire protocol. One call, one response; text arrives through
 /// `on_delta` as it streams. Callers that do not care about deltas pass
@@ -54,12 +45,18 @@ pub fn silent() -> impl FnMut(Delta) + Send {
     |_| {}
 }
 
-/// Every backend uji can talk to. A closed set, so calls dispatch statically.
 pub enum Llm {
-    Anthropic(Box<Anthropic>),
-    OpenAi(OpenAi),
-    Gemini(Gemini),
+    Wired(Box<Bridge>),
     NotConfigured(NotConfigured),
+}
+
+impl Llm {
+    pub async fn route(&self, client: &reqwest::Client) -> Result<serde_json::Value, LlmError> {
+        match self {
+            Self::Wired(bridge) => bridge.route(client).await,
+            Self::NotConfigured(_) => Err(NotConfigured::error()),
+        }
+    }
 }
 
 #[async_trait]
@@ -71,9 +68,7 @@ impl Protocol for Llm {
         on_delta: &mut (dyn FnMut(Delta) + Send),
     ) -> Result<LlmResponse, LlmError> {
         match self {
-            Self::Anthropic(llm) => llm.call(client, request, on_delta).await,
-            Self::OpenAi(llm) => llm.call(client, request, on_delta).await,
-            Self::Gemini(llm) => llm.call(client, request, on_delta).await,
+            Self::Wired(llm) => llm.call(client, request, on_delta).await,
             Self::NotConfigured(llm) => llm.call(client, request, on_delta).await,
         }
     }

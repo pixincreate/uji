@@ -7,6 +7,7 @@ pub enum Event {
     SessionResumed,
     SessionTitled,
     MessageSubmitted,
+    BeforeTurn,
     QueueChanged,
     MessageAppended,
     RenderMessage,

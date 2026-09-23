@@ -4,23 +4,25 @@ mod background;
 mod commands;
 mod compact;
 mod drains;
-mod events;
+pub(crate) mod events;
 mod input;
 mod model;
 mod mouse;
 mod persist;
 mod picker;
+mod prompt;
 
 pub(crate) use picker::LiveQuery;
 mod queue;
+mod replies;
 pub(crate) mod shell;
+pub(crate) mod wires;
 
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Instant;
 
-use uji_agent::llm::{CancelToken, StreamEvent, ToolDecision};
 use uji_agent::session::store::SessionStorage;
 use uji_ui::app::App;
 
@@ -43,17 +45,24 @@ enum ModalInput {
     Cancel,
 }
 
-pub(super) enum ToolOutcome {
-    Done(String),
-    Pending,
+pub(crate) enum Awaiting {
+    Approval { id: u64, arguments: mlua::Table },
+    Result(Running),
 }
 
-pub(crate) enum Awaiting {
-    Approval {
-        arguments: String,
-        reply: tokio::sync::oneshot::Sender<ToolDecision>,
-    },
-    Result(tokio::sync::oneshot::Sender<String>),
+impl Awaiting {
+    fn id(&self) -> u64 {
+        match self {
+            Self::Approval { id, .. } => *id,
+            Self::Result(running) => running.call,
+        }
+    }
+}
+
+pub(crate) struct Running {
+    call: u64,
+    name: String,
+    cancel: Option<mlua::Function>,
 }
 
 enum ToolApproval {
@@ -75,11 +84,12 @@ pub(crate) struct LoopData {
     pub(crate) modal: Option<LuaAction>,
     pub(crate) action_done: bool,
     pub(crate) awaiting: Option<Awaiting>,
+    pub(crate) turn: Option<mlua::Function>,
+    pub(crate) calls: Vec<wires::Live>,
     pub(crate) queued: VecDeque<String>,
     pub(crate) live_query: LiveQuery,
-    pub(crate) cancel: Option<CancelToken>,
     pub(crate) shell: Option<shell::Running>,
-    pub(crate) deferred: VecDeque<StreamEvent>,
+    pub(crate) deferred: VecDeque<events::Reported>,
     pub(crate) last_reveal: Instant,
     pub(crate) config_dir: Option<PathBuf>,
 }

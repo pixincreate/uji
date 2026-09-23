@@ -1,10 +1,13 @@
 pub mod action;
 pub mod agent;
 mod bind;
+pub mod callbacks;
 pub mod command;
 mod convert;
 pub mod event;
+pub mod fs;
 pub mod handlers;
+pub mod http;
 pub mod input;
 pub mod job;
 pub mod json;
@@ -29,19 +32,21 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use mlua::{Lua, Table, Value};
+use mlua::{Function, Lua, Table, Value};
 
 use self::action::Actions;
 use uji_agent::session::conversation::Shared;
 use uji_ui::state::UiState;
 
+use self::callbacks::Callbacks;
 use self::handlers::Handlers;
+use self::http::Fetches;
 use self::input::{Capture, Composer};
 use self::job::Jobs;
 use self::registry::Registry;
 use self::scheduled::Scheduled;
 use self::session::SessionState;
-use self::tools::LuaTool;
+use self::tools::Tool;
 use uji_agent::llm::Catalog;
 use uji_ui::keymap::Keymap;
 
@@ -50,12 +55,15 @@ pub struct Api {
     scheduled: Scheduled,
     handlers: RefCell<Handlers>,
     commands: RefCell<HashMap<String, command::LuaCommand>>,
-    tools: RefCell<BTreeMap<String, LuaTool>>,
+    tools: RefCell<BTreeMap<String, Tool>>,
     providers: RefCell<Catalog>,
     keymap: RefCell<Keymap>,
     packs: RefCell<Vec<PathBuf>>,
     notices: RefCell<Vec<String>>,
     jobs: RefCell<Jobs>,
+    callbacks: RefCell<Callbacks>,
+    fetches: RefCell<Fetches>,
+    wires: RefCell<BTreeMap<String, Function>>,
     composer: Composer,
     capture: Capture,
     session_state: SessionState,
@@ -82,6 +90,9 @@ impl Api {
             packs: RefCell::default(),
             notices: RefCell::default(),
             jobs: RefCell::default(),
+            callbacks: RefCell::default(),
+            fetches: RefCell::default(),
+            wires: RefCell::default(),
             composer: Composer::default(),
             capture: Capture::default(),
             session_state: SessionState::new(conversation),
@@ -106,7 +117,7 @@ impl Api {
         &self.commands
     }
 
-    pub fn lua_tools(&self) -> &RefCell<BTreeMap<String, LuaTool>> {
+    pub fn tools(&self) -> &RefCell<BTreeMap<String, Tool>> {
         &self.tools
     }
 
@@ -172,6 +183,18 @@ impl Api {
 
     pub fn jobs(&self) -> &RefCell<Jobs> {
         &self.jobs
+    }
+
+    pub fn callbacks(&self) -> &RefCell<Callbacks> {
+        &self.callbacks
+    }
+
+    pub fn fetches(&self) -> &RefCell<Fetches> {
+        &self.fetches
+    }
+
+    pub fn wires(&self) -> &RefCell<BTreeMap<String, Function>> {
+        &self.wires
     }
 
     pub fn take_notices(&self) -> Vec<String> {
@@ -243,6 +266,7 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     let llm = lua.create_table()?;
     llm.set("current_provider", llm::current_provider(lua, api)?)?;
     llm.set("current_model", llm::current_model(lua, api)?)?;
+    llm.set("route", llm::route(lua, api)?)?;
     uji.set("llm", llm)?;
 
     let status = lua.create_table()?;
@@ -261,6 +285,7 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
 
     uji.set("json", json::register(lua, api)?)?;
     uji.set("schedule", schedule::schedule(lua, api)?)?;
+    uji.set("defer", schedule::defer(lua, api)?)?;
     uji.set("on", event::on(lua, api)?)?;
     uji.set("off", event::off(lua, api)?)?;
     uji.set("emit", event::emit(lua, api)?)?;
@@ -282,6 +307,8 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     uji.set("keymap", keymap::register(lua, api)?)?;
     uji.set("provider", provider::register(lua, api)?)?;
     uji.set("job", job::register(lua, api)?)?;
+    uji.set("http", http::register(lua, api)?)?;
+    uji.set("fs", fs::register(lua, api)?)?;
     uji.set("input", input::register(lua, api)?)?;
     uji.set("session", session::register(lua, api)?)?;
 

@@ -11,8 +11,10 @@ use crate::runtime::signal::Signal;
 impl LoopData {
     pub(crate) fn on_signal(&mut self, signal: Signal) {
         match signal {
-            Signal::Llm(event) => self.on_llm_event(event),
             Signal::Job(event) => self.on_job_event(&event),
+            Signal::Reply(reply) => self.on_reply(reply),
+            Signal::Line { id, line } => self.on_line(id, &line),
+            Signal::Wire(call) => self.on_wire_call(call),
             Signal::Shell(event) => self.on_shell_event(event),
             Signal::Auth(event) => self.on_auth_event(event),
             Signal::Title(event) => self.on_title_event(event),

@@ -35,6 +35,7 @@ pub struct App {
     stream: Stream,
     reasoning: String,
     scroll: Scroll,
+    confirm_scroll: Scroll,
     mode: Mode,
     suggest_pool: Vec<SuggestItem>,
     overlay: overlay::Overlay,
@@ -53,6 +54,7 @@ impl App {
             stream: Stream::default(),
             reasoning: String::new(),
             scroll: Scroll::default(),
+            confirm_scroll: Scroll::default(),
             mode: Mode::Normal,
             suggest_pool: Vec::new(),
             overlay: overlay::Overlay::default(),
@@ -182,7 +184,7 @@ impl App {
     }
 
     pub fn viewport(&self) -> usize {
-        self.scroll.viewport()
+        self.scroller().viewport()
     }
 
     pub fn reset_scroll(&self) {
@@ -190,19 +192,31 @@ impl App {
     }
 
     pub fn scroll_up(&self, lines: usize) {
-        self.scroll.up(lines);
+        self.scroller().up(lines);
     }
 
     pub fn scroll_down(&self, lines: usize) {
-        self.scroll.down(lines);
+        self.scroller().down(lines);
     }
 
     pub fn jump_top(&self) {
-        self.scroll.top();
+        self.scroller().top();
+    }
+
+    pub fn confirm_scroll(&self) -> &Scroll {
+        &self.confirm_scroll
+    }
+
+    fn scroller(&self) -> &Scroll {
+        if matches!(self.mode, Mode::Confirm { .. }) {
+            &self.confirm_scroll
+        } else {
+            &self.scroll
+        }
     }
 
     pub fn jump_bottom(&self) {
-        self.scroll.follow();
+        self.scroller().follow();
     }
 
     pub fn mode(&self) -> &Mode {
@@ -312,6 +326,7 @@ impl App {
     }
 
     pub fn open_confirm(&mut self, title: String, body: String) {
+        self.confirm_scroll.top();
         self.mode = Mode::Confirm {
             title,
             body,

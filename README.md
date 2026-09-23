@@ -93,7 +93,7 @@ When the context window fills, uji summarises the older messages and keeps going
 
 uji reads `~/.config/uji/init.lua` at startup, then every `.lua` file in `~/.config/uji/plugin/`. `require` resolves modules from `~/.config/uji/lua/` and from each installed pack.
 
-Your `init.lua` replaces the built-in config. It doesn't extend it. The screen layout is part of that config, so start by copying [`crates/agent/config/default.lua`](crates/agent/config/default.lua). It is 49 lines and it opens the message, input and modal windows that you see by default.
+Your `init.lua` replaces the built-in config. It doesn't extend it. The screen layout is part of that config, so start by copying [`crates/uji/runtime/lua/uji/defaults.lua`](crates/uji/runtime/lua/uji/defaults.lua). It is 49 lines and it opens the message, input and modal windows that you see by default.
 
 ### Events
 

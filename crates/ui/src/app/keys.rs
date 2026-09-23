@@ -99,6 +99,10 @@ impl App {
             Key::Char('y' | 'Y' | '1') if typed(key) => self.apply(Action::ConfirmAllow),
             Key::Char('n' | 'N' | '2') if typed(key) => self.apply(Action::ConfirmDeny),
             Key::Left | Key::Right | Key::Tab => self.apply(Action::ConfirmToggle),
+            Key::PageUp => self.apply(Action::PageUp),
+            Key::PageDown => self.apply(Action::PageDown),
+            Key::Home => self.apply(Action::ScrollTop),
+            Key::End => self.apply(Action::ScrollBottom),
             _ => KeyAction::None,
         }
     }

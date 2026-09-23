@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-pub const DEFAULT_LUA: &str = include_str!("../config/default.lua");
-
 pub const INIT_FILE: &str = "init.lua";
 pub const MODULE_DIR: &str = "lua";
 pub const PLUGIN_DIR: &str = "plugin";

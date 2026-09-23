@@ -1,7 +1,5 @@
-use std::path::Path;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
-
-use uji_agent::tools::builtin::Roots;
 
 use super::LoopData;
 
@@ -109,22 +107,11 @@ impl LoopData {
         let Some((path, line)) = split_location(item) else {
             return Vec::new();
         };
-        let roots = self.tool_roots();
-        let cwd = Path::new(&self.app.session().directory);
-        match uji_agent::tools::builtin::read_around(cwd, path, line, CONTEXT_LINES, &roots) {
-            Ok(lines) => lines,
-            Err(err) => vec![err],
-        }
-    }
-
-    fn tool_roots(&self) -> Roots {
-        let access = self.inner.api.access().borrow();
-        let extra = access.roots().to_vec();
-        if access.confined() {
-            Roots::confined(extra)
-        } else {
-            Roots::new(extra)
-        }
+        let cwd = PathBuf::from(&self.app.session().directory);
+        let files = self.inner.api.access().borrow().files(cwd);
+        files
+            .around(path, line, CONTEXT_LINES)
+            .unwrap_or_else(|err| vec![err.to_string()])
     }
 }
 

@@ -1,3 +1,5 @@
+use super::catalog::Budget;
+use super::context;
 use super::{DEFAULT_MAX_OUTPUT, Effort, LlmRequest, Protocol, Retention, Usage, silent};
 use crate::session::model::Message;
 
@@ -44,6 +46,53 @@ const MAX_INPUT: usize = 200_000;
 pub struct Summarized {
     pub summary: String,
     pub usage: Option<Usage>,
+}
+
+pub struct Compacted {
+    pub messages: Vec<Message>,
+    pub summary: String,
+    pub usage: Option<Usage>,
+}
+
+pub async fn compact<P: Protocol + ?Sized>(
+    client: &reqwest::Client,
+    provider: &P,
+    model: String,
+    budget: Budget,
+    keep_recent: u64,
+    mut messages: Vec<Message>,
+) -> Option<Compacted> {
+    if !budget.overflows(context::estimate_messages(&messages)) {
+        return None;
+    }
+    let at = {
+        let refs: Vec<&Message> = messages.iter().collect();
+        context::cut_index(&refs, keep_recent)?
+    };
+    let carried = messages
+        .first()
+        .map_or_else(Vec::new, context::previous_files);
+    let previous = messages
+        .first()
+        .and_then(|message| context::previous_summary(message))
+        .map(str::to_string);
+    let skip = usize::from(previous.is_some());
+    let head: Vec<Message> = messages[skip..at].to_vec();
+    let mut files = context::files_touched(&head.iter().collect::<Vec<_>>());
+    context::merge_files(&mut files, &carried);
+    let summarised = {
+        let refs: Vec<&Message> = head.iter().collect();
+        generate(client, provider, model, &refs, previous.as_deref()).await?
+    };
+    let tail = messages.split_off(at);
+    messages.clear();
+    messages.push(context::summary_message(&summarised.summary, &files));
+    messages.extend(tail);
+    Some(Compacted {
+        messages,
+        summary: summarised.summary,
+        usage: summarised.usage,
+    })
 }
 
 pub async fn generate<P: Protocol + ?Sized>(

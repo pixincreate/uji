@@ -1,15 +1,28 @@
-use std::sync::Arc;
 use std::time::Instant;
 
-use mlua::Value as LuaValue;
-
-use uji_agent::llm::{AgentConfig, CancelToken, StreamEvent, run_agent};
+use mlua::serde::SerializeOptions;
+use mlua::{Function, LuaSerdeExt, Table};
+use serde::Serialize;
+use uji_agent::llm::ToolSpec;
 use uji_agent::session::model::Message;
 use uji_ui::model::RunState;
 
 use super::LoopData;
 use crate::runtime::events;
-use crate::runtime::signal::Signal;
+
+const LOOP: &str = "uji.loop";
+
+#[derive(Serialize)]
+struct Turn<'a> {
+    text: &'a str,
+    system: String,
+    messages: Vec<Message>,
+    tools: Vec<ToolSpec>,
+    model: String,
+    effort: &'static str,
+    max_output: u32,
+    cache: &'static str,
+}
 
 impl LoopData {
     pub(crate) fn submit(&mut self, text: &str) {
@@ -33,45 +46,21 @@ impl LoopData {
         });
         self.maybe_title(text);
 
-        let provider = self.inner.llm.borrow().clone();
-        let model = self.inner.llm_model.borrow().clone();
-        let client = Arc::clone(&self.inner.client);
-        let context = {
+        let mut messages = {
             let conversation = self.app.messages();
             uji_agent::llm::context::build(conversation.messages())
         };
-
-        let system = {
-            let state_rc = self.inner.state();
-            let state = state_rc.borrow();
-            uji_agent::llm::system_prompt(
-                state.opts().agent_system_prompt.as_deref(),
-                &self.app.session().directory,
-            )
+        let system = self.prompt(text, &mut messages);
+        let turn = Turn {
+            text,
+            system,
+            messages,
+            tools: self.gather_tools(),
+            model: self.inner.llm_model.borrow().clone(),
+            effort: self.inner.llm_effort.borrow().name(),
+            max_output: self.max_output(),
+            cache: self.inner.llm_cache.borrow().name(),
         };
-        let mut system = system;
-        let mut context = context;
-        self.gather_context(&mut system, &mut context);
-        let lua_tools = self.gather_lua_tools();
-        let disabled = self.inner.api.access().borrow().disabled().clone();
-        let roots = {
-            let access = self.inner.api.access().borrow();
-            let extra = access.roots().to_vec();
-            if access.confined() {
-                uji_agent::tools::builtin::Roots::confined(extra)
-            } else {
-                uji_agent::tools::builtin::Roots::new(extra)
-            }
-        };
-        let cwd = self.app.session().directory.clone();
-        let sender = self.signals.clone();
-        let cancel = CancelToken::new();
-        self.cancel = Some(cancel.clone());
-        let budget = self.budget();
-        let keep_recent = self.keep_recent();
-        let effort = *self.inner.llm_effort.borrow();
-        let cache = *self.inner.llm_cache.borrow();
-        let max_output = self.max_output();
         {
             let state_rc = self.inner.state();
             let mut state = state_rc.borrow_mut();
@@ -79,73 +68,45 @@ impl LoopData {
             state.set_turn_started(Some(Instant::now()));
         }
         self.inner.emit(events::Event::StatusChanged.name(), &[]);
-        self.runtime.spawn(async move {
-            let mut tools = uji_agent::tools::builtin_registry(roots);
-            tools.disable(&disabled);
-            let config = AgentConfig {
-                client: &client,
-                provider: provider.as_ref(),
-                model,
-                system: Some(system),
-                tools: &tools,
-                lua_tools: &lua_tools,
-                cwd: std::path::Path::new(&cwd),
-                cancel,
-                budget,
-                keep_recent,
-                effort,
-                max_output,
-                cache,
-            };
-            let mut on_event = |event: StreamEvent| {
-                let _ = sender.send(Signal::Llm(event));
-            };
-            run_agent(&config, context, &mut on_event).await;
-        });
+        match self.start_turn(&turn) {
+            Ok(cancel) => self.turn = Some(cancel),
+            Err(err) => {
+                self.fail_assistant(&format!("{LOOP}: {err}"));
+                self.stop_working();
+            }
+        }
+    }
+
+    fn start_turn(&self, turn: &Turn<'_>) -> mlua::Result<Function> {
+        let options = SerializeOptions::new()
+            .serialize_none_to_null(false)
+            .serialize_unit_to_null(false);
+        let turn = self.inner.lua.to_value_with(turn, options)?;
+        self.inner
+            .require::<Table>(LOOP)?
+            .get::<Function>("start")?
+            .call(turn)
     }
 
     pub(crate) fn interrupt(&mut self) -> bool {
         if self.cancel_shell() {
             return true;
         }
-        let Some(cancel) = self.cancel.take() else {
+        let Some(turn) = self.turn.take() else {
             return false;
         };
-        cancel.cancel();
+        if let Err(err) = turn.call::<()>(()) {
+            self.inner.report(format!("{LOOP}: {err}"));
+        }
         self.dirty = true;
         true
     }
 
-    fn gather_context(&self, system: &mut String, messages: &mut Vec<Message>) {
-        for (name, call) in self.inner.api.agent_context().borrow().calls() {
-            let (text, at_turn) = match call.call::<LuaValue>(()) {
-                Ok(LuaValue::String(text)) => (text.to_string_lossy(), false),
-                Ok(LuaValue::Table(table)) => {
-                    let text = table.get::<Option<String>>("text").unwrap_or_default();
-                    let at = table.get::<Option<String>>("at").unwrap_or_default();
-                    (text.unwrap_or_default(), at.as_deref() == Some("turn"))
-                }
-                Ok(_) => continue,
-                Err(err) => {
-                    self.inner.report(format!("agent context {name}: {err}"));
-                    continue;
-                }
-            };
-            if text.trim().is_empty() {
-                continue;
-            }
-            if at_turn {
-                messages.push(Message::User { text });
-            } else {
-                system.push_str("\n\n");
-                system.push_str(&text);
-            }
-        }
-    }
-
     pub(super) fn stop_working(&mut self) {
-        self.cancel = None;
-        self.awaiting = None;
+        self.turn = None;
+        if let Some(awaiting) = self.awaiting.take() {
+            self.release(awaiting);
+        }
         {
             let state_rc = self.inner.state();
             let mut state = state_rc.borrow_mut();

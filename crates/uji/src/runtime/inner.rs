@@ -1,10 +1,10 @@
 use std::cell::RefCell;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::api::Api;
-use mlua::Lua as LuaState;
+use mlua::{FromLuaMulti, Function, Lua as LuaState, LuaSerdeExt, Value as LuaValue};
 use uji_agent::session::conversation::Shared;
 use uji_ui::state::UiState;
 
@@ -12,13 +12,21 @@ use super::events;
 use super::policy;
 use crate::pack;
 use std::collections::BTreeSet;
-use uji_agent::config::{self, DEFAULT_LUA};
-use uji_agent::llm::{Llm, NotConfigured};
+use uji_agent::config;
+use uji_agent::llm::{Catalog, Dispatch, Llm, NotConfigured, Provider};
 use uji_agent::session::store::SessionStorage;
 
 use uji_agent::tools::policy::ToolPolicy;
 
 use super::loader;
+
+const DEFAULTS: &str = "uji.defaults";
+
+const TOOLS: &str = "uji.tools";
+
+const WIRES: &str = "uji.wires";
+
+const PROVIDERS: &str = "uji.providers";
 
 pub(crate) struct Inner {
     pub(crate) lua: LuaState,
@@ -30,6 +38,7 @@ pub(crate) struct Inner {
     pub(crate) llm_cache: RefCell<uji_agent::llm::Retention>,
     pub(crate) client: Arc<reqwest::Client>,
     pub(crate) policy: RefCell<ToolPolicy>,
+    pub(crate) dispatch: Dispatch,
 }
 
 impl Inner {
@@ -38,6 +47,7 @@ impl Inner {
         conversation: Shared,
         client: Arc<reqwest::Client>,
         config_dir: Option<PathBuf>,
+        dispatch: Dispatch,
     ) -> Rc<Self> {
         let inner = Rc::new(Self {
             lua: LuaState::new(),
@@ -49,6 +59,7 @@ impl Inner {
             llm_cache: RefCell::default(),
             client,
             policy: RefCell::new(ToolPolicy::default()),
+            dispatch,
         });
 
         let dir = config_dir.or_else(config::config_dir);
@@ -80,6 +91,9 @@ impl Inner {
             .api
             .actions()
             .reserve(uji_ui::app::Action::names().map(ToString::to_string));
+        inner.load(WIRES);
+        inner.load_providers();
+        inner.load(TOOLS);
         inner.run_init();
         inner.source_plugins();
         inner.compile_policy();
@@ -104,11 +118,7 @@ impl Inner {
     }
 
     fn tool_names(&self) -> BTreeSet<String> {
-        ToolPolicy::default()
-            .names()
-            .map(str::to_string)
-            .chain(self.api.lua_tools().borrow().keys().cloned())
-            .collect()
+        self.api.tools().borrow().keys().cloned().collect()
     }
 
     pub(crate) fn state(&self) -> Rc<RefCell<UiState>> {
@@ -140,18 +150,29 @@ impl Inner {
             .borrow()
             .first()
             .and_then(|dir| config::init_path(dir));
-        let (source, name) = match path {
-            Some(path) => match std::fs::read_to_string(&path) {
-                Ok(source) => (source, path.display().to_string()),
-                Err(err) => {
-                    self.report(format!("cannot read {}: {err}", path.display()));
-                    return;
-                }
-            },
-            None => (DEFAULT_LUA.to_owned(), String::from("default.lua")),
-        };
-        if let Err(err) = self.lua.load(&source).set_name(&name).exec() {
-            self.report(format!("{name}: {err}"));
+        match path {
+            Some(path) => self.source(&path),
+            None => self.load(DEFAULTS),
+        }
+    }
+
+    pub(crate) fn require<T: FromLuaMulti>(&self, module: &str) -> mlua::Result<T> {
+        self.lua.globals().get::<Function>("require")?.call(module)
+    }
+
+    fn load_providers(&self) {
+        let builtin = self
+            .require::<LuaValue>(PROVIDERS)
+            .and_then(|value| self.lua.from_value::<Vec<Provider>>(value));
+        match builtin {
+            Ok(builtin) => *self.api.providers().borrow_mut() = Catalog::new(builtin),
+            Err(err) => self.report(format!("{PROVIDERS}: {err}")),
+        }
+    }
+
+    fn load(&self, module: &str) {
+        if let Err(err) = self.require::<()>(module) {
+            self.report(format!("{module}: {err}"));
         }
     }
 
@@ -159,23 +180,27 @@ impl Inner {
         let roots = self.api.packs().borrow().clone();
         for root in roots {
             for path in plugin_files(&root.join(config::PLUGIN_DIR)) {
-                match std::fs::read_to_string(&path) {
-                    Ok(source) => {
-                        let name = path.display().to_string();
-                        if let Err(err) = self.lua.load(&source).set_name(&name).exec() {
-                            self.report(format!("{name}: {err}"));
-                        }
-                    }
-                    Err(err) => self.report(format!("cannot read {}: {err}", path.display())),
+                self.source(&path);
+            }
+        }
+    }
+
+    fn source(&self, path: &Path) {
+        let name = path.display().to_string();
+        match std::fs::read_to_string(path) {
+            Ok(source) => {
+                if let Err(err) = self.lua.load(&source).set_name(&name).exec() {
+                    self.report(format!("{name}: {err}"));
                 }
             }
+            Err(err) => self.report(format!("cannot read {name}: {err}")),
         }
     }
 
     pub(crate) fn resolve_llm(&self, storage: &mut dyn SessionStorage) {
         let selection = {
             let catalog = self.api.providers().borrow();
-            uji_agent::llm::resolve_from_storage(storage, &catalog)
+            uji_agent::llm::resolve_from_storage(storage, &catalog, &self.dispatch)
         };
         *self.llm.borrow_mut() = selection.llm;
         self.llm_model.borrow_mut().clone_from(&selection.model);
@@ -212,7 +237,7 @@ impl Inner {
     }
 }
 
-fn plugin_files(dir: &std::path::Path) -> Vec<PathBuf> {
+fn plugin_files(dir: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
     };

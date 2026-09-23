@@ -1,3 +1,5 @@
+use uji_agent::session::model::Message;
+
 use super::LoopData;
 use crate::runtime::events;
 
@@ -6,6 +8,16 @@ impl LoopData {
         self.queued.push_back(text.to_string());
         self.sync_queue();
         self.dirty = true;
+    }
+
+    pub(super) fn steer(&mut self, id: u64) {
+        let next = self.queued.pop_front();
+        if let Some(text) = next.clone() {
+            self.app.take_pending();
+            self.append(Message::User { text });
+            self.sync_queue();
+        }
+        self.answer(id, next);
     }
 
     pub(super) fn sync_queue(&mut self) {

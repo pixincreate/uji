@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use mlua::{Table, Value as LuaValue};
 use uji_ui::model::{Border, Color, Extent, Float, Size, Split, WinOpts};
 
@@ -88,4 +90,14 @@ fn extent(table: &Table, key: &str) -> mlua::Result<Extent> {
             "float {key} must be a percent string or a cell count"
         ))),
     }
+}
+
+pub(crate) fn seconds(table: &Table, key: &str) -> mlua::Result<Option<Duration>> {
+    table
+        .get::<Option<f64>>(key)?
+        .map(|secs| {
+            Duration::try_from_secs_f64(secs)
+                .map_err(|_| mlua::Error::runtime(format!("{key} must be a number of seconds")))
+        })
+        .transpose()
 }

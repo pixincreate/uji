@@ -124,10 +124,6 @@ impl UiState {
         self.opts.show_thinking
     }
 
-    pub fn set_agent_system_prompt(&mut self, prompt: Option<String>) {
-        self.opts.agent_system_prompt = prompt;
-    }
-
     pub fn set_confirm(&mut self, config: &ConfirmConfig) {
         let mut confirm = ConfirmOpts::default();
         overlay(&mut confirm.title, config.title.clone());
@@ -184,9 +180,6 @@ impl UiState {
         }
         if let Some(max_height) = config.suggest.max_height {
             self.set_suggest_max_height(max_height);
-        }
-        if let Some(prompt) = config.agent.system_prompt.as_deref() {
-            self.set_agent_system_prompt(Some(prompt.to_string()));
         }
         self.set_confirm(&config.confirm);
         if let Some(loader) = &config.waiting.loader {

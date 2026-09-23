@@ -36,7 +36,6 @@ pub struct UiConfig {
     pub input: InputConfig,
     pub suggest: SuggestConfig,
     pub waiting: WaitingConfig,
-    pub agent: AgentSettings,
     pub confirm: ConfirmConfig,
 }
 
@@ -49,11 +48,6 @@ pub struct ConfirmConfig {
     pub unselected: Option<String>,
     pub title_color: Option<String>,
     pub body_color: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize, Default)]
-pub struct AgentSettings {
-    pub system_prompt: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]

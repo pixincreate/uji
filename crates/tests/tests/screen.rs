@@ -161,3 +161,23 @@ fn a_long_message_wraps_to_the_width() {
         "a row should never run past the width"
     );
 }
+
+#[test]
+fn a_tall_confirm_keeps_its_choices_on_screen_and_scrolls_its_body() {
+    let mut app = windowed();
+    let body = (1..=200)
+        .map(|n| format!("content line {n}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    app.open_confirm(String::from("Write big.txt?"), body);
+    let top = screen(&app, 60, 20);
+    assert!(top.contains("content line 1 "));
+    assert!(top.contains("of 200, scroll for more"));
+    assert!(top.contains("1. Yes, proceed"));
+    assert!(top.contains("2. No, and tell uji"));
+    app.handle_key(Chord::plain(Key::End));
+    let bottom = screen(&app, 60, 20);
+    assert!(bottom.contains("content line 200"));
+    assert!(!bottom.contains("content line 1 "));
+    assert!(bottom.contains("1. Yes, proceed"));
+}

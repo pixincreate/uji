@@ -4,12 +4,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::api::modal::{Answer, ModalKind, ModalRequest};
-use mlua::Value as LuaValue;
-use uji_agent::llm::{CancelToken, StreamEvent};
+use uji_agent::llm::CancelToken;
 use uji_ui::model::RunState;
 
 use uji_ui::app::Echo;
 
+use super::events::Reported;
 use super::{Control, LoopData, ModalInput};
 use crate::api::request::Request;
 use crate::cmd::LuaAction;
@@ -38,6 +38,7 @@ impl LoopData {
     ) -> std::io::Result<()> {
         self.apply_composer();
         self.drain_requests();
+        self.reap_calls();
         self.sync_picker();
         self.drain_diagnostics();
 
@@ -74,13 +75,13 @@ impl LoopData {
 
     pub(super) fn release_deferred(&mut self) {
         while let Some(next) = self.deferred.front() {
-            if self.app.revealing() && !matches!(next, StreamEvent::Delta(_)) {
+            if self.app.revealing() && !next.event.is_delta() {
                 return;
             }
-            let Some(event) = self.deferred.pop_front() else {
+            let Some(reported) = self.deferred.pop_front() else {
                 return;
             };
-            self.apply_llm_event(event);
+            self.apply_report(reported);
         }
     }
 
@@ -99,10 +100,6 @@ impl LoopData {
     pub(crate) fn on_job_event(&mut self, event: &JobEvent) {
         let exited = matches!(event, JobEvent::Exit { .. });
         let id = event.id();
-        let arg = match event {
-            JobEvent::Stdout { line, .. } | JobEvent::Stderr { line, .. } => self.lua_text(line),
-            JobEvent::Exit { code, .. } => LuaValue::Integer(i64::from(*code)),
-        };
         let callback = {
             let jobs = self.inner.api.jobs();
             let jobs = jobs.borrow();
@@ -113,7 +110,9 @@ impl LoopData {
             })
         };
         if let Some(callback) = callback
-            && let Err(err) = callback.call::<()>((arg,))
+            && let Err(err) = event
+                .args(&self.inner.lua)
+                .and_then(|args| callback.call::<()>(args))
         {
             self.inner.report(format!("job {id}: {err}"));
         }
@@ -133,33 +132,69 @@ impl LoopData {
 
     /// Carry out what plugins asked for, in the order they asked.
     fn drain_requests(&mut self) {
-        for request in self.inner.api.take_requests() {
-            match request {
-                Request::Submit(text) => self.submit(&text),
-                Request::SetTitle(title) => self.set_title(title),
-                Request::Interrupt => {
-                    self.interrupt();
-                }
-                Request::Answer(answer) => {
-                    let input = match answer {
-                        Answer::Select(Some(item)) => ModalInput::Select(item),
-                        Answer::Prompt(Some(value)) => ModalInput::Prompt(value),
-                        Answer::Select(None) | Answer::Prompt(None) => ModalInput::Cancel,
-                    };
-                    self.on_modal_answer(input);
-                }
-                Request::Modal(request) => self.open_modal(*request),
-                Request::Exec(command) => self.exec(&command),
-                Request::ToolResult(text) => self.finish_lua_tool(text),
-                Request::JobStart { id, command, cwd } => self.start_job(id, command, cwd),
-                Request::JobStop(id) => self.inner.api.jobs().borrow().stop(id),
-                Request::JobWrite { id, data } => self.inner.api.jobs().borrow().write(id, data),
-                Request::PickItems { items, token } => {
-                    // Drop results whose query has already been superseded.
-                    if token == self.inner.api.pick().borrow().token() {
-                        self.app.set_pick_items(items);
-                        self.dirty = true;
-                    }
+        loop {
+            let requests = self.inner.api.take_requests();
+            if requests.is_empty() {
+                return;
+            }
+            for request in requests {
+                self.carry_out(request);
+            }
+        }
+    }
+
+    fn carry_out(&mut self, request: Request) {
+        match request {
+            Request::Submit(text) => self.submit(&text),
+            Request::SetTitle(title) => self.set_title(title),
+            Request::Interrupt => {
+                self.interrupt();
+            }
+            Request::Answer(answer) => {
+                let input = match answer {
+                    Answer::Select(Some(item)) => ModalInput::Select(item),
+                    Answer::Prompt(Some(value)) => ModalInput::Prompt(value),
+                    Answer::Select(None) | Answer::Prompt(None) => ModalInput::Cancel,
+                };
+                self.on_modal_answer(input);
+            }
+            Request::Modal(request) => self.open_modal(*request),
+            Request::Exec(command) => self.exec(&command),
+            Request::ToolResult { call, text } => self.finish_tool(call, text),
+            Request::Report { event, on_applied } => {
+                self.on_report(Reported { event, on_applied });
+            }
+            Request::Steer(id) => self.steer(id),
+            Request::Approve {
+                id,
+                name,
+                arguments,
+            } => self.handle_tool_decision(id, &name, arguments),
+            Request::RunTool {
+                id,
+                name,
+                arguments,
+            } => self.run_tool(id, name, arguments),
+            Request::Stop(id) => self.stop_pending(id),
+            Request::Compact { id, messages } => self.start_compact(id, messages),
+            Request::Route(id) => self.start_route(id),
+            Request::Defer { id, after } => self.start_defer(id, after),
+            Request::ToolProgress { call, line } => self.tool_progress(call, line),
+            Request::JobStart {
+                id,
+                command,
+                cwd,
+                timeout,
+            } => self.start_job(id, command, cwd, timeout),
+            Request::JobStop(id) => self.inner.api.jobs().borrow().stop(id),
+            Request::JobWrite { id, data } => self.inner.api.jobs().borrow().write(id, data),
+            Request::Fetch { id, fetch } => self.start_fetch(id, *fetch),
+            Request::Fs { id, op } => self.start_fs(id, op),
+            Request::PickItems { items, token } => {
+                // Drop results whose query has already been superseded.
+                if token == self.inner.api.pick().borrow().token() {
+                    self.app.set_pick_items(items);
+                    self.dirty = true;
                 }
             }
         }
@@ -209,7 +244,13 @@ impl LoopData {
         }
     }
 
-    fn start_job(&mut self, id: u64, command: Vec<String>, cwd: Option<PathBuf>) {
+    fn start_job(
+        &mut self,
+        id: u64,
+        command: Vec<String>,
+        cwd: Option<PathBuf>,
+        timeout: Option<Duration>,
+    ) {
         let cancel = CancelToken::new();
         let (stdin, writes) = tokio::sync::mpsc::unbounded_channel();
         self.inner
@@ -218,10 +259,17 @@ impl LoopData {
             .borrow_mut()
             .attach(id, cancel.clone(), stdin);
         let sender = self.signals.clone();
-        self.runtime
-            .spawn(job::run(id, command, cwd, cancel, writes, move |event| {
+        self.runtime.spawn(job::run(
+            id,
+            command,
+            cwd,
+            timeout,
+            cancel,
+            writes,
+            move |event| {
                 let _ = sender.send(Signal::Job(event));
-            }));
+            },
+        ));
     }
 
     fn perform_reload(&mut self) {
@@ -230,19 +278,19 @@ impl LoopData {
         state.borrow_mut().clear();
         let client = Arc::clone(&self.inner.client);
         let conversation = Rc::clone(self.app.conversation());
-        self.inner = Inner::boot(state, conversation, client, self.config_dir.clone());
+        let dispatch = Arc::clone(&self.inner.dispatch);
+        self.inner = Inner::boot(
+            state,
+            conversation,
+            client,
+            self.config_dir.clone(),
+            dispatch,
+        );
         self.inner.resolve_llm(&mut *self.storage);
         self.discover_model_windows();
         self.refresh_suggestions();
         self.drain_diagnostics();
         self.inner.emit(events::Event::StatusChanged.name(), &[]);
         self.dirty = true;
-    }
-
-    fn lua_text(&self, text: &str) -> LuaValue {
-        self.inner
-            .lua
-            .create_string(text)
-            .map_or(LuaValue::Nil, LuaValue::String)
     }
 }

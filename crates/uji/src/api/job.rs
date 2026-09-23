@@ -7,6 +7,7 @@ use uji_agent::llm::CancelToken;
 
 use crate::api::Api;
 use crate::api::bind::bind;
+use crate::api::convert::seconds;
 use crate::api::request::Request;
 
 #[derive(Default)]
@@ -103,13 +104,19 @@ pub(crate) fn start(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(lua, api, move |api, _, opts: Table| {
         let command = command_from(&opts.get::<Value>("cmd")?)?;
         let cwd = opts.get::<Option<String>>("cwd")?.map(PathBuf::from);
+        let timeout = seconds(&opts, "timeout")?;
         let handlers = JobHandlers {
             on_stdout: opts.get("on_stdout")?,
             on_stderr: opts.get("on_stderr")?,
             on_exit: opts.get("on_exit")?,
         };
         let id = api.jobs().borrow_mut().open(handlers);
-        api.request(Request::JobStart { id, command, cwd });
+        api.request(Request::JobStart {
+            id,
+            command,
+            cwd,
+            timeout,
+        });
         Ok(id)
     })
 }

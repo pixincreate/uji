@@ -14,7 +14,7 @@ The visual character is a precise workshop print: solid geometry, engraved grain
 
 - [The agent crate](../../crates/agent/src/lib.rs) is independent of the terminal and Lua, so it can be embedded on its own.
 - [The Lua API](../../crates/uji/src/api/mod.rs) exposes windows, commands, tools, events, providers and keybindings.
-- [The default configuration](../../crates/agent/config/default.lua) constructs the terminal layout and defines behavior in Lua.
+- [The default configuration](../../crates/uji/runtime/lua/uji/defaults.lua) constructs the terminal layout and defines behavior in Lua.
 
 Those are the features the identity should communicate. Use real configuration examples beside the artwork.
 

@@ -1,36 +1,54 @@
-use uji_agent::llm::StreamEvent;
-use uji_agent::session::model::Message;
+use mlua::Function;
+use uji_agent::llm::Delta;
 
-use super::{Awaiting, LoopData, ToolOutcome};
+use super::LoopData;
+use crate::api::agent::Report;
 use crate::runtime::events;
 
+pub(crate) struct Reported {
+    pub(crate) event: Report,
+    pub(crate) on_applied: Option<Function>,
+}
+
 impl LoopData {
-    pub(crate) fn on_llm_event(&mut self, event: StreamEvent) {
+    pub(crate) fn on_report(&mut self, reported: Reported) {
         if matches!(
-            event,
-            StreamEvent::Cancelled | StreamEvent::Failed(_) | StreamEvent::Restarted { .. }
+            reported.event,
+            Report::Cancelled | Report::Failed { .. } | Report::Restarted { .. }
         ) {
             self.app.reveal_all();
             self.release_deferred();
-            self.apply_llm_event(event);
+            self.apply_report(reported);
             return;
         }
-        let waiting = self.app.revealing() && !matches!(event, StreamEvent::Delta(_));
+        let waiting = self.app.revealing() && !reported.event.is_delta();
         if waiting || !self.deferred.is_empty() {
-            self.deferred.push_back(event);
+            self.deferred.push_back(reported);
             return;
         }
-        self.apply_llm_event(event);
+        self.apply_report(reported);
     }
 
-    pub(super) fn apply_llm_event(&mut self, event: StreamEvent) {
+    pub(super) fn apply_report(&mut self, reported: Reported) {
+        self.apply_event(reported.event);
+        if let Some(on_applied) = reported.on_applied
+            && let Err(err) = on_applied.call::<()>(())
+        {
+            self.inner.report(format!("agent report: {err}"));
+        }
+    }
+
+    fn apply_event(&mut self, event: Report) {
         match event {
-            StreamEvent::Delta(delta) => {
-                self.app.push_delta(delta);
+            Report::Text { text } => {
+                self.app.push_delta(Delta::Text(text));
                 self.dirty = true;
             }
-            StreamEvent::Compacted { summary, usage } => {
-                let _ = summary;
+            Report::Reasoning { text } => {
+                self.app.push_delta(Delta::Reasoning(text));
+                self.dirty = true;
+            }
+            Report::Compacted { usage } => {
                 if let Some(usage) = usage {
                     self.app.conversation().borrow_mut().add_cost(usage);
                 }
@@ -39,26 +57,16 @@ impl LoopData {
                 ));
                 self.dirty = true;
             }
-            StreamEvent::Restarted { attempt, of, wait } => {
+            Report::Restarted { attempt, of, wait } => {
                 self.app.take_pending();
                 self.inner.report(format!(
                     "request failed, retrying in {}s ({attempt}/{of})",
-                    wait.as_secs().max(1)
+                    wait.max(1)
                 ));
                 self.drain_diagnostics();
                 self.dirty = true;
             }
-            StreamEvent::SteerRequest { reply } => {
-                let next = self.queued.pop_front();
-                if let Some(text) = next.clone() {
-                    self.app.take_pending();
-                    self.append(Message::User { text });
-                    self.sync_queue();
-                    self.dirty = true;
-                }
-                let _ = reply.send(next);
-            }
-            StreamEvent::AssistantStep {
+            Report::AssistantStep {
                 text,
                 tool_calls,
                 reasoning_content,
@@ -66,11 +74,7 @@ impl LoopData {
                 self.app.take_pending();
                 self.persist_assistant_step(text, tool_calls, reasoning_content);
             }
-            StreamEvent::ToolProgress { name, chunk, .. } => {
-                self.app.overlay_mut().set_running(Some((name, chunk)));
-                self.dirty = true;
-            }
-            StreamEvent::ToolResult {
+            Report::ToolResult {
                 tool_call_id,
                 name,
                 content,
@@ -78,45 +82,25 @@ impl LoopData {
                 self.app.overlay_mut().set_running(None);
                 self.persist_tool_result(tool_call_id, name, content);
             }
-            StreamEvent::ToolDecisionRequest {
-                tool,
-                subject,
-                reply,
-            } => {
-                self.handle_tool_decision(&tool, &subject, reply);
-            }
-            StreamEvent::RunLuaTool {
-                name,
-                arguments,
-                reply,
-            } => {
-                match self.run_lua_tool(&name, &arguments) {
-                    ToolOutcome::Done(result) => {
-                        let _ = reply.send(result);
-                    }
-                    ToolOutcome::Pending => self.awaiting = Some(Awaiting::Result(reply)),
-                }
-                self.dirty = true;
-            }
-            StreamEvent::Done {
+            Report::Done {
                 text,
                 reasoning_content,
             } => {
                 self.finish_assistant(&text, reasoning_content);
                 self.stop_working();
             }
-            StreamEvent::Usage(usage) => {
+            Report::Usage(usage) => {
                 self.inner.api.session().add_usage(usage);
                 self.inner.emit(events::Event::StatusChanged.name(), &[]);
             }
-            StreamEvent::Cancelled => {
+            Report::Cancelled => {
                 self.app.take_pending();
                 self.fail_assistant("interrupted");
                 self.stop_working();
             }
-            StreamEvent::Failed(err) => {
+            Report::Failed { message } => {
                 self.app.take_pending();
-                self.fail_assistant(&err);
+                self.fail_assistant(&message);
                 self.stop_working();
             }
         }

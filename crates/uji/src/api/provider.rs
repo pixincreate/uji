@@ -46,8 +46,32 @@ pub fn list(lua: &Lua, api: &Rc<Api>) -> mlua::Result<mlua::Function> {
     })
 }
 
+pub fn wire(lua: &Lua, api: &Rc<Api>) -> mlua::Result<mlua::Function> {
+    bind(lua, api, move |api, _, (name, spec): (String, Table)| {
+        let stream = spec.get::<mlua::Function>("stream")?;
+        api.wires().borrow_mut().insert(name, stream);
+        Ok(())
+    })
+}
+
+pub fn stream(lua: &Lua, api: &Rc<Api>) -> mlua::Result<mlua::Function> {
+    bind(
+        lua,
+        api,
+        move |api, _, (wire, request, reply): (String, Table, Table)| {
+            let stream =
+                api.wires().borrow().get(&wire).cloned().ok_or_else(|| {
+                    mlua::Error::runtime(format!("no wire is registered as {wire}"))
+                })?;
+            stream.call::<LuaValue>((request, reply))
+        },
+    )
+}
+
 pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     let provider = lua.create_table()?;
+    provider.set("stream", stream(lua, api)?)?;
+    provider.set("wire", wire(lua, api)?)?;
     provider.set("add", add(lua, api)?)?;
     provider.set("remove", remove(lua, api)?)?;
     provider.set("list", list(lua, api)?)?;

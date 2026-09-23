@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use mlua::serde::SerializeOptions;
 use mlua::{Function, Lua, LuaSerdeExt, Table, Value};
 
 use crate::api::Api;
@@ -12,11 +13,23 @@ pub(crate) fn encode(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 }
 
 pub(crate) fn decode(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    bind(lua, api, move |_, lua, text: String| {
-        let value: serde_json::Value =
-            serde_json::from_str(&text).map_err(mlua::Error::external)?;
-        lua.to_value(&value)
-    })
+    bind(
+        lua,
+        api,
+        move |_, lua, (text, opts): (String, Option<Table>)| {
+            let value: serde_json::Value =
+                serde_json::from_str(&text).map_err(mlua::Error::external)?;
+            let nulls = opts
+                .map(|opts| opts.get::<Option<bool>>("nulls"))
+                .transpose()?
+                .flatten()
+                .unwrap_or(true);
+            let options = SerializeOptions::new()
+                .serialize_none_to_null(nulls)
+                .serialize_unit_to_null(nulls);
+            lua.to_value_with(&value, options)
+        },
+    )
 }
 
 pub(crate) fn array(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
