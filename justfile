@@ -25,7 +25,7 @@ scan:
 
 # Unit + integration tests.
 test:
-    cargo test --workspace
+    cargo nextest run --workspace
 
 # Everything CI would run.
 check: fmt lint test

@@ -3,4 +3,4 @@ set -e
 
 cargo fmt --all --check
 just lint
-cargo test --workspace
+just test
