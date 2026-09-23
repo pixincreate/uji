@@ -286,8 +286,6 @@ fn tool_verb(name: &str) -> &'static str {
         "read_file" => "Read",
         "edit_file" => "Edited",
         "write_file" => "Wrote",
-        "list_dir" => "Listed",
-        "grep" => "Searched",
         "run_command" => "Ran",
         _ => "Called",
     }
@@ -302,7 +300,6 @@ fn tool_detail(name: &str, arguments: &str) -> String {
     };
     let detail = match name {
         "run_command" => field("command"),
-        "grep" => field("pattern"),
         _ => field("path"),
     };
     detail.unwrap_or_else(|| arguments.chars().take(200).collect())

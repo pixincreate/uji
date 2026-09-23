@@ -46,13 +46,9 @@ pub fn describe(name: &str, arguments: &str) -> Prompt {
             "Would you like to write the following file?".to_string(),
             format!("Destination: {}", text(&map, "path")),
         ),
-        "read_file" | "list_dir" => (
+        "read_file" => (
             format!("Would you like to allow uji to `{name}`?"),
             format!("Path: {}", text(&map, "path")),
-        ),
-        "grep" => (
-            "Would you like to allow uji to search the workspace?".to_string(),
-            format!("Pattern: {}", text(&map, "pattern")),
         ),
         _ => {
             let detail = if map.is_empty() {

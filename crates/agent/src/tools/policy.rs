@@ -73,29 +73,26 @@ pub struct ToolPolicy {
     pub default: Action,
 }
 
+const BUILTIN: [(&str, Action); 4] = [
+    ("read_file", Action::Allow),
+    ("edit_file", Action::Ask),
+    ("write_file", Action::Ask),
+    ("run_command", Action::Ask),
+];
+
 impl Default for ToolPolicy {
     fn default() -> Self {
-        let mut tools = HashMap::new();
-        for name in ["read_file", "list_dir", "grep"] {
-            tools.insert(
-                name.to_string(),
-                ToolRules {
-                    rules: Vec::new(),
-                    default: Action::Allow,
-                },
-            );
-        }
-        for name in ["edit_file", "write_file", "run_command"] {
-            tools.insert(
-                name.to_string(),
-                ToolRules {
-                    rules: Vec::new(),
-                    default: Action::Ask,
-                },
-            );
-        }
         Self {
-            tools,
+            tools: BUILTIN
+                .into_iter()
+                .map(|(name, default)| {
+                    let rules = ToolRules {
+                        default,
+                        ..ToolRules::default()
+                    };
+                    (name.to_string(), rules)
+                })
+                .collect(),
             default: Action::Ask,
         }
     }

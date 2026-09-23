@@ -11,28 +11,15 @@ use serde_json::{Value, json};
 
 use crate::llm::ToolSpec;
 use crate::process;
-use crate::tools::lines;
+use crate::tools::{descriptions, lines};
 
 use super::{Invocation, Tool};
 
 const MAX_READ_LINES: usize = 2_000;
+const MAX_READ_BYTES: usize = 50 * 1024;
 const MAX_LINE_BYTES: usize = 2_000;
 const SNIFF_BYTES: usize = 8_192;
 const MAX_TOOL_OUTPUT: usize = 24_000;
-const MAX_GREP_MATCHES: usize = 200;
-const MAX_LIST_ENTRIES: usize = 1_000;
-const MAX_MATCH_CHARS: usize = 400;
-const MAX_GREP_DEPTH: usize = 12;
-const SKIP_DIRS: &[&str] = &[
-    ".git",
-    "target",
-    "node_modules",
-    "build",
-    "dist",
-    ".venv",
-    "vendor",
-    "__pycache__",
-];
 
 fn schema(props: &Value, required: &[&str]) -> Value {
     json!({
@@ -145,15 +132,6 @@ fn fs_error(action: &str, path: &str, cwd: &Path, err: &std::io::Error) -> Strin
     }
 }
 
-fn cap(text: String, max: usize) -> String {
-    let count = text.chars().count();
-    if count <= max {
-        return text;
-    }
-    let head: String = text.chars().take(max).collect();
-    format!("{head}\n\n[output truncated: showed {max} of {count} characters]")
-}
-
 fn arg(args: &Value, key: &str) -> String {
     args.get(key)
         .and_then(Value::as_str)
@@ -202,21 +180,21 @@ impl Tool for ReadFile {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "read_file".into(),
-            description: "Read a text file and return its contents with 1-based line numbers prefixed as `NNN| `. Read a file before editing it so `edit_file` snippets match exactly. Long files are returned in pages: use `offset` and `limit` to read further. The line numbers are display only - never include them in `edit_file` arguments.".into(),
+            description: descriptions::read_file::TOOL.into(),
             parameters: schema(
                 &json!({
                     "path": {
                         "type": "string",
-                        "description": "Path to the file, absolute or relative to the working directory.",
+                        "description": descriptions::read_file::PATH,
                     },
                     "offset": {
                         "type": "integer",
-                        "description": "1-based line to start at. Defaults to 1.",
+                        "description": descriptions::read_file::OFFSET,
                         "minimum": 1,
                     },
                     "limit": {
                         "type": "integer",
-                        "description": "Maximum number of lines to return. Defaults to 2000.",
+                        "description": descriptions::read_file::LIMIT,
                         "minimum": 1,
                     },
                 }),
@@ -234,7 +212,7 @@ impl Tool for ReadFile {
         let path = required(args, "path")?;
         let target = resolve(cwd, &path, &self.roots)?;
         if target.dir.metadata(&target.rel).is_ok_and(|m| m.is_dir()) {
-            return Err(format!("{path} is a directory; use list_dir"));
+            return Err(format!("{path} is a directory, not a file"));
         }
         let file = target
             .dir
@@ -250,41 +228,21 @@ impl Tool for ReadFile {
         let offset = usize_arg(args, "offset").unwrap_or(1).max(1);
         let limit = usize_arg(args, "limit").unwrap_or(MAX_READ_LINES).max(1);
 
-        let mut out = String::new();
+        let mut page = lines::Page::new(offset, limit, MAX_READ_BYTES);
         let mut line = String::new();
-        let mut total = 0usize;
-        let mut shown = 0usize;
         while let lines::Line::Read { truncated } =
             lines::read(&mut reader, &mut line, MAX_LINE_BYTES)
                 .map_err(|err| fs_error("read", &path, cwd, &err))?
         {
-            if truncated {
-                line.push_str(" …[line truncated]");
-            }
-            total = total.saturating_add(1);
-            if total < offset || shown >= limit {
-                continue;
-            }
-            shown = shown.saturating_add(1);
-            let _ = writeln!(out, "{total:>5}| {line}");
+            page.push(&line, truncated);
         }
-        if total == 0 {
-            return Ok(format!("{path} is empty"));
-        }
-        if offset > total {
-            return Err(format!(
+        match page.total() {
+            0 => Ok(format!("{path} is empty")),
+            total if offset > total => Err(format!(
                 "offset {offset} is past the end of {path} ({total} lines)"
-            ));
+            )),
+            _ => Ok(page.finish()),
         }
-        let last = offset.saturating_add(shown).saturating_sub(1);
-        if last < total {
-            let _ = write!(
-                out,
-                "\n[showed lines {offset}-{last} of {total}; call read_file again with offset {} for more]",
-                last.saturating_add(1)
-            );
-        }
-        Ok(out)
     }
 }
 
@@ -297,24 +255,24 @@ impl Tool for EditFile {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "edit_file".into(),
-            description: "Replace an exact snippet of an existing file, leaving the rest untouched. This is the tool to use for changing code. `old_string` must reproduce the file's current text byte for byte, including indentation and newlines, and must appear exactly once unless `replace_all` is true - include a few surrounding lines to make it unique. Do not include the `NNN| ` line-number prefixes that read_file adds. To delete code, pass an empty `new_string`.".into(),
+            description: descriptions::edit_file::TOOL.into(),
             parameters: schema(
                 &json!({
                     "path": {
                         "type": "string",
-                        "description": "Path to the file to edit, absolute or relative to the working directory.",
+                        "description": descriptions::edit_file::PATH,
                     },
                     "old_string": {
                         "type": "string",
-                        "description": "Exact text to find, copied verbatim from the file.",
+                        "description": descriptions::edit_file::OLD_STRING,
                     },
                     "new_string": {
                         "type": "string",
-                        "description": "Text to put in its place. Empty string deletes the snippet.",
+                        "description": descriptions::edit_file::NEW_STRING,
                     },
                     "replace_all": {
                         "type": "boolean",
-                        "description": "Replace every occurrence instead of requiring exactly one. Defaults to false.",
+                        "description": descriptions::edit_file::REPLACE_ALL,
                     },
                 }),
                 &["path", "old_string", "new_string"],
@@ -383,16 +341,16 @@ impl Tool for WriteFile {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "write_file".into(),
-            description: "Write a file from scratch, creating parent directories as needed. This replaces the entire file, so use it for new files only. To change an existing file use `edit_file` instead - overwriting loses everything you did not include.".into(),
+            description: descriptions::write_file::TOOL.into(),
             parameters: schema(
                 &json!({
                     "path": {
                         "type": "string",
-                        "description": "Path to write, absolute or relative to the working directory.",
+                        "description": descriptions::write_file::PATH,
                     },
                     "content": {
                         "type": "string",
-                        "description": "Complete contents of the file.",
+                        "description": descriptions::write_file::CONTENT,
                     },
                 }),
                 &["path", "content"],
@@ -429,234 +387,6 @@ impl Tool for WriteFile {
     }
 }
 
-pub struct ListDir {
-    pub roots: Roots,
-}
-
-#[async_trait]
-impl Tool for ListDir {
-    fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "list_dir".into(),
-            description: "List the entries of a directory, one per line, marked `dir` or `file`. Use it to orient yourself in an unfamiliar tree. Skips version-control and build directories.".into(),
-            parameters: schema(
-                &json!({
-                    "path": {
-                        "type": "string",
-                        "description": "Directory to list. Defaults to the working directory.",
-                    },
-                }),
-                &[],
-            ),
-        }
-    }
-
-    fn subject(&self, args: &Value) -> String {
-        let path = arg(args, "path");
-        if path.is_empty() {
-            String::from(".")
-        } else {
-            path
-        }
-    }
-
-    async fn run(&self, args: &Value, call: &Invocation<'_>) -> Result<String, String> {
-        let cwd = call.cwd;
-        let path = self.subject(args);
-        let target = resolve(cwd, &path, &self.roots)?;
-        let entries = target
-            .dir
-            .read_dir(&target.rel)
-            .map_err(|err| fs_error("list", &path, cwd, &err))?;
-        let mut rows: Vec<String> = Vec::new();
-        let mut capped = false;
-        for entry in entries.flatten() {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
-            if is_dir && SKIP_DIRS.contains(&name.as_str()) {
-                continue;
-            }
-            if rows.len() >= MAX_LIST_ENTRIES {
-                capped = true;
-                break;
-            }
-            rows.push(format!("{} {name}", if is_dir { "dir " } else { "file" }));
-        }
-        if rows.is_empty() {
-            return Ok(format!("{path} is empty"));
-        }
-        rows.sort();
-        let mut out = rows.join("\n");
-        if capped {
-            let _ = write!(
-                out,
-                "\n\n[stopped at {MAX_LIST_ENTRIES} entries; narrow the path or use grep]"
-            );
-        }
-        Ok(out)
-    }
-}
-
-pub struct Grep {
-    pub roots: Roots,
-}
-
-#[async_trait]
-impl Tool for Grep {
-    fn spec(&self) -> ToolSpec {
-        ToolSpec {
-            name: "grep".into(),
-            description: "Search text files for a regular expression and return matching lines as `path:line: text`. Use it to locate symbols, callers, and definitions before reading whole files. Skips binaries, version-control and build directories. Returns at most 200 matches; narrow the pattern or path if you hit the cap.".into(),
-            parameters: schema(
-                &json!({
-                    "pattern": {
-                        "type": "string",
-                        "description": "Rust regular expression, for example `fn run_agent` or `impl \\w+ for OpenAi`.",
-                    },
-                    "path": {
-                        "type": "string",
-                        "description": "File or directory to search. Defaults to the working directory.",
-                    },
-                    "case_sensitive": {
-                        "type": "boolean",
-                        "description": "Match case exactly. Defaults to true.",
-                    },
-                }),
-                &["pattern"],
-            ),
-        }
-    }
-
-    fn subject(&self, args: &Value) -> String {
-        let path = arg(args, "path");
-        if path.is_empty() {
-            String::from(".")
-        } else {
-            path
-        }
-    }
-
-    async fn run(&self, args: &Value, call: &Invocation<'_>) -> Result<String, String> {
-        let cwd = call.cwd;
-        let pattern = required(args, "pattern")?;
-        let case_sensitive = args
-            .get("case_sensitive")
-            .and_then(Value::as_bool)
-            .unwrap_or(true);
-        let regex = regex::RegexBuilder::new(&pattern)
-            .case_insensitive(!case_sensitive)
-            .build()
-            .map_err(|err| format!("invalid pattern: {err}"))?;
-        let path = self.subject(args);
-        let target = resolve(cwd, &path, &self.roots)?;
-        let mut matches = Vec::new();
-        let whole_root = target.rel == Path::new(".");
-        if target
-            .dir
-            .metadata(&target.rel)
-            .is_ok_and(|meta| meta.is_file())
-        {
-            let label = target.rel.display().to_string();
-            grep_file(&target.dir, &target.rel, &label, &regex, &mut matches);
-        } else {
-            let nested = if whole_root {
-                None
-            } else {
-                Some(
-                    target
-                        .dir
-                        .open_dir(&target.rel)
-                        .map_err(|err| fs_error("search", &path, cwd, &err))?,
-                )
-            };
-            let dir = nested.as_ref().unwrap_or(&target.dir);
-            let prefix = if whole_root {
-                PathBuf::new()
-            } else {
-                target.rel.clone()
-            };
-            walk_grep(dir, &prefix, &regex, 0, &mut matches);
-        }
-        if matches.is_empty() {
-            return Ok(format!("no matches for `{pattern}`"));
-        }
-        let capped = matches.len() >= MAX_GREP_MATCHES;
-        let mut out = matches.join("\n");
-        if capped {
-            let _ = write!(
-                out,
-                "\n\n[stopped at {MAX_GREP_MATCHES} matches; narrow the pattern or path]"
-            );
-        }
-        Ok(cap(out, MAX_TOOL_OUTPUT))
-    }
-}
-
-fn grep_file(dir: &Dir, rel: &Path, label: &str, regex: &regex::Regex, out: &mut Vec<String>) {
-    let Ok(file) = dir.open(rel) else {
-        return;
-    };
-    let mut reader = BufReader::with_capacity(SNIFF_BYTES, file);
-    let Ok(head) = reader.fill_buf() else {
-        return;
-    };
-    if is_probably_binary(head) {
-        return;
-    }
-    let mut line = String::new();
-    let mut index = 0usize;
-    while let Ok(lines::Line::Read { .. }) = lines::read(&mut reader, &mut line, MAX_LINE_BYTES) {
-        index = index.saturating_add(1);
-        if out.len() >= MAX_GREP_MATCHES {
-            return;
-        }
-        if regex.is_match(&line) {
-            let shown: String = line.trim_end().chars().take(MAX_MATCH_CHARS).collect();
-            out.push(format!("{label}:{index}: {shown}"));
-        }
-    }
-}
-
-fn walk_grep(dir: &Dir, prefix: &Path, regex: &regex::Regex, depth: usize, out: &mut Vec<String>) {
-    if depth > MAX_GREP_DEPTH || out.len() >= MAX_GREP_MATCHES {
-        return;
-    }
-    let Ok(entries) = dir.entries() else {
-        return;
-    };
-    let mut items: Vec<(String, bool)> = entries
-        .flatten()
-        .map(|entry| {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            let is_dir = entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
-            (name, is_dir)
-        })
-        .collect();
-    items.sort();
-    for (name, is_dir) in items {
-        if out.len() >= MAX_GREP_MATCHES {
-            return;
-        }
-        let shown = prefix.join(&name);
-        if is_dir {
-            if name.starts_with('.') || SKIP_DIRS.contains(&name.as_str()) {
-                continue;
-            }
-            if let Ok(nested) = dir.open_dir(&name) {
-                walk_grep(&nested, &shown, regex, depth.saturating_add(1), out);
-            }
-        } else {
-            grep_file(
-                dir,
-                Path::new(&name),
-                &shown.display().to_string(),
-                regex,
-                out,
-            );
-        }
-    }
-}
-
 pub struct RunCommand {
     pub roots: Roots,
 }
@@ -666,16 +396,16 @@ impl Tool for RunCommand {
     fn spec(&self) -> ToolSpec {
         ToolSpec {
             name: "run_command".into(),
-            description: "Run a shell command in the working directory and return its combined stdout and stderr, plus the exit code when it is non-zero. Use it to build, test, run linters, and inspect the environment. Prefer `read_file`, `edit_file`, `grep`, and `list_dir` for file work. The command is non-interactive: it cannot prompt, and it is killed at the timeout.".into(),
+            description: descriptions::run_command::TOOL.into(),
             parameters: schema(
                 &json!({
                     "command": {
                         "type": "string",
-                        "description": "Shell command, for example `cargo test -p uji`.",
+                        "description": descriptions::run_command::COMMAND,
                     },
                     "timeout": {
                         "type": "integer",
-                        "description": "Seconds before the command is killed. Defaults to 120.",
+                        "description": descriptions::run_command::TIMEOUT,
                         "minimum": 1,
                     },
                 }),

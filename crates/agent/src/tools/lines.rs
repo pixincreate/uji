@@ -1,4 +1,7 @@
+use std::fmt::Write as _;
 use std::io::BufRead;
+
+const TRUNCATED: &str = " …[line truncated]";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Line {
@@ -32,5 +35,64 @@ pub fn read<R: BufRead>(reader: &mut R, line: &mut String, max: usize) -> std::i
         if ended.is_some() {
             return Ok(Line::Read { truncated });
         }
+    }
+}
+
+pub struct Page {
+    offset: usize,
+    limit: usize,
+    budget: usize,
+    total: usize,
+    shown: usize,
+    full: bool,
+    text: String,
+}
+
+impl Page {
+    pub fn new(offset: usize, limit: usize, budget: usize) -> Self {
+        Self {
+            offset,
+            limit,
+            budget,
+            total: 0,
+            shown: 0,
+            full: false,
+            text: String::new(),
+        }
+    }
+
+    pub fn push(&mut self, line: &str, truncated: bool) {
+        self.total = self.total.saturating_add(1);
+        if self.full || self.total < self.offset {
+            return;
+        }
+        let before = self.text.len();
+        let marker = if truncated { TRUNCATED } else { "" };
+        let _ = writeln!(self.text, "{:>5}| {line}{marker}", self.total);
+        if self.shown > 0 && self.text.len() > self.budget {
+            self.text.truncate(before);
+            self.full = true;
+            return;
+        }
+        self.shown = self.shown.saturating_add(1);
+        self.full = self.shown >= self.limit;
+    }
+
+    pub fn total(&self) -> usize {
+        self.total
+    }
+
+    pub fn finish(mut self) -> String {
+        let last = self.offset.saturating_add(self.shown).saturating_sub(1);
+        if last < self.total {
+            let _ = write!(
+                self.text,
+                "\n[showed lines {}-{last} of {}; continue with offset {}]",
+                self.offset,
+                self.total,
+                last.saturating_add(1)
+            );
+        }
+        self.text
     }
 }
