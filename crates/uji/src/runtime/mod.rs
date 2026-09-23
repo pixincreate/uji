@@ -15,6 +15,7 @@ mod policy;
 mod renderer;
 mod reply;
 mod signal;
+mod work;
 
 pub use error::RuntimeError;
 pub use frontend::{Frontend, Terminal};
@@ -22,7 +23,6 @@ pub(crate) use inner::Inner;
 pub(crate) use loop_data::{Control, LoopData};
 
 use std::cell::RefCell;
-use std::collections::VecDeque;
 use std::io;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -38,12 +38,12 @@ use uji_agent::session::conversation::{Conversation, Shared};
 use uji_agent::session::model::Session;
 use uji_agent::session::store::SessionStorage;
 use uji_ui::app::App;
+use work::Work;
 
 pub struct Runtime {
     inner: Rc<Inner>,
     loop_handle: LoopHandle<'static, LoopData>,
     event_loop: EventLoop<'static, LoopData>,
-    config_dir: Option<PathBuf>,
     conversation: Shared,
     signals: calloop::channel::Sender<Signal>,
     signal_channel: calloop::channel::Channel<Signal>,
@@ -63,7 +63,7 @@ impl Runtime {
             state,
             Rc::clone(&conversation),
             client,
-            config_dir.clone(),
+            config_dir,
             dispatch(signals.clone()),
         );
 
@@ -74,7 +74,6 @@ impl Runtime {
             inner,
             loop_handle,
             event_loop,
-            config_dir,
             conversation,
             signals,
             signal_channel,
@@ -111,7 +110,6 @@ impl Runtime {
             inner,
             loop_handle,
             mut event_loop,
-            config_dir,
             conversation,
             signals,
             signal_channel,
@@ -126,28 +124,8 @@ impl Runtime {
         let mut frontend: Box<dyn Frontend> = Box::new(frontend);
         frontend.start(keys)?;
 
-        let mut data = LoopData {
-            inner,
-            app,
-            storage,
-            frontend,
-            dirty: false,
-            control: Control::Run,
-            signals,
-            active: None,
-            modal: None,
-            action_done: false,
-            awaiting: None,
-            turn: None,
-            calls: Vec::new(),
-            queued: VecDeque::new(),
-            live_query: loop_data::LiveQuery::default(),
-            shell: None,
-            deferred: VecDeque::new(),
-            last_reveal: std::time::Instant::now(),
-            config_dir,
-            runtime: tokio::runtime::Runtime::new()?,
-        };
+        let work = Work::new(tokio::runtime::Runtime::new()?, signals);
+        let mut data = LoopData::new(inner, app, storage, frontend, work);
 
         data.bootstrap()?;
 

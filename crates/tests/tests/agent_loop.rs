@@ -293,3 +293,37 @@ fn a_stream_that_only_sends_keepalives_is_given_up_and_retried() {
     .unwrap();
     assert!(server.turns().len() >= 2);
 }
+
+#[test]
+fn a_message_that_waits_for_compaction_is_sent_once_it_is_done() {
+    let server = serve(|_| text("done")).unwrap();
+    let sandbox = Sandbox::new("loop").unwrap();
+    for turn in 0..6 {
+        sandbox.remember(Message::User {
+            text: format!("question {turn}"),
+        });
+        sandbox.remember(Message::Assistant {
+            text: "answer ".repeat(400),
+            tool_calls: Vec::new(),
+            reasoning_content: None,
+        });
+    }
+    sandbox
+        .config(&format!("{}\n{SUBMIT}", provider(&server.url, 4_000)))
+        .unwrap();
+    let messages = sandbox
+        .run(Until::TurnFinished, &[], Duration::from_secs(20))
+        .unwrap();
+    assert!(
+        server
+            .requests()
+            .iter()
+            .any(|request| request.system().starts_with("You compact coding sessions"))
+    );
+    let turns = server.turns();
+    assert_eq!(turns.len(), 1);
+    let sent = &turns[0].body["messages"];
+    let last = &sent[sent.as_array().unwrap().len() - 1];
+    assert_eq!(last["content"], "go");
+    assert_eq!(last_answer(&messages), Some("done"));
+}

@@ -39,6 +39,7 @@ pub(crate) struct Inner {
     pub(crate) client: Arc<reqwest::Client>,
     pub(crate) policy: RefCell<ToolPolicy>,
     pub(crate) dispatch: Dispatch,
+    pub(crate) config_dir: Option<PathBuf>,
 }
 
 impl Inner {
@@ -60,6 +61,7 @@ impl Inner {
             client,
             policy: RefCell::new(ToolPolicy::default()),
             dispatch,
+            config_dir: config_dir.clone(),
         });
 
         let dir = config_dir.or_else(config::config_dir);

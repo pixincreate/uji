@@ -34,24 +34,21 @@ impl IntoLua for Folded {
 impl LoopData {
     pub(super) fn start_fetch(&self, id: u64, fetch: Fetch) {
         let client = Arc::clone(&self.inner.client);
-        let sender = self.signals.clone();
-        self.runtime.spawn(async move {
-            let lines = sender.clone();
+        self.work.stream(|signals| async move {
+            let lines = signals.clone();
             let on_line = move |line| {
                 let _ = lines.send(Signal::Line { id, line });
             };
             let result = http::fetch(&client, fetch, on_line).await;
-            let _ = sender.send(Signal::Reply(Reply::new(id, result)));
+            let _ = signals.send(Signal::Reply(Reply::new(id, result)));
         });
     }
 
     pub(super) fn start_fs(&self, id: u64, op: FsOp) {
         let cwd = PathBuf::from(&self.app.session().directory);
         let files = self.inner.api.access().borrow().files(cwd);
-        let sender = self.signals.clone();
-        self.runtime.spawn_blocking(move || {
-            let _ = sender.send(Signal::Reply(fs::run(id, op, &files)));
-        });
+        self.work
+            .spawn_blocking(move || Signal::Reply(fs::run(id, op, &files)));
     }
 
     pub(super) fn on_line(&mut self, id: u64, line: &str) {
@@ -69,18 +66,16 @@ impl LoopData {
     pub(super) fn start_route(&self, id: u64) {
         let llm = self.inner.llm.borrow().clone();
         let client = Arc::clone(&self.inner.client);
-        let sender = self.signals.clone();
-        self.runtime.spawn(async move {
+        self.work.spawn(async move {
             let route = llm.route(&client).await.map(Json);
-            let _ = sender.send(Signal::Reply(Reply::new(id, route)));
+            Signal::Reply(Reply::new(id, route))
         });
     }
 
     pub(super) fn start_defer(&self, id: u64, after: Duration) {
-        let sender = self.signals.clone();
-        self.runtime.spawn(async move {
+        self.work.spawn(async move {
             tokio::time::sleep(after).await;
-            let _ = sender.send(Signal::Reply(Reply::new(id, Ok::<_, Infallible>(true))));
+            Signal::Reply(Reply::new(id, Ok::<_, Infallible>(true)))
         });
     }
 
@@ -93,16 +88,12 @@ impl LoopData {
         let llm = self.inner.llm.borrow().clone();
         let model = self.inner.llm_model.borrow().clone();
         let client = Arc::clone(&self.inner.client);
-        let sender = self.signals.clone();
-        self.runtime.spawn(async move {
+        self.work.spawn(async move {
             let compacted =
                 summary::compact(&client, llm.as_ref(), model, budget, keep_recent, messages)
                     .await
                     .map(Folded);
-            let _ = sender.send(Signal::Reply(Reply::new(
-                id,
-                Ok::<_, Infallible>(compacted),
-            )));
+            Signal::Reply(Reply::new(id, Ok::<_, Infallible>(compacted)))
         });
     }
 

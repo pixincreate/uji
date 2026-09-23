@@ -19,10 +19,10 @@ pub(crate) mod shell;
 pub(crate) mod wires;
 
 use std::collections::VecDeque;
-use std::path::PathBuf;
 use std::rc::Rc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
+use mlua::Function;
 use uji_agent::session::store::SessionStorage;
 use uji_ui::app::App;
 
@@ -30,7 +30,7 @@ use crate::cmd::{Action, LuaAction};
 
 use super::Inner;
 use super::frontend::Frontend;
-use super::signal::Signal;
+use super::work::Work;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Control {
@@ -62,7 +62,7 @@ impl Awaiting {
 pub(crate) struct Running {
     call: u64,
     name: String,
-    cancel: Option<mlua::Function>,
+    cancel: Option<Function>,
 }
 
 enum ToolApproval {
@@ -71,25 +71,99 @@ enum ToolApproval {
     Ask { title: Option<String> },
 }
 
+#[derive(Default)]
+pub(crate) struct Turn {
+    cancel: Option<Function>,
+    awaiting: Option<Awaiting>,
+    queued: VecDeque<String>,
+}
+
+pub(crate) struct Reveal {
+    deferred: VecDeque<events::Reported>,
+    last: Instant,
+}
+
+const FRAME: Duration = Duration::from_millis(16);
+
+impl Default for Reveal {
+    fn default() -> Self {
+        Self {
+            deferred: VecDeque::new(),
+            last: Instant::now(),
+        }
+    }
+}
+
+impl Reveal {
+    fn holding(&self) -> bool {
+        !self.deferred.is_empty()
+    }
+
+    fn hold(&mut self, reported: events::Reported) {
+        self.deferred.push_back(reported);
+    }
+
+    fn release(&mut self, revealing: bool) -> Option<events::Reported> {
+        if revealing && !self.deferred.front()?.event.is_delta() {
+            return None;
+        }
+        self.deferred.pop_front()
+    }
+
+    fn due(&self) -> bool {
+        self.last.elapsed() >= FRAME
+    }
+
+    fn stepped(&mut self) {
+        self.last = Instant::now();
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct Command {
+    active: Option<Box<dyn Action>>,
+    modal: Option<LuaAction>,
+    done: bool,
+}
+
 pub(crate) struct LoopData {
     pub(crate) inner: Rc<Inner>,
     pub(crate) app: App,
     pub(crate) storage: Box<dyn SessionStorage>,
     pub(crate) frontend: Box<dyn Frontend>,
-    pub(crate) dirty: bool,
+    pub(crate) work: Work,
     pub(crate) control: Control,
-    pub(crate) signals: calloop::channel::Sender<Signal>,
-    pub(crate) runtime: tokio::runtime::Runtime,
-    pub(crate) active: Option<Box<dyn Action>>,
-    pub(crate) modal: Option<LuaAction>,
-    pub(crate) action_done: bool,
-    pub(crate) awaiting: Option<Awaiting>,
-    pub(crate) turn: Option<mlua::Function>,
-    pub(crate) calls: Vec<wires::Live>,
-    pub(crate) queued: VecDeque<String>,
-    pub(crate) live_query: LiveQuery,
-    pub(crate) shell: Option<shell::Running>,
-    pub(crate) deferred: VecDeque<events::Reported>,
-    pub(crate) last_reveal: Instant,
-    pub(crate) config_dir: Option<PathBuf>,
+    pub(crate) dirty: bool,
+    turn: Turn,
+    reveal: Reveal,
+    command: Command,
+    calls: Vec<wires::Live>,
+    live_query: LiveQuery,
+    shell: Option<shell::Running>,
+}
+
+impl LoopData {
+    pub(crate) fn new(
+        inner: Rc<Inner>,
+        app: App,
+        storage: Box<dyn SessionStorage>,
+        frontend: Box<dyn Frontend>,
+        work: Work,
+    ) -> Self {
+        Self {
+            inner,
+            app,
+            storage,
+            frontend,
+            work,
+            control: Control::Run,
+            dirty: false,
+            turn: Turn::default(),
+            reveal: Reveal::default(),
+            command: Command::default(),
+            calls: Vec::new(),
+            live_query: LiveQuery::default(),
+            shell: None,
+        }
+    }
 }

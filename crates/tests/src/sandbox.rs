@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::error::Error;
 use std::io;
@@ -99,6 +100,7 @@ impl Frontend for Headless {
 
 pub struct Sandbox {
     root: PathBuf,
+    history: RefCell<Vec<Message>>,
 }
 
 impl Sandbox {
@@ -114,7 +116,10 @@ impl Sandbox {
         ));
         std::fs::create_dir_all(root.join("cfg"))?;
         std::fs::create_dir_all(root.join("work"))?;
-        Ok(Self { root })
+        Ok(Self {
+            root,
+            history: RefCell::default(),
+        })
     }
 
     pub fn root(&self) -> &Path {
@@ -131,6 +136,10 @@ impl Sandbox {
             std::fs::create_dir_all(parent)?;
         }
         std::fs::write(path, content)
+    }
+
+    pub fn remember(&self, message: Message) {
+        self.history.borrow_mut().push(message);
     }
 
     pub fn config(&self, lua: &str) -> io::Result<()> {
@@ -155,6 +164,9 @@ impl Sandbox {
         let mut session = storage.create_session("test")?;
         session.directory = self.work().display().to_string();
         let id = session.id;
+        for message in self.history.take() {
+            storage.append_message(&id, message)?;
+        }
         let (commands, waiting) = mpsc::channel();
         let frontend = Headless {
             commands,

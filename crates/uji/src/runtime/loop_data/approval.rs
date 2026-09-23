@@ -33,6 +33,7 @@ impl IntoLua for Decision {
 impl LoopData {
     pub(super) fn resolve_tool_confirmation(&mut self, allow: bool) {
         let waiting = self
+            .turn
             .awaiting
             .take_if(|awaiting| matches!(awaiting, Awaiting::Approval { .. }));
         if let Some(Awaiting::Approval { id, arguments }) = waiting {
@@ -64,7 +65,7 @@ impl LoopData {
                     .from_value::<serde_json::Value>(LuaValue::Table(arguments.clone()))
                     .unwrap_or_default();
                 let prompt = uji_agent::tools::prompt::describe(name, &shown.to_string());
-                self.awaiting = Some(Awaiting::Approval { id, arguments });
+                self.turn.awaiting = Some(Awaiting::Approval { id, arguments });
                 self.app
                     .open_confirm(title.unwrap_or(prompt.question), prompt.detail);
                 self.dirty = true;
@@ -122,7 +123,7 @@ impl LoopData {
         match self.start_tool(&name, arguments, id) {
             Ok(Started::Done(text)) => self.answer(id, text),
             Ok(Started::Pending(cancel)) => {
-                self.awaiting = Some(Awaiting::Result(Running {
+                self.turn.awaiting = Some(Awaiting::Result(Running {
                     call: id,
                     name,
                     cancel,
@@ -154,7 +155,7 @@ impl LoopData {
     }
 
     pub(super) fn finish_tool(&mut self, call: u64, text: String) {
-        let finished = self.awaiting.take_if(
+        let finished = self.turn.awaiting.take_if(
             |awaiting| matches!(awaiting, Awaiting::Result(running) if running.call == call),
         );
         if finished.is_some() {
@@ -163,7 +164,7 @@ impl LoopData {
     }
 
     pub(super) fn stop_pending(&mut self, id: u64) {
-        if let Some(awaiting) = self.awaiting.take_if(|awaiting| awaiting.id() == id) {
+        if let Some(awaiting) = self.turn.awaiting.take_if(|awaiting| awaiting.id() == id) {
             self.release(awaiting);
         }
     }
@@ -184,7 +185,7 @@ impl LoopData {
     }
 
     pub(super) fn tool_progress(&mut self, call: u64, line: String) {
-        if let Some(Awaiting::Result(running)) = &self.awaiting
+        if let Some(Awaiting::Result(running)) = &self.turn.awaiting
             && running.call == call
         {
             self.app

@@ -80,7 +80,7 @@ impl LoopData {
         }
         self.inner.emit(events::Event::StatusChanged.name(), &[]);
         background::compact(
-            &self.runtime,
+            &self.work,
             background::CompactRequest {
                 client: Arc::clone(&self.inner.client),
                 provider: self.inner.llm.borrow().clone(),
@@ -90,7 +90,6 @@ impl LoopData {
                 carried,
                 cut,
             },
-            self.signals.clone(),
         );
         true
     }
@@ -123,6 +122,7 @@ impl LoopData {
                 .report(String::from("could not compact; sending the full context")),
         }
         self.stop_working();
+        self.send_queued();
         self.drain_diagnostics();
         self.dirty = true;
     }

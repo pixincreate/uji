@@ -31,7 +31,7 @@ impl LoopData {
         let builtin = if forced { None } else { builtin::build(name) };
         if let Some(mut action) = builtin {
             action.start(self, &args);
-            self.active = Some(action);
+            self.command.active = Some(action);
         } else if let Some(command) = lua_command {
             if let Err(err) = command.handler.call::<()>((args.raw.clone(),)) {
                 self.inner.report(format!("{name}: {err}"));
@@ -42,7 +42,7 @@ impl LoopData {
     }
 
     pub(super) fn on_modal(&mut self, input: ModalInput) {
-        let Some(mut modal) = self.modal.take() else {
+        let Some(mut modal) = self.command.modal.take() else {
             return;
         };
         match input {
@@ -53,9 +53,9 @@ impl LoopData {
     }
 
     pub(super) fn on_modal_answer(&mut self, input: ModalInput) {
-        let mut active = self.active.take();
+        let mut active = self.command.active.take();
         if let Some(action) = active.as_mut() {
-            self.action_done = false;
+            self.command.done = false;
             match input {
                 ModalInput::Select(item) => action.on_select(self, item),
                 ModalInput::Prompt(value) => action.on_prompt(self, value),
@@ -63,9 +63,9 @@ impl LoopData {
             }
         }
         if let Some(action) = active
-            && !self.action_done
+            && !self.command.done
         {
-            self.active = Some(action);
+            self.command.active = Some(action);
         }
     }
 }
@@ -171,12 +171,7 @@ impl Context for LoopData {
                 .report(format!("unknown provider: {provider_id}"));
             return;
         };
-        crate::runtime::auth::start(
-            &self.runtime,
-            Arc::clone(&self.inner.client),
-            &provider,
-            self.signals.clone(),
-        );
+        crate::runtime::auth::start(&self.work, Arc::clone(&self.inner.client), &provider);
     }
 
     fn sync_packs(&mut self) {
@@ -192,7 +187,7 @@ impl Context for LoopData {
     }
 
     fn finish(&mut self) {
-        self.action_done = true;
+        self.command.done = true;
     }
 
     fn providers(&self) -> Vec<Provider> {

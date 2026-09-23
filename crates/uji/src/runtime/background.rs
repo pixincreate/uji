@@ -6,6 +6,7 @@ use uji_agent::llm::{Llm, LlmConfig, Provider, Usage, summary, title};
 use uji_agent::session::model::{Message, StoredMessage};
 
 use super::signal::Signal;
+use super::work::Work;
 
 pub(crate) enum CompactEvent {
     Ready {
@@ -27,12 +28,8 @@ pub(crate) struct CompactRequest {
     pub(crate) cut: Cut,
 }
 
-pub(crate) fn compact(
-    runtime: &tokio::runtime::Runtime,
-    request: CompactRequest,
-    sender: calloop::channel::Sender<Signal>,
-) {
-    runtime.spawn(async move {
+pub(crate) fn compact(work: &Work, request: CompactRequest) {
+    work.spawn(async move {
         let refs: Vec<&Message> = request.earlier.iter().map(|entry| &entry.message).collect();
         let mut files = context::files_touched(&refs);
         context::merge_files(&mut files, &request.carried);
@@ -53,7 +50,7 @@ pub(crate) fn compact(
             },
             None => CompactEvent::Failed,
         };
-        let _ = sender.send(Signal::Compacted(event));
+        Signal::Compacted(event)
     });
 }
 
@@ -63,14 +60,13 @@ pub(crate) enum TitleEvent {
 }
 
 pub(crate) fn title(
-    runtime: &tokio::runtime::Runtime,
+    work: &Work,
     client: Arc<reqwest::Client>,
     provider: Arc<Llm>,
     model: String,
     first_message: String,
-    sender: calloop::channel::Sender<Signal>,
 ) {
-    runtime.spawn(async move {
+    work.spawn(async move {
         let event = match title::generate(&client, provider, model, &first_message).await {
             Some(titled) => TitleEvent::Ready {
                 title: titled.title,
@@ -78,7 +74,7 @@ pub(crate) fn title(
             },
             None => TitleEvent::Unavailable,
         };
-        let _ = sender.send(Signal::Title(event));
+        Signal::Title(event)
     });
 }
 
@@ -87,23 +83,17 @@ pub(crate) struct ModelsEvent {
     pub(crate) windows: Vec<Windows>,
 }
 
-pub(crate) fn model_windows(
-    runtime: &tokio::runtime::Runtime,
-    client: &Arc<reqwest::Client>,
-    providers: Vec<Provider>,
-    sender: &calloop::channel::Sender<Signal>,
-) {
+pub(crate) fn model_windows(work: &Work, client: &Arc<reqwest::Client>, providers: Vec<Provider>) {
     for provider in providers {
         let client = Arc::clone(client);
-        let sender = sender.clone();
-        runtime.spawn(async move {
+        work.stream(|signals| async move {
             let key =
                 LlmConfig::for_provider(provider.id.clone(), Some(&provider), String::new(), None)
                     .resolve_key();
             let Some(windows) = discover::windows(&client, &provider, key.as_deref()).await else {
                 return;
             };
-            let _ = sender.send(Signal::Models(ModelsEvent {
+            let _ = signals.send(Signal::Models(ModelsEvent {
                 provider: provider.id,
                 windows,
             }));

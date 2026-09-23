@@ -48,12 +48,11 @@ impl LoopData {
             return;
         }
         background::title(
-            &self.runtime,
+            &self.work,
             Arc::clone(&self.inner.client),
             self.inner.llm.borrow().clone(),
             self.inner.llm_model.borrow().clone(),
             first_message.to_string(),
-            self.signals.clone(),
         );
     }
 
@@ -104,7 +103,7 @@ impl LoopData {
         if registered.is_empty() {
             return;
         }
-        background::model_windows(&self.runtime, &self.inner.client, registered, &self.signals);
+        background::model_windows(&self.work, &self.inner.client, registered);
     }
 
     pub(super) fn on_models(&mut self, event: &ModelsEvent) {

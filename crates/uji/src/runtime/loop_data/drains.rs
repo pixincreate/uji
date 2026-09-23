@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::api::modal::{Answer, ModalKind, ModalRequest};
 use uji_agent::llm::CancelToken;
@@ -10,15 +10,13 @@ use uji_ui::model::RunState;
 use uji_ui::app::Echo;
 
 use super::events::Reported;
-use super::{Control, LoopData, ModalInput};
+use super::{Control, FRAME, LoopData, ModalInput};
 use crate::api::request::Request;
 use crate::cmd::LuaAction;
 use crate::runtime::events;
 use crate::runtime::job::JobEvent;
 use crate::runtime::signal::Signal;
 use crate::runtime::{Inner, job};
-
-const FRAME: Duration = Duration::from_millis(16);
 
 impl LoopData {
     pub(crate) fn bootstrap(&mut self) -> std::io::Result<()> {
@@ -56,9 +54,9 @@ impl LoopData {
             self.perform_reload();
         }
 
-        if self.last_reveal.elapsed() >= FRAME && self.app.reveal_step() {
+        if self.reveal.due() && self.app.reveal_step() {
             self.dirty = true;
-            self.last_reveal = Instant::now();
+            self.reveal.stepped();
         }
         self.release_deferred();
 
@@ -70,17 +68,11 @@ impl LoopData {
     }
 
     pub(crate) fn frame_timeout(&self) -> Option<Duration> {
-        (self.app.revealing() || !self.deferred.is_empty()).then_some(FRAME)
+        (self.app.revealing() || self.reveal.holding()).then_some(FRAME)
     }
 
     pub(super) fn release_deferred(&mut self) {
-        while let Some(next) = self.deferred.front() {
-            if self.app.revealing() && !next.event.is_delta() {
-                return;
-            }
-            let Some(reported) = self.deferred.pop_front() else {
-                return;
-            };
+        while let Some(reported) = self.reveal.release(self.app.revealing()) {
             self.apply_report(reported);
         }
     }
@@ -222,7 +214,7 @@ impl LoopData {
     }
 
     fn open_modal(&mut self, request: ModalRequest) {
-        self.modal = Some(LuaAction::new(request.on_done));
+        self.command.modal = Some(LuaAction::new(request.on_done));
         match request.kind {
             ModalKind::Select { items } => self.app.open_select(request.title, items),
             ModalKind::Pick { items, live } => self.app.open_pick(request.title, items, live),
@@ -258,18 +250,11 @@ impl LoopData {
             .jobs()
             .borrow_mut()
             .attach(id, cancel.clone(), stdin);
-        let sender = self.signals.clone();
-        self.runtime.spawn(job::run(
-            id,
-            command,
-            cwd,
-            timeout,
-            cancel,
-            writes,
-            move |event| {
-                let _ = sender.send(Signal::Job(event));
-            },
-        ));
+        self.work.stream(|signals| {
+            job::run(id, command, cwd, timeout, cancel, writes, move |event| {
+                let _ = signals.send(Signal::Job(event));
+            })
+        });
     }
 
     fn perform_reload(&mut self) {
@@ -283,7 +268,7 @@ impl LoopData {
             state,
             conversation,
             client,
-            self.config_dir.clone(),
+            self.inner.config_dir.clone(),
             dispatch,
         );
         self.inner.resolve_llm(&mut *self.storage);

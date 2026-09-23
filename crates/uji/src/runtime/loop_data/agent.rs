@@ -69,7 +69,7 @@ impl LoopData {
         }
         self.inner.emit(events::Event::StatusChanged.name(), &[]);
         match self.start_turn(&turn) {
-            Ok(cancel) => self.turn = Some(cancel),
+            Ok(cancel) => self.turn.cancel = Some(cancel),
             Err(err) => {
                 self.fail_assistant(&format!("{LOOP}: {err}"));
                 self.stop_working();
@@ -92,7 +92,7 @@ impl LoopData {
         if self.cancel_shell() {
             return true;
         }
-        let Some(turn) = self.turn.take() else {
+        let Some(turn) = self.turn.cancel.take() else {
             return false;
         };
         if let Err(err) = turn.call::<()>(()) {
@@ -103,8 +103,8 @@ impl LoopData {
     }
 
     pub(super) fn stop_working(&mut self) {
-        self.turn = None;
-        if let Some(awaiting) = self.awaiting.take() {
+        self.turn.cancel = None;
+        if let Some(awaiting) = self.turn.awaiting.take() {
             self.release(awaiting);
         }
         {

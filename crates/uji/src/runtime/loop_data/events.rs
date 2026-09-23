@@ -22,8 +22,8 @@ impl LoopData {
             return;
         }
         let waiting = self.app.revealing() && !reported.event.is_delta();
-        if waiting || !self.deferred.is_empty() {
-            self.deferred.push_back(reported);
+        if waiting || self.reveal.holding() {
+            self.reveal.hold(reported);
             return;
         }
         self.apply_report(reported);
@@ -88,6 +88,7 @@ impl LoopData {
             } => {
                 self.finish_assistant(&text, reasoning_content);
                 self.stop_working();
+                self.send_queued();
             }
             Report::Usage(usage) => {
                 self.inner.api.session().add_usage(usage);

@@ -39,18 +39,17 @@ impl LoopData {
             return;
         }
         let cancel = CancelToken::new();
-        let sender = self.signals.clone();
         let argv = vec![shell_program(), String::from("-c"), command.to_string()];
         let cwd = PathBuf::from(&self.app.session().directory);
         let token = cancel.clone();
-        self.runtime.spawn(async move {
+        self.work.stream(|signals| async move {
             let spec = Spec::argv(&argv).in_dir(&cwd);
             let exit = process::stream(spec, &token, |_, line| {
-                let _ = sender.send(Signal::Shell(ShellEvent::Line(line)));
+                let _ = signals.send(Signal::Shell(ShellEvent::Line(line)));
             })
             .await;
             let exit = exit.unwrap_or(Exit::Code(-1));
-            let _ = sender.send(Signal::Shell(ShellEvent::Done(exit)));
+            let _ = signals.send(Signal::Shell(ShellEvent::Done(exit)));
         });
         self.shell = Some(Running {
             command: command.to_string(),
