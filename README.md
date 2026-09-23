@@ -1,6 +1,6 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="design/joinery/readme-header-dark.png">
-  <img src="design/joinery/readme-header-light.png" width="640" alt="uji. A coding agent you can shape with Lua.">
+  <img src="design/joinery/readme-header-light.png" width="640" alt="uji. A small, lightweight, composable coding harness">
 </picture>
 
 God's chosen harness.
