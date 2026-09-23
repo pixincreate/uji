@@ -1,3 +1,4 @@
+local common = require("uji.wires.common")
 local stream = require("uji.wires.stream")
 
 local VERSION = "2023-06-01"
@@ -8,32 +9,31 @@ local function text(value)
     return { type = "text", text = value }
 end
 
-local function translate(request)
-    local system = request.system or ""
-    local messages = {}
-    for _, item in ipairs(request.messages) do
-        if item.type == "user" then
-            messages[#messages + 1] = { role = "user", content = { text(item.text) } }
-        elseif item.type == "assistant" then
-            local blocks = uji.json.array({})
-            if item.text ~= "" then
-                blocks[#blocks + 1] = text(item.text)
-            end
-            for _, call in ipairs(item.tool_calls or {}) do
-                blocks[#blocks + 1] =
-                    { type = "tool_use", id = call.id, name = call.name, input = stream.arguments(call.arguments) }
-            end
-            messages[#messages + 1] = { role = "assistant", content = blocks }
-        elseif item.type == "tool" then
-            messages[#messages + 1] = {
-                role = "user",
-                content = { { type = "tool_result", tool_use_id = item.tool_call_id, content = item.content } },
-            }
-        elseif item.type == "system" then
-            system = system ~= "" and system .. "\n" .. item.text or item.text
+local function tool_use(call)
+    return { type = "tool_use", id = call.id, name = call.name, input = common.arguments(call.arguments) }
+end
+
+local SHAPES = {
+    user = function(item)
+        return { role = "user", content = { text(item.text) } }
+    end,
+    assistant = function(item)
+        local blocks = common.map(item.tool_calls, tool_use)
+        if item.text ~= "" then
+            table.insert(blocks, 1, text(item.text))
         end
-    end
-    return system, messages
+        return { role = "assistant", content = blocks }
+    end,
+    tool = function(item)
+        return {
+            role = "user",
+            content = { { type = "tool_result", tool_use_id = item.tool_call_id, content = item.content } },
+        }
+    end,
+}
+
+local function tool(spec)
+    return { name = spec.name, description = spec.description, input_schema = spec.parameters }
 end
 
 local function cache(body, retention)
@@ -58,20 +58,16 @@ local function cache(body, retention)
 end
 
 local function body(request)
-    local system, messages = translate(request)
-    local tools = {}
-    for _, tool in ipairs(request.tools) do
-        tools[#tools + 1] = { name = tool.name, description = tool.description, input_schema = tool.parameters }
-    end
-    local max_tokens, budget = stream.fit_thinking(request.effort, request.max_output)
+    local system = common.system(request)
+    local max_tokens, budget = common.fit_thinking(request.effort, request.max_output)
     local out = {
         model = request.model,
         max_tokens = max_tokens,
         thinking = budget > 0 and { type = "enabled", budget_tokens = budget } or nil,
         system = system ~= "" and { text(system) } or uji.json.array({}),
-        messages = messages,
+        messages = common.translate(request.messages, SHAPES),
         stream = true,
-        tools = #tools > 0 and tools or nil,
+        tools = common.nonempty(common.map(request.tools, tool)),
     }
     cache(out, request.cache)
     local identity = request.auth.oauth and request.auth.oauth.identity_prompt
@@ -84,7 +80,7 @@ end
 local function headers(auth)
     local out = { ["anthropic-version"] = VERSION }
     if auth.oauth then
-        out.Authorization = "Bearer " .. auth.oauth.token
+        out.Authorization = common.bearer(auth.oauth.token)
         for name, value in pairs(auth.oauth.headers or {}) do
             out[name] = value
         end

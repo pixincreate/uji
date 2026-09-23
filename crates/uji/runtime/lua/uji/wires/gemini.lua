@@ -1,49 +1,46 @@
+local common = require("uji.wires.common")
 local stream = require("uji.wires.stream")
 
 local MAX_TOKENS = "MAX_TOKENS"
 
-local function translate(request)
-    local system = request.system or ""
-    local contents = {}
-    for _, item in ipairs(request.messages) do
-        if item.type == "user" then
-            contents[#contents + 1] = { role = "user", parts = { { text = item.text } } }
-        elseif item.type == "assistant" then
-            local parts = uji.json.array({})
-            if item.text ~= "" then
-                parts[#parts + 1] = { text = item.text }
-            end
-            for _, call in ipairs(item.tool_calls or {}) do
-                parts[#parts + 1] = { functionCall = { name = call.name, args = stream.arguments(call.arguments) } }
-            end
-            contents[#contents + 1] = { role = "model", parts = parts }
-        elseif item.type == "tool" then
-            contents[#contents + 1] = {
-                role = "function",
-                parts = { { functionResponse = { name = item.name, response = { result = item.content } } } },
-            }
-        elseif item.type == "system" then
-            system = system ~= "" and system .. "\n" .. item.text or item.text
+local function call(tool_call)
+    return { functionCall = { name = tool_call.name, args = common.arguments(tool_call.arguments) } }
+end
+
+local SHAPES = {
+    user = function(item)
+        return { role = "user", parts = { { text = item.text } } }
+    end,
+    assistant = function(item)
+        local parts = common.map(item.tool_calls, call)
+        if item.text ~= "" then
+            table.insert(parts, 1, { text = item.text })
         end
-    end
-    return system, contents
+        return { role = "model", parts = parts }
+    end,
+    tool = function(item)
+        return {
+            role = "function",
+            parts = { { functionResponse = { name = item.name, response = { result = item.content } } } },
+        }
+    end,
+}
+
+local function tool(spec)
+    return {
+        functionDeclarations = { { name = spec.name, description = spec.description, parameters = spec.parameters } },
+    }
 end
 
 local function body(request)
-    local system, contents = translate(request)
-    local tools = {}
-    for _, tool in ipairs(request.tools) do
-        tools[#tools + 1] = {
-            functionDeclarations = { { name = tool.name, description = tool.description, parameters = tool.parameters } },
-        }
-    end
-    local _, budget = stream.fit_thinking(request.effort, request.max_output)
+    local system = common.system(request)
+    local _, budget = common.fit_thinking(request.effort, request.max_output)
     return {
         generationConfig = budget > 0 and { thinkingConfig = { thinkingBudget = budget, includeThoughts = true } }
             or nil,
         systemInstruction = system ~= "" and { parts = { { text = system } } } or nil,
-        contents = contents,
-        tools = #tools > 0 and tools or nil,
+        contents = common.translate(request.messages, SHAPES),
+        tools = common.nonempty(common.map(request.tools, tool)),
     }
 end
 
