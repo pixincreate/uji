@@ -4,26 +4,25 @@ mod background;
 mod commands;
 mod compact;
 mod drains;
-pub(crate) mod events;
 mod input;
 mod model;
 mod mouse;
 mod persist;
 mod picker;
 mod prompt;
-
-pub(crate) use picker::LiveQuery;
 mod queue;
 mod replies;
+pub(crate) mod reports;
 pub(crate) mod shell;
 pub(crate) mod wires;
 
+pub(crate) use picker::LiveQuery;
+
 use std::collections::VecDeque;
-use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use mlua::Function;
-use uji_agent::session::store::SessionStorage;
+use uji_core::session::store::SessionStorage;
 use uji_ui::app::App;
 
 use crate::cmd::{Action, LuaAction};
@@ -79,7 +78,7 @@ pub(crate) struct Turn {
 }
 
 pub(crate) struct Reveal {
-    deferred: VecDeque<events::Reported>,
+    deferred: VecDeque<reports::Reported>,
     last: Instant,
 }
 
@@ -99,11 +98,11 @@ impl Reveal {
         !self.deferred.is_empty()
     }
 
-    fn hold(&mut self, reported: events::Reported) {
+    fn hold(&mut self, reported: reports::Reported) {
         self.deferred.push_back(reported);
     }
 
-    fn release(&mut self, revealing: bool) -> Option<events::Reported> {
+    fn release(&mut self, revealing: bool) -> Option<reports::Reported> {
         if revealing && !self.deferred.front()?.event.is_delta() {
             return None;
         }
@@ -127,7 +126,7 @@ pub(crate) struct Command {
 }
 
 pub(crate) struct LoopData {
-    pub(crate) inner: Rc<Inner>,
+    pub(crate) inner: Inner,
     pub(crate) app: App,
     pub(crate) storage: Box<dyn SessionStorage>,
     pub(crate) frontend: Box<dyn Frontend>,
@@ -144,7 +143,7 @@ pub(crate) struct LoopData {
 
 impl LoopData {
     pub(crate) fn new(
-        inner: Rc<Inner>,
+        inner: Inner,
         app: App,
         storage: Box<dyn SessionStorage>,
         frontend: Box<dyn Frontend>,

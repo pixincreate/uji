@@ -4,17 +4,18 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::api::modal::{Answer, ModalKind, ModalRequest};
-use uji_agent::llm::CancelToken;
+use uji_core::llm::CancelToken;
 use uji_ui::model::RunState;
 
 use uji_ui::app::Echo;
 
-use super::events::Reported;
+use super::reports::Reported;
 use super::{Control, FRAME, LoopData, ModalInput};
 use crate::api::request::Request;
 use crate::cmd::LuaAction;
 use crate::runtime::events;
 use crate::runtime::job::JobEvent;
+use crate::runtime::renderer::LuaRenderer;
 use crate::runtime::signal::Signal;
 use crate::runtime::{Inner, job};
 
@@ -23,7 +24,7 @@ impl LoopData {
         self.frontend.draw(&self.app)?;
         self.inner.resolve_llm(&mut *self.storage);
         self.discover_model_windows();
-        self.inner.emit(events::Event::StatusChanged.name(), &[]);
+        self.inner.emit(&events::StatusChanged);
         self.refresh_suggestions();
         self.frontend.draw(&self.app)?;
         self.dirty = false;
@@ -36,15 +37,19 @@ impl LoopData {
     ) -> std::io::Result<()> {
         self.apply_composer();
         self.drain_requests();
+        if self.inner.api.rules().borrow().changed() {
+            self.inner.compile_policy();
+        }
         self.reap_calls();
         self.sync_picker();
-        self.drain_diagnostics();
+        self.drain_notices();
 
-        for callback in self.inner.api.scheduled().take() {
+        let scheduled = std::mem::take(&mut *self.inner.api.scheduled().borrow_mut());
+        for callback in scheduled {
             let _ = handle.insert_idle(move |data: &mut LoopData| {
                 if let Err(err) = callback.call::<()>(()) {
                     data.inner
-                        .report(format!("scheduled callback error: {err}"));
+                        .notify(format!("scheduled callback error: {err}"));
                 }
                 data.dirty = true;
             });
@@ -79,34 +84,35 @@ impl LoopData {
 
     pub(crate) fn on_timer(&mut self) {
         if self.inner.state().borrow().run_state() == RunState::Working {
-            self.inner.emit(events::Event::Tick.name(), &[]);
+            self.inner.emit(&events::LoaderTicked);
             self.dirty = true;
         }
     }
 
     pub(crate) fn timer_interval(&self) -> Duration {
-        let ms = self.inner.state().borrow().opts().loader_interval_ms.max(1);
-        Duration::from_millis(ms)
+        self.inner.state().borrow().loader_interval()
     }
 
     pub(crate) fn on_job_event(&mut self, event: &JobEvent) {
         let exited = matches!(event, JobEvent::Exit { .. });
         let id = event.id();
-        let callback = {
-            let jobs = self.inner.api.jobs();
-            let jobs = jobs.borrow();
-            jobs.handlers(id).and_then(|handlers| match event {
-                JobEvent::Stdout { .. } => handlers.on_stdout.clone(),
-                JobEvent::Stderr { .. } => handlers.on_stderr.clone(),
-                JobEvent::Exit { .. } => handlers.on_exit.clone(),
-            })
-        };
+        let callback =
+            self.inner
+                .api
+                .jobs()
+                .borrow()
+                .handlers(id)
+                .and_then(|handlers| match event {
+                    JobEvent::Stdout { .. } => handlers.stdout.clone(),
+                    JobEvent::Stderr { .. } => handlers.stderr.clone(),
+                    JobEvent::Exit { .. } => handlers.exit.clone(),
+                });
         if let Some(callback) = callback
             && let Err(err) = event
                 .args(&self.inner.lua)
                 .and_then(|args| callback.call::<()>(args))
         {
-            self.inner.report(format!("job {id}: {err}"));
+            self.inner.notify(format!("job {id}: {err}"));
         }
         if exited {
             self.inner.api.jobs().borrow_mut().finish(id);
@@ -114,8 +120,8 @@ impl LoopData {
         self.dirty = true;
     }
 
-    pub(super) fn drain_diagnostics(&mut self) {
-        let notices = self.inner.take_diagnostics();
+    pub(super) fn drain_notices(&mut self) {
+        let notices = self.inner.take_notices();
         if !notices.is_empty() {
             self.app.overlay_mut().push_notices(notices);
             self.dirty = true;
@@ -138,7 +144,7 @@ impl LoopData {
     fn carry_out(&mut self, request: Request) {
         match request {
             Request::Submit(text) => self.submit(&text),
-            Request::SetTitle(title) => self.set_title(title),
+            Request::SetTitle(title) => self.set_title(&title),
             Request::Interrupt => {
                 self.interrupt();
             }
@@ -197,17 +203,17 @@ impl LoopData {
             return;
         };
         if let Err(err) = self.frontend.suspend() {
-            self.inner.report(format!("suspend terminal: {err}"));
+            self.inner.notify(format!("suspend terminal: {err}"));
         }
         let status = std::process::Command::new(program).args(args).status();
         if let Err(err) = self.frontend.resume() {
-            self.inner.report(format!("resume terminal: {err}"));
+            self.inner.notify(format!("resume terminal: {err}"));
         }
         match status {
             Ok(status) if !status.success() => {
-                self.inner.report(format!("{program} exited with {status}"));
+                self.inner.notify(format!("{program} exited with {status}"));
             }
-            Err(err) => self.inner.report(format!("run {program}: {err}")),
+            Err(err) => self.inner.notify(format!("run {program}: {err}")),
             Ok(_) => {}
         }
         self.dirty = true;
@@ -227,12 +233,18 @@ impl LoopData {
     }
 
     fn apply_composer(&mut self) {
-        let composer = self.inner.api.composer();
-        if let Some(text) = composer.take_written() {
-            self.app.set_input(text);
-            self.dirty = true;
-        } else {
-            composer.observe(self.app.input());
+        let written = self.inner.api.composer().borrow_mut().take_written();
+        match written {
+            Some(text) => {
+                self.app.set_input(text);
+                self.dirty = true;
+            }
+            None => self
+                .inner
+                .api
+                .composer()
+                .borrow_mut()
+                .observe(self.app.input()),
         }
     }
 
@@ -259,7 +271,7 @@ impl LoopData {
 
     fn perform_reload(&mut self) {
         self.control = Control::Run;
-        let state = self.inner.state();
+        let state = Rc::clone(self.inner.state());
         state.borrow_mut().clear();
         let client = Arc::clone(&self.inner.client);
         let conversation = Rc::clone(self.app.conversation());
@@ -271,11 +283,15 @@ impl LoopData {
             self.inner.config_dir.clone(),
             dispatch,
         );
+        self.app.set_renderer(Box::new(LuaRenderer::new(
+            self.inner.lua.clone(),
+            Rc::clone(&self.inner.api),
+        )));
         self.inner.resolve_llm(&mut *self.storage);
         self.discover_model_windows();
         self.refresh_suggestions();
-        self.drain_diagnostics();
-        self.inner.emit(events::Event::StatusChanged.name(), &[]);
+        self.drain_notices();
+        self.inner.emit(&events::StatusChanged);
         self.dirty = true;
     }
 }

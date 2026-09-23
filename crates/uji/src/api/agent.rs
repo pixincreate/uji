@@ -2,13 +2,12 @@ use std::rc::Rc;
 
 use mlua::{Function, Lua, LuaSerdeExt, Table, Value};
 use serde::Deserialize;
-use uji_agent::llm::Usage;
-use uji_agent::session::model::{Message, ToolCall};
+use uji_core::llm::Usage;
+use uji_core::session::model::{Message, ToolCall};
 
 use crate::api::Api;
 use crate::api::bind::bind;
 use crate::api::callbacks::canceller;
-use crate::api::registry::Entry;
 use crate::api::request::Request;
 
 #[derive(Deserialize)]
@@ -23,6 +22,7 @@ pub enum Report {
     Usage(Usage),
     Compacted {
         usage: Option<Usage>,
+        count: usize,
     },
     Restarted {
         attempt: u32,
@@ -33,7 +33,7 @@ pub enum Report {
         text: String,
         #[serde(default)]
         tool_calls: Vec<ToolCall>,
-        reasoning_content: Option<String>,
+        reasoning: Option<String>,
     },
     ToolResult {
         tool_call_id: String,
@@ -42,7 +42,7 @@ pub enum Report {
     },
     Done {
         text: String,
-        reasoning_content: Option<String>,
+        reasoning: Option<String>,
     },
     Cancelled,
     Failed {
@@ -56,48 +56,7 @@ impl Report {
     }
 }
 
-pub(crate) fn context(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    bind(
-        lua,
-        api,
-        move |api, _, (name, call, opts): (String, Function, Option<Table>)| {
-            let priority = opts
-                .map(|opts| opts.get::<Option<i64>>("priority"))
-                .transpose()?
-                .flatten()
-                .unwrap_or(50);
-            api.agent_context().borrow_mut().add(Entry {
-                name,
-                priority,
-                call,
-            });
-            Ok(())
-        },
-    )
-}
-
-pub(crate) fn clear_context(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    bind(lua, api, move |api, _, name: String| {
-        api.agent_context().borrow_mut().remove(&name);
-        Ok(())
-    })
-}
-
-pub(crate) fn contexts(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    bind(lua, api, move |api, lua, ()| {
-        let out = lua.create_table()?;
-        for (name, call) in api.agent_context().borrow().calls() {
-            match call.call::<Value>(()) {
-                Ok(Value::Nil) => {}
-                Ok(value) => out.push(value)?,
-                Err(err) => api.notify(format!("agent context {name}: {err}")),
-            }
-        }
-        Ok(out)
-    })
-}
-
-pub(crate) fn report(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+fn report(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(
         lua,
         api,
@@ -109,7 +68,7 @@ pub(crate) fn report(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     )
 }
 
-pub(crate) fn steer(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+fn steer(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(lua, api, |api, lua, on_done: Function| {
         let id = api.callbacks().borrow_mut().open(on_done);
         api.request(Request::Steer(id));
@@ -117,7 +76,7 @@ pub(crate) fn steer(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     })
 }
 
-pub(crate) fn approve(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+fn approve(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(lua, api, |api, lua, (call, on_done): (Table, Function)| {
         let name = call.get::<String>("name")?;
         let arguments = call.get::<Table>("arguments")?;
@@ -131,7 +90,7 @@ pub(crate) fn approve(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     })
 }
 
-pub(crate) fn run_tool(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+fn run_tool(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(
         lua,
         api,
@@ -147,7 +106,7 @@ pub(crate) fn run_tool(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     )
 }
 
-pub(crate) fn compact(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+fn compact(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(
         lua,
         api,
@@ -160,15 +119,36 @@ pub(crate) fn compact(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     )
 }
 
-pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
-    let agent = lua.create_table()?;
-    agent.set("report", report(lua, api)?)?;
-    agent.set("steer", steer(lua, api)?)?;
-    agent.set("approve", approve(lua, api)?)?;
-    agent.set("run_tool", run_tool(lua, api)?)?;
-    agent.set("compact", compact(lua, api)?)?;
-    agent.set("context", context(lua, api)?)?;
-    agent.set("clear_context", clear_context(lua, api)?)?;
-    agent.set("contexts", contexts(lua, api)?)?;
-    Ok(agent)
+fn route(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    bind(lua, api, |api, lua, on_done: Function| {
+        let id = api.callbacks().borrow_mut().open(on_done);
+        api.request(Request::Route(id));
+        canceller(lua, api, id)
+    })
+}
+
+fn stream(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    bind(
+        lua,
+        api,
+        move |api, _, (wire, request, reply): (String, Table, Table)| {
+            let stream =
+                api.wires().borrow().get(&wire).cloned().ok_or_else(|| {
+                    mlua::Error::runtime(format!("no wire is registered as {wire}"))
+                })?;
+            stream.call::<Value>((request, reply))
+        },
+    )
+}
+
+pub(crate) fn host(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
+    let host = lua.create_table()?;
+    host.set("report", report(lua, api)?)?;
+    host.set("steer", steer(lua, api)?)?;
+    host.set("approve", approve(lua, api)?)?;
+    host.set("run_tool", run_tool(lua, api)?)?;
+    host.set("compact", compact(lua, api)?)?;
+    host.set("route", route(lua, api)?)?;
+    host.set("stream", stream(lua, api)?)?;
+    Ok(host)
 }

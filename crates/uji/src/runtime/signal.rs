@@ -1,4 +1,4 @@
-use uji_agent::llm::Call;
+use uji_core::llm::Call;
 
 use super::auth::AuthEvent;
 use super::background::{CompactEvent, ModelsEvent, TitleEvent};

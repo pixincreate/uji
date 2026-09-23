@@ -23,12 +23,10 @@ use std::rc::Rc;
 use crate::keymap;
 use crate::state::UiState;
 
-use uji_agent::llm::Delta;
-use uji_agent::session::conversation::{Conversation, Shared};
-use uji_agent::session::model::Session;
+use self::stream::Delta;
+use uji_core::session::conversation::{Conversation, Shared};
 
 pub struct App {
-    session: Session,
     conversation: Shared,
     state: Rc<RefCell<UiState>>,
     composer: Composer,
@@ -41,13 +39,12 @@ pub struct App {
     overlay: overlay::Overlay,
     transcript: RefCell<crate::render::transcript::Transcript>,
     typed: RefCell<crate::render::input::Layout>,
-    renderer: Option<Rc<dyn renderer::BlockRenderer>>,
+    renderer: Option<Box<dyn renderer::BlockRenderer>>,
 }
 
 impl App {
-    pub fn new(session: Session, conversation: Shared, state: Rc<RefCell<UiState>>) -> Self {
+    pub fn new(conversation: Shared, state: Rc<RefCell<UiState>>) -> Self {
         Self {
-            session,
             conversation,
             state,
             composer: Composer::default(),
@@ -62,14 +59,6 @@ impl App {
             typed: RefCell::default(),
             renderer: None,
         }
-    }
-
-    pub fn session(&self) -> &Session {
-        &self.session
-    }
-
-    pub fn set_title(&mut self, title: String) {
-        self.session.title = title;
     }
 
     pub fn conversation(&self) -> &Shared {
@@ -92,12 +81,12 @@ impl App {
         self.composer.revision()
     }
 
-    pub fn set_renderer(&mut self, renderer: Rc<dyn renderer::BlockRenderer>) {
+    pub fn set_renderer(&mut self, renderer: Box<dyn renderer::BlockRenderer>) {
         self.renderer = Some(renderer);
     }
 
-    pub fn renderer(&self) -> Option<&Rc<dyn renderer::BlockRenderer>> {
-        self.renderer.as_ref()
+    pub fn renderer(&self) -> Option<&dyn renderer::BlockRenderer> {
+        self.renderer.as_deref()
     }
 
     pub fn state(&self) -> &Rc<RefCell<UiState>> {

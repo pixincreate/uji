@@ -31,20 +31,23 @@ return {
         return field.text(args, "path")
     end,
     policy = "ask",
-    defer = true,
-    run = function(args, done)
+    display = {
+        verb = "Wrote",
+        question = "Would you like to write the following file?",
+    },
+    run = function(args, ctx)
         local missing = field.missing(args, "path")
         if missing then
-            return done(missing)
+            return missing
         end
         local path = field.text(args, "path")
         local content = field.text(args, "content")
         uji.fs.write(path, content, function(written, err)
             if not written then
-                return done("error: " .. err)
+                return ctx.done("error: " .. err)
             end
             local verb = written.created and "created" or "overwrote"
-            done(string.format("%s %s (%d lines)", verb, path, line_count(content)))
+            ctx.done(string.format("%s %s (%d lines)", verb, path, line_count(content)))
         end)
     end,
 }

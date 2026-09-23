@@ -4,8 +4,8 @@ use crate::keymap::{Chord, Key};
 use crate::model::Builtin;
 
 use super::action::{Action, KeyAction, default_action, rank_items};
-use uji_agent::session::conversation::Conversation;
-use uji_agent::session::model::Message;
+use uji_core::session::conversation::Conversation;
+use uji_core::session::model::Message;
 
 use super::{App, Mode};
 use std::rc::Rc;

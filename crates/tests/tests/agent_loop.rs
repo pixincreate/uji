@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use serde_json::json;
-use uji_agent::session::model::Message;
+use uji_core::session::model::Message;
 use uji_tests::{
     ALLOW_ALL, Reply, Request, SUBMIT, Sandbox, Server, Until, events, provider, text, tool_calls,
     tool_results,
@@ -305,7 +305,7 @@ fn a_message_that_waits_for_compaction_is_sent_once_it_is_done() {
         sandbox.remember(Message::Assistant {
             text: "answer ".repeat(400),
             tool_calls: Vec::new(),
-            reasoning_content: None,
+            reasoning: None,
         });
     }
     sandbox

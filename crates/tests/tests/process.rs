@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
-use uji_agent::llm::CancelToken;
-use uji_agent::process::{self, Capture, Exit, Spec, Stream};
+use uji_core::llm::CancelToken;
+use uji_core::process::{self, Capture, Exit, Spec, Stream};
 
 #[tokio::test]
 async fn both_streams_and_the_exit_code_come_back() {

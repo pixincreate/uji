@@ -7,7 +7,7 @@ use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Method, Url};
 use tokio::sync::watch;
 use tokio::time::Instant;
-use uji_agent::llm::{CancelToken, STREAM_IDLE};
+use uji_core::llm::{CancelToken, STREAM_IDLE};
 
 use crate::api::Api;
 use crate::api::bind::bind;
@@ -91,7 +91,7 @@ fn headers(pairs: HashMap<String, String>) -> mlua::Result<HeaderMap> {
 }
 
 pub(crate) fn request(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    bind(lua, api, |api, _, (opts, on_done): (Table, Function)| {
+    bind(lua, api, |api, lua, (opts, on_done): (Table, Function)| {
         let on_line = opts.get::<Option<Function>>("on_line")?;
         let timeout = seconds(&opts, "timeout")?.or(on_line.is_none().then_some(TIMEOUT));
         let cancel = CancelToken::new();
@@ -126,20 +126,16 @@ pub(crate) fn request(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
             id,
             fetch: Box::new(fetch),
         });
-        Ok(id)
-    })
-}
-
-pub(crate) fn cancel(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    bind(lua, api, |api, _, id: u64| {
-        api.fetches().borrow().cancel(id);
-        Ok(())
+        bind(lua, api, move |api, _, ()| {
+            api.fetches().borrow().cancel(id);
+            api.callbacks().borrow_mut().take(id);
+            Ok(())
+        })
     })
 }
 
 pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     let http = lua.create_table()?;
     http.set("request", request(lua, api)?)?;
-    http.set("cancel", cancel(lua, api)?)?;
     Ok(http)
 }

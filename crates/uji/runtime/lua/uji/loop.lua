@@ -138,11 +138,11 @@ function Turn:cancel()
 end
 
 function Turn:report(event, on_applied)
-    uji.agent.report(event, on_applied)
+    self.host.report(event, on_applied)
 end
 
 function Turn:call()
-    local route, err = self:await(uji.llm.route)
+    local route, err = self:await(self.host.route)
     if route == CANCELLED then
         return CANCELLED
     end
@@ -161,7 +161,7 @@ function Turn:call()
         auth = route.auth,
     }
     return self:await(function(done)
-        return uji.provider.stream(route.wire, request, {
+        return self.host.stream(route.wire, request, {
             text = function(delta)
                 self:report({ type = "text", text = delta })
             end,
@@ -206,19 +206,19 @@ end
 
 function Turn:compact()
     local folded = self:await(function(done)
-        return uji.agent.compact(self.messages, done)
+        return self.host.compact(self.messages, done)
     end)
     if folded == CANCELLED then
         return CANCELLED
     end
     if folded then
         self.messages = folded.messages
-        self:report({ type = "compacted", usage = folded.usage })
+        self:report({ type = "compacted", usage = folded.usage, count = folded.count })
     end
 end
 
 function Turn:steer()
-    local text = self:await(uji.agent.steer)
+    local text = self:await(self.host.steer)
     if text == CANCELLED or text == nil then
         return false
     end
@@ -239,7 +239,7 @@ function Turn:execute(call)
         return problem
     end
     local decision = self:await(function(done)
-        local stop_approval = uji.agent.approve({ name = call.name, arguments = args }, done)
+        local stop_approval = self.host.approve({ name = call.name, arguments = args }, done)
         local stop_timer = uji.defer(APPROVAL_TIMEOUT, function()
             done(TIMED_OUT)
         end)
@@ -258,7 +258,7 @@ function Turn:execute(call)
         return "denied: " .. decision.deny
     end
     return self:await(function(done)
-        return uji.agent.run_tool(call.name, decision.arguments, done)
+        return self.host.run_tool(call.name, decision.arguments, done)
     end)
 end
 
@@ -310,17 +310,17 @@ function Turn:run()
         local text, reasoning = answer.text, answer.reasoning
         if #calls == 0 then
             if not self:steer() then
-                return self:report({ type = "done", text = text, reasoning_content = reasoning })
+                return self:report({ type = "done", text = text, reasoning = reasoning })
             end
-            self:report({ type = "assistant_step", text = text, tool_calls = {}, reasoning_content = reasoning })
-            self.messages[#self.messages + 1] = { type = "assistant", text = text, reasoning_content = reasoning }
+            self:report({ type = "assistant_step", text = text, tool_calls = {}, reasoning = reasoning })
+            self.messages[#self.messages + 1] = { type = "assistant", text = text, reasoning = reasoning }
         else
-            local step = { type = "assistant_step", text = text, tool_calls = calls, reasoning_content = reasoning }
+            local step = { type = "assistant_step", text = text, tool_calls = calls, reasoning = reasoning }
             self:await(function(done)
                 self:report(step, done)
             end)
             self.messages[#self.messages + 1] =
-                { type = "assistant", text = text, tool_calls = calls, reasoning_content = reasoning }
+                { type = "assistant", text = text, tool_calls = calls, reasoning = reasoning }
             self:run_tools(calls)
             if self.cancelled then
                 return self:report({ type = "cancelled" })
@@ -335,8 +335,9 @@ end
 
 local M = {}
 
-function M.start(turn)
+function M.start(turn, host)
     local self = setmetatable(turn, Turn)
+    self.host = host
     self.names, self.known = {}, {}
     for _, tool in ipairs(self.tools) do
         self.names[#self.names + 1] = tool.name

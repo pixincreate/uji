@@ -1,0 +1,7 @@
+id: prefer-cell
+language: rust
+severity: error
+message: A `Copy` value needs no borrow guard; use `Cell` instead of `RefCell`.
+rule:
+  kind: generic_type
+  regex: "^RefCell<(bool|char|[ui](8|16|32|64|128|size)|f32|f64)>$"

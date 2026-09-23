@@ -32,8 +32,10 @@ impl Args {
         Self { raw, tokens }
     }
 }
-use uji_agent::llm::Provider;
-use uji_agent::session::store::Setting;
+use std::cell::Ref;
+
+use uji_core::llm::{Catalog, Provider};
+use uji_core::session::store::Setting;
 use uji_ui::app::Echo;
 
 pub trait Context {
@@ -51,7 +53,7 @@ pub trait Context {
     fn start_oauth(&mut self, provider_id: &str);
     fn notify(&mut self, message: &str);
     fn finish(&mut self);
-    fn providers(&self) -> Vec<Provider>;
+    fn catalog(&self) -> Ref<'_, Catalog>;
     fn provider(&self, id: &str) -> Option<Provider>;
     fn provider_by_name(&self, name: &str) -> Option<Provider>;
     fn command_names(&self) -> Vec<String>;

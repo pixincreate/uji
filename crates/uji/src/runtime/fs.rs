@@ -1,5 +1,5 @@
 use mlua::{IntoLua, Lua, Value};
-use uji_agent::fs::{Excerpt, Files, Written};
+use uji_core::fs::{Excerpt, Files, Written};
 
 use super::reply::Reply;
 use crate::api::fs::FsOp;

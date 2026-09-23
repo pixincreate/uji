@@ -9,21 +9,16 @@ uji.ui.configure({
     waiting = {
         loader = {
             frames = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" },
-            interval_ms = 80,
+            interval = 0.08,
         },
     },
 })
 
-uji.on("tool_call", function(event)
-    if event.name == "run_command" then
-        local cmd = event.arguments.command or ""
-        if string.match(cmd, "^rm %-rf") then
-            return { deny = "Refusing to run rm -rf" }
-        end
-        return { ask = true }
-    end
-    return nil
-end)
+uji.tool.policy({
+    run_command = {
+        deny = { "/^rm\\s+-rf/" },
+    },
+})
 
 local waiting_text = "Working"
 
@@ -43,7 +38,7 @@ local function render_activity()
 end
 
 uji.on("status_changed", render_activity)
-uji.on("tick", render_activity)
+uji.on("loader_ticked", render_activity)
 
 -- <C-e> is end-of-line now that the defaults are readline's.
-uji.keymap.set("normal", "<A-e>", { command = "effort" })
+uji.keymap.add("normal", "<A-e>", { command = "effort" })

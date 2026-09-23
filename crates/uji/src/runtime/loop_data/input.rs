@@ -46,7 +46,7 @@ impl LoopData {
     }
 
     fn dispatch_key(&mut self, key: Chord) -> Option<KeyAction> {
-        if self.inner.api.capture().is_active() {
+        if self.inner.api.capture().borrow().is_some() {
             self.dispatch_capture(key);
             return None;
         }
@@ -62,14 +62,15 @@ impl LoopData {
                 if let Some(action) = Action::parse(&name) {
                     return Some(self.app.apply(action));
                 }
-                match self.inner.api.actions().get(&name) {
+                let handler = self.inner.api.actions().borrow().get(&name);
+                match handler {
                     Some(handler) => {
                         if let Err(err) = handler.call::<()>(()) {
-                            self.inner.report(format!("action {name}: {err}"));
+                            self.inner.notify(format!("action {name}: {err}"));
                         }
                         self.dirty = true;
                     }
-                    None => self.inner.report(format!("unknown keymap action: {name}")),
+                    None => self.inner.notify(format!("unknown keymap action: {name}")),
                 }
                 None
             }
@@ -78,7 +79,7 @@ impl LoopData {
     }
 
     fn dispatch_capture(&mut self, chord: Chord) {
-        let Some(handler) = self.inner.api.capture().handler() else {
+        let Some(handler) = self.inner.api.capture().borrow().clone() else {
             return;
         };
         let Ok(event) = self.inner.lua.create_table() else {
@@ -92,8 +93,8 @@ impl LoopData {
         let _ = event.set("alt", chord.alt);
         let _ = event.set("shift", chord.shift);
         if let Err(err) = handler.call::<()>((event,)) {
-            self.inner.report(format!("capture handler: {err}"));
-            self.inner.api.capture().clear();
+            self.inner.notify(format!("capture handler: {err}"));
+            self.inner.api.capture().borrow_mut().take();
         }
         self.dirty = true;
     }

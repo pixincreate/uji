@@ -3,6 +3,11 @@ const MIN: usize = 3;
 const MAX: usize = 120;
 const BURST: usize = 4096;
 
+pub enum Delta {
+    Text(String),
+    Reasoning(String),
+}
+
 #[derive(Debug, Default)]
 pub struct Stream {
     text: String,

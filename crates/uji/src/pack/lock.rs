@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use uji_agent::config;
+use uji_core::config;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Entry {
@@ -21,7 +21,7 @@ pub(crate) struct Lock {
 
 impl Lock {
     pub(crate) fn path() -> Option<PathBuf> {
-        config::data_dir().map(|dir| dir.join("uji-lock.json"))
+        config::config_dir().map(|dir| dir.join("uji-lock.json"))
     }
 
     pub(crate) fn load() -> Self {

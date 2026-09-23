@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use mlua::{Function, Lua, Table};
+use strum::IntoStaticStr;
 
 use crate::api::Api;
 use crate::api::bind::bind;
@@ -69,17 +70,11 @@ pub fn pick(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     )
 }
 
-/// Hand a live picker the results for a query. `token` is what `on_query` was
-/// given; results for a superseded query are dropped.
-pub fn pick_items(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    bind(
-        lua,
-        api,
-        move |api, _, (items, token): (Vec<String>, u64)| {
-            api.request(Request::PickItems { items, token });
-            Ok(())
-        },
-    )
+pub(crate) fn show(lua: &Lua, api: &Rc<Api>, token: u64) -> mlua::Result<Function> {
+    bind(lua, api, move |api, _, items: Vec<String>| {
+        api.request(Request::PickItems { items, token });
+        Ok(())
+    })
 }
 
 pub fn prompt(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
@@ -103,9 +98,17 @@ fn title_of(opts: &Table) -> mlua::Result<String> {
     Ok(opts.get::<Option<String>>("title")?.unwrap_or_default())
 }
 
-pub fn ask_ui(lua: &Lua, component: &str, opts: Table, on_done: Function) -> mlua::Result<()> {
+#[derive(Clone, Copy, IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum Component {
+    Select,
+    Prompt,
+}
+
+pub fn ask_ui(lua: &Lua, component: Component, opts: Table, on_done: Function) -> mlua::Result<()> {
     let uji: Table = lua.globals().get("uji")?;
     let ui: Table = uji.get("ui")?;
-    let handler: Function = ui.get(component)?;
+    let name: &'static str = component.into();
+    let handler: Function = ui.get(name)?;
     handler.call::<()>((opts, on_done))
 }

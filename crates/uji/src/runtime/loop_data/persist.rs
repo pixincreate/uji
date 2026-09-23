@@ -1,65 +1,58 @@
-use mlua::Value as LuaValue;
-use uji_agent::session::id::{MessageId, now_millis};
-use uji_agent::session::model::{Message, StoredMessage, ToolCall};
+use uji_core::session::id::{MessageId, now_millis};
+use uji_core::session::model::{Message, Stamp, StoredMessage, ToolCall};
 
 use super::LoopData;
 use crate::runtime::events;
 
 impl LoopData {
     pub(super) fn append(&mut self, message: Message) {
-        let kind = message.type_name();
-        let text = message.text().to_string();
-        let id = self.app.session().id;
-        let stored = match self.storage.append_message(&id, message.clone()) {
-            Ok(stored) => stored,
+        let id = self.app.messages().info().id;
+        let stamp = match self.storage.append_message(&id, &message) {
+            Ok(stamp) => stamp,
             Err(err) => {
-                self.inner
-                    .report(format!("failed to persist {kind} message: {err}"));
-                let seq = self
-                    .app
-                    .messages()
-                    .messages()
-                    .last()
-                    .map_or(0, |last| last.seq)
-                    .saturating_add(1);
-                StoredMessage {
-                    id: MessageId::new(),
-                    seq,
-                    time_created: now_millis(),
-                    message,
-                }
+                self.inner.notify(format!(
+                    "failed to persist {} message: {err}",
+                    message.type_name()
+                ));
+                self.unsaved_stamp()
             }
         };
-        self.app.conversation().borrow_mut().push(stored);
-        self.inner.emit(
-            events::Event::MessageAppended.name(),
-            &[("type", kind.to_string()), ("text", text.clone())],
-        );
-        if kind == "error" {
-            self.inner
-                .emit(events::Event::Error.name(), &[("text", text)]);
-        }
+        let kind = message.type_name();
+        let text = message.text().to_string();
+        self.app
+            .conversation()
+            .borrow_mut()
+            .push(StoredMessage::new(stamp, message));
+        self.inner
+            .emit(&events::MessageAppended { kind, text: &text });
         self.dirty = true;
     }
+
+    fn unsaved_stamp(&self) -> Stamp {
+        let seq = self
+            .app
+            .messages()
+            .messages()
+            .last()
+            .map_or(0, |last| last.seq)
+            .saturating_add(1);
+        Stamp {
+            id: MessageId::new(),
+            seq,
+            time_created: now_millis(),
+        }
+    }
+
     pub(super) fn persist_assistant_step(
         &mut self,
         text: String,
         tool_calls: Vec<ToolCall>,
-        reasoning_content: Option<String>,
+        reasoning: Option<String>,
     ) {
-        if !tool_calls.is_empty() {
-            let names = tool_calls
-                .iter()
-                .map(|call| call.name.as_str())
-                .collect::<Vec<_>>()
-                .join(",");
-            self.inner
-                .emit(events::Event::ToolStarted.name(), &[("tools", names)]);
-        }
         self.append(Message::Assistant {
             text,
             tool_calls,
-            reasoning_content,
+            reasoning,
         });
     }
 
@@ -69,14 +62,7 @@ impl LoopData {
         name: String,
         content: String,
     ) {
-        let content = self
-            .inner
-            .ask(
-                events::Event::ToolFinished.name(),
-                &[("name", name.clone()), ("content", content.clone())],
-            )
-            .and_then(replacement_content)
-            .unwrap_or(content);
+        let content = self.inner.fold(&events::AfterTool { name: &name }, content);
         self.append(Message::Tool {
             tool_call_id,
             name,
@@ -89,19 +75,12 @@ impl LoopData {
         });
     }
 
-    pub(super) fn finish_assistant(&mut self, text: &str, reasoning_content: Option<String>) {
+    pub(super) fn finish_assistant(&mut self, text: &str, reasoning: Option<String>) {
         self.app.take_pending();
         self.append(Message::Assistant {
             text: text.to_string(),
             tool_calls: Vec::new(),
-            reasoning_content,
+            reasoning,
         });
     }
-}
-
-fn replacement_content(value: LuaValue) -> Option<String> {
-    let LuaValue::Table(table) = value else {
-        return None;
-    };
-    table.get::<Option<String>>("content").ok().flatten()
 }

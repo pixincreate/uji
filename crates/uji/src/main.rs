@@ -1,14 +1,15 @@
 use std::error::Error;
+use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 use uji::runtime::{Runtime, events};
-use uji::session::id::SessionId;
-use uji::session::store::SessionStorage;
-use uji::storage::interface::StorageInterface;
-use uji::storage::sqlite::{SqliteStorage, default_db_path};
+use uji_core::session::id::SessionId;
+use uji_core::session::model::UNTITLED;
+use uji_core::session::store::SessionStorage;
+use uji_core::storage::sqlite::{SqliteStorage, default_db_path};
 
 #[derive(Parser, Debug)]
-#[command(name = "uji", version, about = "Embeddable harness — barebones TUI")]
+#[command(name = "uji", version, about = "A coding agent you can shape with Lua")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,
@@ -27,7 +28,7 @@ enum Command {
     },
 }
 
-fn main() {
+fn main() -> ExitCode {
     let cli = Cli::parse();
     let command = cli.command.unwrap_or(Command::New);
 
@@ -38,10 +39,12 @@ fn main() {
         Command::Delete { id } => handle_delete(&id),
     };
 
-    #[allow(clippy::disallowed_methods)]
-    if let Err(err) = result {
-        eprintln!("uji: error: {err}");
-        std::process::exit(1);
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("uji: error: {err}");
+            ExitCode::FAILURE
+        }
     }
 }
 
@@ -51,13 +54,12 @@ fn open_storage() -> Result<Box<dyn SessionStorage>, Box<dyn Error>> {
 
 fn handle_new() -> Result<(), Box<dyn Error>> {
     let mut storage = open_storage()?;
-    let session = storage.create_session(uji::session::model::UNTITLED)?;
+    let session = storage.create_session(UNTITLED)?;
     let runtime = Runtime::boot()?;
-    runtime.emit(
-        events::Event::SessionCreated.name(),
-        &[("session_id", session.id.to_string())],
-    );
-    runtime.run(session, storage)?;
+    runtime.emit(&events::SessionCreated {
+        session_id: session.id,
+    });
+    runtime.run(&session, storage)?;
     Ok(())
 }
 
@@ -74,15 +76,14 @@ fn handle_resume(id: Option<String>) -> Result<(), Box<dyn Error>> {
         }
         None => match storage.latest_session()? {
             Some(session) => session,
-            None => storage.create_session(uji::session::model::UNTITLED)?,
+            None => storage.create_session(UNTITLED)?,
         },
     };
     let runtime = Runtime::boot()?;
-    runtime.emit(
-        events::Event::SessionResumed.name(),
-        &[("session_id", session.id.to_string())],
-    );
-    runtime.run(session, storage)?;
+    runtime.emit(&events::SessionResumed {
+        session_id: session.id,
+    });
+    runtime.run(&session, storage)?;
     Ok(())
 }
 

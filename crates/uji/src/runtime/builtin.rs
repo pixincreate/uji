@@ -19,7 +19,7 @@ pub(crate) const BUILTINS: &[Builtin] = &[
     },
     Builtin {
         name: "reload",
-        desc: "redraw the UI from config",
+        desc: "reload config and plugins",
         make: || Box::new(Reload),
     },
     Builtin {
@@ -44,11 +44,6 @@ pub(crate) const BUILTINS: &[Builtin] = &[
     },
     Builtin {
         name: "quit",
-        desc: "leave uji",
-        make: || Box::new(Quit),
-    },
-    Builtin {
-        name: "exit",
         desc: "leave uji",
         make: || Box::new(Quit),
     },

@@ -1,5 +1,5 @@
 use super::{Action, Args, Context};
-use uji_agent::session::store::Setting;
+use uji_core::session::store::Setting;
 use uji_ui::app::Echo;
 
 const SUBSCRIPTION: &str = "Subscription (sign in with browser)";
@@ -18,7 +18,7 @@ enum Step {
 #[derive(Default)]
 struct Draft {
     provider_id: String,
-    is_custom: bool,
+    needs_url: bool,
     has_oauth: bool,
     auth_env: Vec<String>,
     base_url: String,
@@ -35,7 +35,12 @@ impl Action for Login {
     fn start(&mut self, ctx: &mut dyn Context, _args: &Args) {
         self.step = Step::Provider;
         self.draft = Draft::default();
-        let names = ctx.providers().iter().map(|p| p.name.clone()).collect();
+        let names = ctx
+            .catalog()
+            .all()
+            .iter()
+            .map(|provider| provider.name.clone())
+            .collect();
         ctx.open_select("Provider".into(), names);
     }
 
@@ -80,7 +85,7 @@ impl Login {
             return;
         };
         provider.id.clone_into(&mut self.draft.provider_id);
-        self.draft.is_custom = provider.id == "custom";
+        self.draft.needs_url = provider.base_url.is_empty();
         self.draft.has_oauth = provider.oauth.is_some();
         self.draft.auth_env.clone_from(&provider.auth_env);
 
@@ -90,7 +95,7 @@ impl Login {
                 format!("{} sign-in", provider.name),
                 vec![SUBSCRIPTION.to_string(), API_KEY.to_string()],
             );
-        } else if self.draft.is_custom {
+        } else if self.draft.needs_url {
             self.ask_base_url(ctx);
         } else if self.draft.auth_env.is_empty() {
             self.finish_configure(ctx);
@@ -125,7 +130,7 @@ impl Login {
 
     fn finish_configure(&self, ctx: &mut dyn Context) {
         ctx.set_setting(&Setting::Provider, &self.draft.provider_id);
-        if self.draft.is_custom {
+        if self.draft.needs_url {
             ctx.set_setting(&Setting::BaseUrl, &self.draft.base_url);
             let model = self.draft.model.clone();
             super::remember_model(ctx, &self.draft.provider_id, &model);

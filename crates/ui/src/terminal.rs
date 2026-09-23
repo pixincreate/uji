@@ -1,4 +1,5 @@
 use std::io::{self, Stdout, Write};
+use std::sync::Once;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crossterm::{
@@ -33,6 +34,8 @@ const ENHANCEMENTS: KeyboardEnhancementFlags = KeyboardEnhancementFlags::DISAMBI
 /// Whether the flags were pushed, so they are popped exactly as often.
 static ENHANCED: AtomicBool = AtomicBool::new(false);
 
+static GUARDED: Once = Once::new();
+
 fn push_enhancements(out: &mut impl Write) -> io::Result<()> {
     if !supports_keyboard_enhancement().unwrap_or(false) {
         return Ok(());
@@ -53,7 +56,7 @@ fn pop_enhancements(out: &mut impl Write) -> io::Result<()> {
 ///
 /// Without this a panic leaves raw mode, the alternate screen and the keyboard
 /// flags in place, and the shell that comes back is unusable.
-pub fn guard_against_panic() {
+fn guard_against_panic() {
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let mut out = io::stdout();
@@ -67,6 +70,7 @@ pub fn guard_against_panic() {
 }
 
 pub fn open() -> io::Result<Term> {
+    GUARDED.call_once(guard_against_panic);
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;

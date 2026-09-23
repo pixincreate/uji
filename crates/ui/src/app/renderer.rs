@@ -1,5 +1,5 @@
 use crate::model::Line;
-use uji_agent::session::model::StoredMessage;
+use uji_core::session::model::{StoredMessage, ToolCall};
 
 #[derive(Clone, Copy)]
 pub enum Block<'a> {
@@ -14,4 +14,6 @@ pub trait BlockRenderer {
     fn render(&self, block: Block<'_>) -> Option<Vec<Line>>;
 
     fn overrides(&self) -> bool;
+
+    fn tool_label(&self, call: &ToolCall) -> Option<String>;
 }

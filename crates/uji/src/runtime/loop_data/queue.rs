@@ -1,4 +1,4 @@
-use uji_agent::session::model::Message;
+use uji_core::session::model::Message;
 
 use super::LoopData;
 use crate::runtime::events;
@@ -30,11 +30,8 @@ impl LoopData {
 
     pub(super) fn sync_queue(&mut self) {
         let queued: Vec<String> = self.turn.queued.iter().cloned().collect();
-        self.inner.emit(
-            events::Event::QueueChanged.name(),
-            &[("count", queued.len().to_string())],
-        );
-        self.inner.state().borrow_mut().set_queued(queued.clone());
-        self.app.overlay_mut().set_queued(queued);
+        let count = queued.len();
+        self.inner.state().borrow_mut().set_queued(queued);
+        self.inner.emit(&events::QueueChanged { count });
     }
 }

@@ -1,0 +1,23 @@
+id: no-borrow-into-block
+language: rust
+severity: error
+message: >-
+  A `RefCell` borrow in the head of a `for`, `match`, `if let` or `while let`
+  lives until the block ends, so anything in the block that reaches the same
+  cell again, such as a Lua callback, panics with "already borrowed". Take what
+  you need first, then let the guard drop: `let items = cell.borrow().items();`.
+rule:
+  any:
+    - kind: for_expression
+    - kind: match_expression
+    - kind: let_condition
+  has:
+    field: value
+    any:
+      - pattern: $CELL.borrow()
+      - pattern: $CELL.borrow_mut()
+      - has:
+          stopBy: end
+          any:
+            - pattern: $CELL.borrow()
+            - pattern: $CELL.borrow_mut()

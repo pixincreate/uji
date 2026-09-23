@@ -10,8 +10,8 @@ message: >-
 files:
   - "crates/**/mod.rs"
 ignores:
-  - "crates/agent/src/llm/mod.rs"
-  - "crates/agent/src/tools/mod.rs"
+  - "crates/core/src/llm/mod.rs"
+  - "crates/core/src/tools/mod.rs"
   - "crates/ui/src/render/mod.rs"
   - "crates/ui/src/render/modal/mod.rs"
   - "crates/uji/src/api/mod.rs"

@@ -1,26 +1,13 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use uji_agent::session::conversation::Conversation;
-use uji_agent::session::id::SessionId;
-use uji_agent::session::model::{Session, Time};
+use uji_core::session::conversation::Conversation;
 use uji_ui::app::{Action, App, Echo, KeyAction, Mode, SuggestItem};
 use uji_ui::keymap::{Binding, Chord, Key, Keymap, Mode as KeyMode, describe};
 use uji_ui::state::UiState;
 
 fn app() -> App {
-    let session = Session {
-        id: SessionId::new(),
-        parent_id: None,
-        title: String::new(),
-        directory: String::from("."),
-        time: Time {
-            created: 0,
-            updated: 0,
-        },
-    };
     App::new(
-        session,
         Conversation::shared(),
         Rc::new(RefCell::new(UiState::new())),
     )
@@ -213,7 +200,6 @@ fn a_prompt_answers_what_was_typed_into_it() {
 #[test]
 fn tab_completes_a_suggestion() {
     let mut app = app();
-    app.state().borrow_mut().set_suggest_enabled(true);
     app.set_suggestions(vec![SuggestItem {
         name: String::from("models"),
         desc: String::from("pick the default model"),

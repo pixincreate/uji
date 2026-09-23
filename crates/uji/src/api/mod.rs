@@ -1,8 +1,9 @@
 pub mod action;
 pub mod agent;
-mod bind;
+pub(crate) mod bind;
 pub mod callbacks;
 pub mod command;
+pub mod context;
 mod convert;
 pub mod event;
 pub mod fs;
@@ -12,7 +13,6 @@ pub mod input;
 pub mod job;
 pub mod json;
 pub mod keymap;
-pub mod llm;
 pub mod modal;
 pub mod pick;
 pub mod provider;
@@ -20,12 +20,12 @@ pub mod request;
 
 pub mod registry;
 pub mod schedule;
-pub mod scheduled;
 pub mod session;
 
 pub mod status;
 pub mod tools;
 pub mod window;
+pub mod wire;
 
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashMap};
@@ -35,27 +35,25 @@ use std::rc::Rc;
 use mlua::{Function, Lua, Table, Value};
 
 use self::action::Actions;
-use uji_agent::session::conversation::Shared;
+use uji_core::session::conversation::Shared;
 use uji_ui::state::UiState;
 
 use self::callbacks::Callbacks;
 use self::handlers::Handlers;
 use self::http::Fetches;
-use self::input::{Capture, Composer};
+use self::input::Composer;
 use self::job::Jobs;
 use self::registry::Registry;
-use self::scheduled::Scheduled;
-use self::session::SessionState;
 use self::tools::Tool;
-use uji_agent::llm::Catalog;
+use uji_core::llm::Catalog;
 use uji_ui::keymap::Keymap;
 
 pub struct Api {
     state: Rc<RefCell<UiState>>,
-    scheduled: Scheduled,
+    scheduled: RefCell<Vec<Function>>,
     handlers: RefCell<Handlers>,
     commands: RefCell<HashMap<String, command::LuaCommand>>,
-    tools: RefCell<BTreeMap<String, Tool>>,
+    tools: RefCell<BTreeMap<String, Rc<Tool>>>,
     providers: RefCell<Catalog>,
     keymap: RefCell<Keymap>,
     packs: RefCell<Vec<PathBuf>>,
@@ -64,23 +62,25 @@ pub struct Api {
     callbacks: RefCell<Callbacks>,
     fetches: RefCell<Fetches>,
     wires: RefCell<BTreeMap<String, Function>>,
-    composer: Composer,
-    capture: Capture,
-    session_state: SessionState,
+    composer: RefCell<Composer>,
+    capture: RefCell<Option<Function>>,
+    conversation: Shared,
     requests: RefCell<Vec<request::Request>>,
     pick: RefCell<pick::Pick>,
     access: RefCell<tools::Access>,
     segments: RefCell<Registry>,
-    agent_context: RefCell<Registry>,
+    context: RefCell<Registry>,
+    compaction: RefCell<context::Compaction>,
+    rules: RefCell<tools::Rules>,
     next_handler: Cell<u64>,
-    actions: Actions,
+    actions: RefCell<Actions>,
 }
 
 impl Api {
     pub fn new(state: Rc<RefCell<UiState>>, conversation: Shared) -> Rc<Self> {
         Rc::new(Self {
             state,
-            scheduled: Scheduled::default(),
+            scheduled: RefCell::default(),
             handlers: RefCell::default(),
             commands: RefCell::default(),
             access: RefCell::default(),
@@ -93,23 +93,25 @@ impl Api {
             callbacks: RefCell::default(),
             fetches: RefCell::default(),
             wires: RefCell::default(),
-            composer: Composer::default(),
-            capture: Capture::default(),
-            session_state: SessionState::new(conversation),
+            composer: RefCell::default(),
+            capture: RefCell::default(),
+            conversation,
             requests: RefCell::default(),
             pick: RefCell::default(),
             segments: RefCell::default(),
-            agent_context: RefCell::default(),
+            context: RefCell::default(),
+            compaction: RefCell::default(),
+            rules: RefCell::default(),
             next_handler: Cell::new(0),
-            actions: Actions::default(),
+            actions: RefCell::default(),
         })
     }
 
-    pub fn state(&self) -> Rc<RefCell<UiState>> {
-        Rc::clone(&self.state)
+    pub fn state(&self) -> &Rc<RefCell<UiState>> {
+        &self.state
     }
 
-    pub fn scheduled(&self) -> &Scheduled {
+    pub fn scheduled(&self) -> &RefCell<Vec<Function>> {
         &self.scheduled
     }
 
@@ -117,7 +119,7 @@ impl Api {
         &self.commands
     }
 
-    pub fn tools(&self) -> &RefCell<BTreeMap<String, Tool>> {
+    pub fn tools(&self) -> &RefCell<BTreeMap<String, Rc<Tool>>> {
         &self.tools
     }
 
@@ -137,11 +139,11 @@ impl Api {
         self.notices.borrow_mut().push(message);
     }
 
-    pub fn capture(&self) -> &Capture {
+    pub fn capture(&self) -> &RefCell<Option<Function>> {
         &self.capture
     }
 
-    pub fn composer(&self) -> &Composer {
+    pub fn composer(&self) -> &RefCell<Composer> {
         &self.composer
     }
 
@@ -163,12 +165,20 @@ impl Api {
         &self.segments
     }
 
-    pub fn actions(&self) -> &Actions {
+    pub fn actions(&self) -> &RefCell<Actions> {
         &self.actions
     }
 
-    pub fn agent_context(&self) -> &RefCell<Registry> {
-        &self.agent_context
+    pub fn context(&self) -> &RefCell<Registry> {
+        &self.context
+    }
+
+    pub fn compaction(&self) -> &RefCell<context::Compaction> {
+        &self.compaction
+    }
+
+    pub fn rules(&self) -> &RefCell<tools::Rules> {
+        &self.rules
     }
 
     pub fn next_handler_name(&self) -> String {
@@ -177,8 +187,8 @@ impl Api {
         format!("handler {next}")
     }
 
-    pub fn session(&self) -> &SessionState {
-        &self.session_state
+    pub fn conversation(&self) -> &Shared {
+        &self.conversation
     }
 
     pub fn jobs(&self) -> &RefCell<Jobs> {
@@ -198,9 +208,7 @@ impl Api {
     }
 
     pub fn take_notices(&self) -> Vec<String> {
-        let mut notices = std::mem::take(&mut *self.notices.borrow_mut());
-        notices.extend(self.state.borrow_mut().take_notices());
-        notices
+        std::mem::take(&mut *self.notices.borrow_mut())
     }
 
     pub(crate) fn handlers(&self) -> &RefCell<Handlers> {
@@ -220,13 +228,28 @@ impl Api {
         self.handlers.borrow().has(event)
     }
 
+    pub fn fold(&self, event: &str, payload: &Table, field: &str) {
+        let _ = payload.set("event", event);
+        let handlers = self.handlers.borrow().get(event);
+        for handler in handlers {
+            match handler.call::<Value>(payload.clone()) {
+                Ok(Value::Nil) => {}
+                Ok(value) => {
+                    let _ = payload.set(field, value);
+                }
+                Err(err) => self.notify(format!("{event} handler error: {err}")),
+            }
+        }
+    }
+
     pub fn ask(&self, event: &str, payload: &Table) -> Option<Value> {
         self.run(event, payload, Policy::FirstAnswer)
     }
 
     fn run(&self, event: &str, payload: &Table, policy: Policy) -> Option<Value> {
         let _ = payload.set("event", event);
-        for handler in self.handlers.borrow().get(event) {
+        let handlers = self.handlers.borrow().get(event);
+        for handler in handlers {
             match handler.call::<Value>(payload.clone()) {
                 Ok(value) if policy == Policy::FirstAnswer && !value.is_nil() => {
                     return Some(value);
@@ -259,15 +282,8 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     ui.set("exec", window::exec(lua, api)?)?;
     ui.set("select", modal::select(lua, api)?)?;
     ui.set("pick", modal::pick(lua, api)?)?;
-    ui.set("pick_items", modal::pick_items(lua, api)?)?;
     ui.set("prompt", modal::prompt(lua, api)?)?;
     uji.set("ui", ui)?;
-
-    let llm = lua.create_table()?;
-    llm.set("current_provider", llm::current_provider(lua, api)?)?;
-    llm.set("current_model", llm::current_model(lua, api)?)?;
-    llm.set("route", llm::route(lua, api)?)?;
-    uji.set("llm", llm)?;
 
     let status = lua.create_table()?;
     status.set("provider", status::provider(lua, api)?)?;
@@ -280,7 +296,8 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     status.set("loader_frame", status::loader_frame(lua, api)?)?;
     status.set("add", status::add(lua, api)?)?;
     status.set("remove", status::remove(lua, api)?)?;
-    status.set("segments", status::segments(lua, api)?)?;
+    status.set("list", status::list(lua, api)?)?;
+    status.set("render", status::render(lua, api)?)?;
     uji.set("status", status)?;
 
     uji.set("json", json::register(lua, api)?)?;
@@ -290,22 +307,24 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     uji.set("off", event::off(lua, api)?)?;
     uji.set("emit", event::emit(lua, api)?)?;
     uji.set("notify", event::notify(lua, api)?)?;
-    uji.set("command", command::command(lua, api)?)?;
 
     let tool = lua.create_table()?;
-    tool.set("register", tools::register(lua, api)?)?;
-    tool.set("unregister", tools::unregister(lua, api)?)?;
-    tool.set("roots", tools::roots(lua, api)?)?;
-    tool.set("list_roots", tools::list_roots(lua, api)?)?;
-    tool.set("disable", tools::disable(lua, api)?)?;
+    tool.set("add", tools::add(lua, api)?)?;
+    tool.set("remove", tools::remove(lua, api)?)?;
+    tool.set("list", tools::list(lua, api)?)?;
     tool.set("enable", tools::enable(lua, api)?)?;
+    tool.set("disable", tools::disable(lua, api)?)?;
+    tool.set("roots", tools::roots(lua, api)?)?;
     tool.set("confine", tools::confine(lua, api)?)?;
+    tool.set("policy", tools::policy_rules(lua, api)?)?;
     uji.set("tool", tool)?;
 
-    uji.set("agent", agent::register(lua, api)?)?;
+    uji.set("command", command::register(lua, api)?)?;
+    uji.set("context", context::register(lua, api)?)?;
     uji.set("action", action::register(lua, api)?)?;
     uji.set("keymap", keymap::register(lua, api)?)?;
     uji.set("provider", provider::register(lua, api)?)?;
+    uji.set("wire", wire::register(lua, api)?)?;
     uji.set("job", job::register(lua, api)?)?;
     uji.set("http", http::register(lua, api)?)?;
     uji.set("fs", fs::register(lua, api)?)?;

@@ -33,15 +33,15 @@ use uji_ui::input::Input;
 use uji_ui::state::UiState;
 
 use signal::Signal;
-use uji_agent::llm::Dispatch;
-use uji_agent::session::conversation::{Conversation, Shared};
-use uji_agent::session::model::Session;
-use uji_agent::session::store::SessionStorage;
+use uji_core::llm::Dispatch;
+use uji_core::session::conversation::{Conversation, Shared};
+use uji_core::session::model::Session;
+use uji_core::session::store::SessionStorage;
 use uji_ui::app::App;
 use work::Work;
 
 pub struct Runtime {
-    inner: Rc<Inner>,
+    inner: Inner,
     loop_handle: LoopHandle<'static, LoopData>,
     event_loop: EventLoop<'static, LoopData>,
     conversation: Shared,
@@ -57,7 +57,7 @@ impl Runtime {
     pub fn boot_in(config_dir: Option<PathBuf>) -> Result<Self, RuntimeError> {
         let state = Rc::new(RefCell::new(UiState::new()));
         let conversation = Conversation::shared();
-        let client = Arc::new(uji_agent::llm::http_client());
+        let client = Arc::new(uji_core::llm::http_client());
         let (signals, signal_channel) = calloop::channel::channel::<Signal>();
         let inner = Inner::boot(
             state,
@@ -80,29 +80,25 @@ impl Runtime {
         })
     }
 
-    pub fn emit(&self, event: &str, fields: &[(&str, String)]) {
-        self.inner.emit(event, fields);
+    pub fn emit<E: events::Event>(&self, event: &E) {
+        self.inner.emit(event);
     }
 
-    pub fn state(&self) -> Rc<RefCell<UiState>> {
+    pub fn state(&self) -> &Rc<RefCell<UiState>> {
         self.inner.state()
     }
 
-    pub fn diagnostics(&self) -> Vec<String> {
-        self.inner.take_diagnostics()
+    pub fn notices(&self) -> Vec<String> {
+        self.inner.take_notices()
     }
 
-    pub fn eval(&self, chunk: &str) -> mlua::Result<()> {
-        self.inner.lua.load(chunk).exec()
-    }
-
-    pub fn run(self, session: Session, storage: Box<dyn SessionStorage>) -> io::Result<()> {
+    pub fn run(self, session: &Session, storage: Box<dyn SessionStorage>) -> io::Result<()> {
         self.run_with(session, storage, Terminal::new())
     }
 
     pub fn run_with(
         self,
-        session: Session,
+        session: &Session,
         mut storage: Box<dyn SessionStorage>,
         frontend: impl Frontend + 'static,
     ) -> io::Result<()> {
@@ -116,9 +112,12 @@ impl Runtime {
         } = self;
 
         let messages = storage.messages(&session.id).map_err(io::Error::other)?;
-        conversation.borrow_mut().attach(&session, messages);
-        let mut app = App::new(session, conversation, inner.state());
-        app.set_renderer(Rc::new(renderer::LuaRenderer::new(Rc::clone(&inner))));
+        conversation.borrow_mut().attach(session, messages);
+        let mut app = App::new(conversation, Rc::clone(inner.state()));
+        app.set_renderer(Box::new(renderer::LuaRenderer::new(
+            inner.lua.clone(),
+            Rc::clone(&inner.api),
+        )));
 
         let (keys, key_channel) = calloop::channel::channel::<Input>();
         let mut frontend: Box<dyn Frontend> = Box::new(frontend);
@@ -149,7 +148,7 @@ impl Runtime {
             data.pump(&loop_handle)?;
         }
 
-        data.inner.emit(events::Event::Quit.name(), &[]);
+        data.inner.emit(&events::BeforeQuit);
         data.frontend.stop()
     }
 }

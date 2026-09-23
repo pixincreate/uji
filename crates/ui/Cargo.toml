@@ -2,13 +2,18 @@
 name = "uji-ui"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Terminal interface for uji"
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 base64 = "0.22"
 arboard = { version = "3", default-features = false, features = ["wayland-data-control"] }
 nucleo-matcher = "0.3"
-uji-agent = { path = "../agent" }
+uji-core = { path = "../core" }
 ratatui = "0.30"
 crossterm = "0.29"
 serde_json = "1"

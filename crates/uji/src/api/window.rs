@@ -11,8 +11,7 @@ use crate::api::bind::bind;
 use crate::api::request::Request;
 
 pub fn open_win(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let state = api.state();
-    lua.create_function(move |_, opts: Option<Table>| {
+    bind(lua, api, move |api, _, opts: Option<Table>| {
         let (builtin, win_opts) = match opts {
             Some(table) => {
                 let builtin = match table.get::<Option<String>>("view")? {
@@ -26,59 +25,58 @@ pub fn open_win(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
             }
             None => (None, WinOpts::default()),
         };
-        let mut state = state.borrow_mut();
+        let mut state = api.state().borrow_mut();
         Ok(state.open_window(builtin, win_opts))
     })
 }
 
 pub fn close_win(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let state = api.state();
-    lua.create_function(move |_, id: u32| {
-        let mut state = state.borrow_mut();
+    bind(lua, api, move |api, _, id: u32| {
+        let mut state = api.state().borrow_mut();
         Ok(state.close_window(id))
     })
 }
 
 pub fn set_lines(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let state = api.state();
-    lua.create_function(move |_, (id, values): (u32, Table)| {
+    bind(lua, api, move |api, _, (id, values): (u32, Table)| {
         let lines = values
             .sequence_values::<LuaValue>()
             .map(|value| line_from_lua(value?))
             .collect::<mlua::Result<Vec<_>>>()?;
-        state.borrow_mut().set_window_lines(id, lines);
+        api.state().borrow_mut().set_window_lines(id, lines);
         Ok(())
     })
 }
 
 pub fn clear(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let state = api.state();
-    lua.create_function(move |_, id: u32| {
-        state.borrow_mut().clear_window(id);
+    bind(lua, api, move |api, _, id: u32| {
+        api.state().borrow_mut().clear_window(id);
         Ok(())
     })
 }
 
 pub fn set_size(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let state = api.state();
-    lua.create_function(move |_, (id, size): (u32, LuaValue)| {
+    bind(lua, api, move |api, _, (id, size): (u32, LuaValue)| {
         let size = Size::from_lua_value(&size)?;
-        state.borrow_mut().set_window_size(id, size);
+        api.state().borrow_mut().set_window_size(id, size);
         Ok(())
     })
 }
 
 pub fn set_title(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let state = api.state();
-    lua.create_function(move |_, (id, title): (u32, Option<String>)| {
-        state.borrow_mut().set_window_title(id, title);
-        Ok(())
-    })
+    bind(
+        lua,
+        api,
+        move |api, _, (id, title): (u32, Option<String>)| {
+            api.state().borrow_mut().set_window_title(id, title);
+            Ok(())
+        },
+    )
 }
 
 pub fn exec(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    bind(lua, api, move |api, _, opts: Table| {
-        let command = match opts.get::<LuaValue>("cmd")? {
+    bind(lua, api, move |api, _, cmd: LuaValue| {
+        let command = match cmd {
             LuaValue::String(text) => vec![
                 String::from("sh"),
                 String::from("-c"),
@@ -98,11 +96,12 @@ pub fn exec(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 }
 
 pub fn configure(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let state = api.state();
-    lua.create_function(move |lua, opts: Table| {
+    bind(lua, api, move |api, lua, opts: Table| {
         let config: UiConfig = lua.from_value(LuaValue::Table(opts))?;
-        state.borrow_mut().apply_config(&config);
-        Ok(())
+        api.state()
+            .borrow_mut()
+            .apply_config(&config)
+            .map_err(|err| mlua::Error::runtime(err.to_string()))
     })
 }
 

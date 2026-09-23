@@ -1,5 +1,6 @@
 use std::fmt;
 use std::str::FromStr;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Builtin {
@@ -78,7 +79,7 @@ impl FromStr for Color {
             "cyan" => Ok(Self::Cyan),
             "white" => Ok(Self::White),
             "gray" | "grey" => Ok(Self::Gray),
-            "dark_gray" | "dark_grey" | "light_black" => Ok(Self::DarkGray),
+            "dark_gray" | "dark_grey" => Ok(Self::DarkGray),
             "light_red" => Ok(Self::LightRed),
             "light_green" => Ok(Self::LightGreen),
             "light_yellow" => Ok(Self::LightYellow),
@@ -215,7 +216,7 @@ impl Default for WinOpts {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct WindowSpec {
     pub id: u32,
     pub builtin: Option<Builtin>,
@@ -262,24 +263,7 @@ impl Default for Theme {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CompactionOpts {
-    pub enabled: bool,
-    pub reserve: Option<u64>,
-    pub keep_recent: u64,
-}
-
-impl Default for CompactionOpts {
-    fn default() -> Self {
-        Self {
-            enabled: true,
-            reserve: None,
-            keep_recent: 20_000,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct GlobalOpts {
     pub cursor_blink: bool,
     pub show_thinking: bool,
@@ -287,10 +271,9 @@ pub struct GlobalOpts {
     pub suggest_enabled: bool,
     pub suggest_max_height: u16,
     pub loader_frames: Vec<String>,
-    pub loader_interval_ms: u64,
+    pub loader_interval: Duration,
     pub confirm: ConfirmOpts,
     pub theme: Theme,
-    pub compaction: CompactionOpts,
 }
 
 impl Default for GlobalOpts {
@@ -302,15 +285,14 @@ impl Default for GlobalOpts {
             suggest_enabled: true,
             suggest_max_height: 5,
             loader_frames: Vec::new(),
-            loader_interval_ms: 80,
+            loader_interval: Duration::from_millis(80),
             confirm: ConfirmOpts::default(),
             theme: Theme::default(),
-            compaction: CompactionOpts::default(),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub struct ConfirmOpts {
     pub title: String,
     pub yes: String,
@@ -335,15 +317,22 @@ impl Default for ConfirmOpts {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct ActiveModel {
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub effort: Option<String>,
+    pub context_window: Option<u64>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RunState {
     #[default]
     Idle,
     Working,
-    Error,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ParseError(pub String);
 
 impl fmt::Display for ParseError {

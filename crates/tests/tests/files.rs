@@ -1,4 +1,4 @@
-use uji_agent::fs::Files;
+use uji_core::fs::Files;
 use uji_tests::Sandbox;
 
 fn files(sandbox: &Sandbox) -> Files {

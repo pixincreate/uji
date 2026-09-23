@@ -1,36 +1,36 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use globset::Glob;
-use mlua::{Lua, Table, Value as LuaValue};
+use mlua::Value as LuaValue;
 use regex::Regex;
 
 use strum::VariantArray;
-use uji_agent::tools::policy::{Action, Matcher, Rule, ToolPolicy, ToolRules};
+use uji_core::tools::policy::{Action, Matcher, Rule, ToolPolicy, ToolRules};
 
 const PRECEDENCE: [Action; Action::VARIANTS.len()] = [Action::Deny, Action::Allow, Action::Ask];
 
-pub(super) fn compile(lua: &Lua, known: &BTreeSet<String>) -> (ToolPolicy, Vec<String>) {
+pub(super) fn compile(
+    rules: &BTreeMap<String, LuaValue>,
+    known: &BTreeSet<String>,
+) -> (ToolPolicy, Vec<String>) {
     let mut policy = ToolPolicy::default();
     let mut notices = Vec::new();
-    let Some(table) = policy_table(lua) else {
-        return (policy, notices);
-    };
-    if let Ok(Some(default)) = table.get::<Option<String>>("default") {
-        match Action::parse(&default) {
-            Some(action) => policy.default = action,
-            None => notices.push(format!(
-                "tool policy: default `{default}` is not allow, ask or deny; asking instead"
-            )),
-        }
-    }
-    for pair in table.pairs::<String, LuaValue>() {
-        let Ok((name, value)) = pair else {
-            continue;
-        };
+    for (name, value) in rules {
         if name == "default" {
+            match value.as_string().map(mlua::LuaString::to_string_lossy) {
+                Some(default) => match Action::parse(&default) {
+                    Some(action) => policy.default = action,
+                    None => notices.push(format!(
+                        "tool policy: default `{default}` is not allow, ask or deny; asking instead"
+                    )),
+                },
+                None => notices.push(String::from(
+                    "tool policy: default must be allow, ask or deny; asking instead",
+                )),
+            }
             continue;
         }
-        if !known.contains(&name) {
+        if !known.contains(name) {
             notices.push(format!(
                 "tool policy: `{name}` is not a tool, so its rules do nothing"
             ));
@@ -38,15 +38,9 @@ pub(super) fn compile(lua: &Lua, known: &BTreeSet<String>) -> (ToolPolicy, Vec<S
         }
         policy
             .tools
-            .insert(name.clone(), tool_rules(&name, value, &mut notices));
+            .insert(name.clone(), tool_rules(name, value.clone(), &mut notices));
     }
     (policy, notices)
-}
-
-fn policy_table(lua: &Lua) -> Option<Table> {
-    let uji: Table = lua.globals().get("uji").ok()?;
-    let tool: Table = uji.get("tool").ok()?;
-    tool.get("policy").ok()
 }
 
 fn tool_rules(name: &str, value: LuaValue, notices: &mut Vec<String>) -> ToolRules {
@@ -56,18 +50,18 @@ fn tool_rules(name: &str, value: LuaValue, notices: &mut Vec<String>) -> ToolRul
         ));
         return ToolRules {
             rules: Vec::new(),
-            default: Action::Ask,
+            default: Some(Action::Ask),
         };
     };
     let mut rules = Vec::new();
-    let mut default = Action::Ask;
+    let mut default = None;
     if let Ok(Some(value)) = table.get::<Option<String>>("default") {
-        match Action::parse(&value) {
-            Some(action) => default = action,
-            None => notices.push(format!(
+        default = Some(Action::parse(&value).unwrap_or_else(|| {
+            notices.push(format!(
                 "tool policy: `{name}` default `{value}` is not allow, ask or deny; asking instead"
-            )),
-        }
+            ));
+            Action::Ask
+        }));
     }
     let mut unreadable = false;
     for action in PRECEDENCE {
@@ -86,13 +80,13 @@ fn tool_rules(name: &str, value: LuaValue, notices: &mut Vec<String>) -> ToolRul
         }
     }
     if unreadable {
-        let raised = default.strictest(Action::Ask);
-        if raised != default {
+        let raised = default.map_or(Action::Ask, |action| action.strictest(Action::Ask));
+        if default != Some(raised) {
             notices.push(format!(
                 "tool policy: asking before every {name}, because part of its policy could not be read"
             ));
-            default = raised;
         }
+        default = Some(raised);
     }
     ToolRules { rules, default }
 }

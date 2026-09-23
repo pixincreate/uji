@@ -1,6 +1,6 @@
-use uji_agent::llm::context::build;
-use uji_agent::session::id::{MessageId, now_millis};
-use uji_agent::session::model::{Message, StoredMessage, ToolCall};
+use uji_core::llm::context::build;
+use uji_core::session::id::{MessageId, now_millis};
+use uji_core::session::model::{Message, StoredMessage, ToolCall};
 
 fn stored(seq: i64, message: Message) -> StoredMessage {
     StoredMessage {
@@ -13,7 +13,7 @@ fn stored(seq: i64, message: Message) -> StoredMessage {
 
 #[test]
 fn a_shell_message_never_reaches_the_model() {
-    let context = build(&[
+    let history = [
         stored(
             0,
             Message::User {
@@ -28,7 +28,8 @@ fn a_shell_message_never_reaches_the_model() {
                 code: 0,
             },
         ),
-    ]);
+    ];
+    let context = build(&history);
     assert_eq!(context.len(), 1);
     assert!(
         !context
@@ -40,7 +41,7 @@ fn a_shell_message_never_reaches_the_model() {
 
 #[test]
 fn a_tool_call_without_its_result_is_dropped() {
-    let context = build(&[stored(
+    let history = [stored(
         0,
         Message::Assistant {
             text: String::from("looking"),
@@ -49,11 +50,12 @@ fn a_tool_call_without_its_result_is_dropped() {
                 name: String::from("read_file"),
                 arguments: String::from("{}"),
             }],
-            reasoning_content: None,
+            reasoning: None,
         },
-    )]);
+    )];
+    let context = build(&history);
     assert!(matches!(
-        context.as_slice(),
+        context.iter().map(AsRef::as_ref).collect::<Vec<&Message>>().as_slice(),
         [Message::Assistant { text, tool_calls, .. }]
             if text == "looking" && tool_calls.is_empty()
     ));
@@ -61,7 +63,7 @@ fn a_tool_call_without_its_result_is_dropped() {
 
 #[test]
 fn a_compaction_cuts_the_history_it_summarised() {
-    let context = build(&[
+    let history = [
         stored(
             0,
             Message::User {
@@ -82,7 +84,8 @@ fn a_compaction_cuts_the_history_it_summarised() {
                 text: String::from("recent"),
             },
         ),
-    ]);
+    ];
+    let context = build(&history);
     assert_eq!(context.len(), 2);
     assert!(context[0].text().contains("they said hello"));
     assert!(!context[0].text().contains("ancient history"));

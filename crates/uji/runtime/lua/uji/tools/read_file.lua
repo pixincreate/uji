@@ -60,17 +60,20 @@ return {
         return field.text(args, "path")
     end,
     policy = "allow",
-    defer = true,
-    run = function(args, done)
+    display = {
+        verb = "Read",
+        question = "Would you like to allow uji to `read_file`?",
+    },
+    run = function(args, ctx)
         local missing = field.missing(args, "path")
         if missing then
-            return done(missing)
+            return missing
         end
         local path = field.text(args, "path")
         local offset = math.max(field.count(args, "offset") or 1, 1)
         local limit = math.max(field.count(args, "limit") or MAX_LINES, 1)
         uji.fs.lines(path, { offset = offset, limit = limit, max_line = MAX_LINE }, function(read, err)
-            done(read and page(path, offset, read) or "error: " .. err)
+            ctx.done(read and page(path, offset, read) or "error: " .. err)
         end)
     end,
 }

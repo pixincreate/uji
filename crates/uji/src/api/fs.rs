@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use mlua::{Function, Lua, LuaString, Table};
-use uji_agent::fs::Window;
+use uji_core::fs::Window;
 
 use crate::api::Api;
 use crate::api::bind::bind;

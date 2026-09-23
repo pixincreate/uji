@@ -1,6 +1,8 @@
+use std::rc::Rc;
+
 use mlua::{Function, IntoLua, Lua, LuaSerdeExt, Table, Value as LuaValue};
-use uji_agent::llm::ToolSpec;
-use uji_agent::tools::policy::Action;
+use uji_core::llm::ToolSpec;
+use uji_core::tools::policy::Action;
 
 use super::{Awaiting, LoopData, Running, ToolApproval};
 use crate::api::tools;
@@ -50,47 +52,54 @@ impl LoopData {
 
     pub(super) fn handle_tool_decision(&mut self, id: u64, name: &str, arguments: Table) {
         let verdict = self.policy_verdict(name, &arguments);
-        let decision = self.inner.lua.create_table().ok().and_then(|event| {
-            let _ = event.set("name", name);
-            let _ = event.set("arguments", arguments.clone());
-            self.inner.api.ask(events::Event::ToolCall.name(), &event)
+        let decision = self.inner.ask(&events::BeforeTool {
+            name,
+            arguments: &arguments,
         });
         match parse_tool_decision(decision).unwrap_or(verdict) {
             ToolApproval::Allow => self.answer(id, Decision::Allow(arguments)),
             ToolApproval::Deny { reason } => self.answer(id, Decision::Deny(reason)),
             ToolApproval::Ask { title } => {
-                let shown = self
-                    .inner
-                    .lua
-                    .from_value::<serde_json::Value>(LuaValue::Table(arguments.clone()))
-                    .unwrap_or_default();
-                let prompt = uji_agent::tools::prompt::describe(name, &shown.to_string());
+                let (question, detail) = self.question(name, &arguments);
                 self.turn.awaiting = Some(Awaiting::Approval { id, arguments });
-                self.app
-                    .open_confirm(title.unwrap_or(prompt.question), prompt.detail);
+                self.app.open_confirm(title.unwrap_or(question), detail);
                 self.dirty = true;
             }
         }
     }
 
+    fn question(&self, name: &str, arguments: &Table) -> (String, String) {
+        let tool = self.inner.api.tools().borrow().get(name).map(Rc::clone);
+        let question = tool
+            .as_ref()
+            .and_then(|tool| tool.display.question.clone())
+            .unwrap_or_else(|| format!("Would you like to run `{name}`?"));
+        let detail = tool
+            .and_then(|tool| tool.detail(arguments).ok().flatten())
+            .unwrap_or_else(|| {
+                let shown = self
+                    .inner
+                    .lua
+                    .from_value::<serde_json::Value>(LuaValue::Table(arguments.clone()))
+                    .unwrap_or_default();
+                uji_core::tools::prompt::listing(&shown)
+            });
+        (question, detail)
+    }
+
     fn policy_verdict(&self, name: &str, args: &Table) -> ToolApproval {
-        let tool = self.inner.api.tools().borrow().get(name).cloned();
+        let tool = self.inner.api.tools().borrow().get(name).map(Rc::clone);
         let (subject, declared) = match tool {
             Some(tool) => match tool.subject(name, args) {
                 Ok(subject) => (subject, tool.policy),
                 Err(err) => {
-                    self.inner.report(format!("{name} subject: {err}"));
+                    self.inner.notify(format!("{name} subject: {err}"));
                     return ToolApproval::Ask { title: None };
                 }
             },
             None => (name.to_string(), None),
         };
-        match self
-            .inner
-            .policy
-            .borrow()
-            .evaluate(name, &subject, declared)
-        {
+        match self.inner.policy.evaluate(name, &subject, declared) {
             Action::Allow => ToolApproval::Allow,
             Action::Deny => ToolApproval::Deny {
                 reason: String::from("denied by policy"),
@@ -120,6 +129,7 @@ impl LoopData {
     }
 
     pub(super) fn run_tool(&mut self, id: u64, name: String, arguments: LuaValue) {
+        self.inner.emit(&events::ToolStarted { name: &name });
         match self.start_tool(&name, arguments, id) {
             Ok(Started::Done(text)) => self.answer(id, text),
             Ok(Started::Pending(cancel)) => {
@@ -142,16 +152,18 @@ impl LoopData {
             .tools()
             .borrow()
             .get(name)
-            .cloned()
+            .map(Rc::clone)
             .ok_or_else(|| mlua::Error::runtime(format!("unknown tool {name}")))?;
-        if !tool.defer {
-            return tool.run.call::<String>(arguments).map(Started::Done);
+        let ctx = tools::context(lua, &self.inner.api, call)?;
+        match tool.run.call::<LuaValue>((arguments, ctx))? {
+            LuaValue::String(text) => Ok(Started::Done(text.to_string_lossy())),
+            LuaValue::Function(cancel) => Ok(Started::Pending(Some(cancel))),
+            LuaValue::Nil => Ok(Started::Pending(None)),
+            other => Err(mlua::Error::runtime(format!(
+                "{name} returned a {}; run returns its result, a function that cancels it, or nothing",
+                other.type_name()
+            ))),
         }
-        let done = tools::done(lua, &self.inner.api, call)?;
-        let progress = tools::progress(lua, &self.inner.api, call)?;
-        tool.run
-            .call::<Option<Function>>((arguments, done, progress))
-            .map(Started::Pending)
     }
 
     pub(super) fn finish_tool(&mut self, call: u64, text: String) {
@@ -177,7 +189,7 @@ impl LoopData {
                 if let Some(cancel) = cancel
                     && let Err(err) = cancel.call::<()>(())
                 {
-                    self.inner.report(format!("{name}: {err}"));
+                    self.inner.notify(format!("{name}: {err}"));
                 }
             }
         }

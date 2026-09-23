@@ -1,0 +1,16 @@
+id: no-scope-block
+language: rust
+severity: error
+message: >-
+  Do not open a block just to scope a value or a borrow, as in `let x = { ... };`
+  or a bare `{ ... }`. Give the work a name in a method or function, or let the
+  guard drop at the end of its statement.
+rule:
+  any:
+    - kind: let_declaration
+      has:
+        field: value
+        kind: block
+    - kind: expression_statement
+      has:
+        kind: block

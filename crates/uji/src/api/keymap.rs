@@ -8,7 +8,6 @@ use crate::api::bind::bind;
 
 fn binding_from_lua(value: &Value) -> Option<Binding> {
     match value {
-        Value::Nil => Some(Binding::Unbound),
         Value::String(action) => Some(Binding::Action(action.to_string_lossy())),
         Value::Table(table) => {
             if let Ok(Some(command)) = table.get::<Option<String>>("command") {
@@ -31,24 +30,31 @@ fn target(mode: &str, key: &str) -> mlua::Result<(Mode, Chord)> {
     Ok((parsed_mode, chord))
 }
 
-pub(crate) fn set(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+pub(crate) fn add(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(
         lua,
         api,
         move |api, _, (mode, key, binding): (String, String, Value)| {
             let (mode, chord) = target(&mode, &key)?;
-            let binding = binding_from_lua(&binding).ok_or_else(|| {
-                mlua::Error::runtime(
-                    "binding must be an action name, { command = \"...\" }, or nil",
-                )
-            })?;
+            let binding = match binding {
+                Value::Function(handler) => {
+                    let name = format!("{} {}", mode.name(), describe(chord));
+                    api.actions().borrow_mut().add(name.clone(), handler);
+                    Binding::Action(name)
+                }
+                other => binding_from_lua(&other).ok_or_else(|| {
+                    mlua::Error::runtime(
+                        "binding must be an action name, a function, or { command = \"...\" }",
+                    )
+                })?,
+            };
             api.keymap().borrow_mut().set(mode, chord, binding);
             Ok(())
         },
     )
 }
 
-pub(crate) fn del(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+pub(crate) fn remove(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(lua, api, move |api, _, (mode, key): (String, String)| {
         let (mode, chord) = target(&mode, &key)?;
         api.keymap().borrow_mut().set(mode, chord, Binding::Unbound);
@@ -66,13 +72,19 @@ pub(crate) fn reset(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 pub(crate) fn list(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(lua, api, move |api, lua, ()| {
         let out = lua.create_table()?;
-        for ((mode, chord), binding) in api.keymap().borrow().entries() {
+        let entries: Vec<_> = api
+            .keymap()
+            .borrow()
+            .entries()
+            .map(|(&(mode, chord), binding)| (mode, chord, binding.clone()))
+            .collect();
+        for (mode, chord, binding) in entries {
             let row = lua.create_table()?;
             row.set("mode", mode.name())?;
-            row.set("key", describe(*chord))?;
+            row.set("key", describe(chord))?;
             match binding {
-                Binding::Action(name) => row.set("action", name.clone())?,
-                Binding::Command(name) => row.set("command", name.clone())?,
+                Binding::Action(name) => row.set("action", name)?,
+                Binding::Command(name) => row.set("command", name)?,
                 Binding::Unbound => row.set("unbound", true)?,
             }
             out.push(row)?;
@@ -83,8 +95,8 @@ pub(crate) fn list(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 
 pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     let keymap = lua.create_table()?;
-    keymap.set("set", set(lua, api)?)?;
-    keymap.set("del", del(lua, api)?)?;
+    keymap.set("add", add(lua, api)?)?;
+    keymap.set("remove", remove(lua, api)?)?;
     keymap.set("reset", reset(lua, api)?)?;
     keymap.set("list", list(lua, api)?)?;
     Ok(keymap)

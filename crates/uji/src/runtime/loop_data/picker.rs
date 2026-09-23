@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use super::LoopData;
+use crate::api::modal;
 
 const CONTEXT_LINES: usize = 40;
 
@@ -70,8 +71,10 @@ impl LoopData {
             return;
         };
         let token = self.inner.api.pick().borrow_mut().next_token();
-        if let Err(err) = hook.call::<()>((query, token)) {
-            self.inner.report(format!("pick query: {err}"));
+        let called = modal::show(&self.inner.lua, &self.inner.api, token)
+            .and_then(|show| hook.call::<()>((query, show)));
+        if let Err(err) = called {
+            self.inner.notify(format!("pick query: {err}"));
         }
     }
 
@@ -93,7 +96,7 @@ impl LoopData {
             Some(hook) => match hook.call::<Vec<String>>(item) {
                 Ok(lines) => lines,
                 Err(err) => {
-                    self.inner.report(format!("preview: {err}"));
+                    self.inner.notify(format!("preview: {err}"));
                     Vec::new()
                 }
             },
@@ -107,7 +110,7 @@ impl LoopData {
         let Some((path, line)) = split_location(item) else {
             return Vec::new();
         };
-        let cwd = PathBuf::from(&self.app.session().directory);
+        let cwd = PathBuf::from(&self.app.messages().info().directory);
         let files = self.inner.api.access().borrow().files(cwd);
         files
             .around(path, line, CONTEXT_LINES)

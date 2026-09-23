@@ -1,34 +1,11 @@
 use std::rc::Rc;
 
 use mlua::{Lua, Table};
-use uji_agent::llm::Usage;
-use uji_agent::session::conversation::Shared;
+use uji_core::llm::Usage;
 
 use crate::api::Api;
 use crate::api::bind::bind;
 use crate::api::request::Request;
-
-pub struct SessionState {
-    conversation: Shared,
-}
-
-impl SessionState {
-    pub fn new(conversation: Shared) -> Self {
-        Self { conversation }
-    }
-
-    pub fn conversation(&self) -> &Shared {
-        &self.conversation
-    }
-
-    pub fn set_title(&self, title: String) {
-        self.conversation.borrow_mut().set_title(title);
-    }
-
-    pub fn add_usage(&self, usage: Usage) {
-        self.conversation.borrow_mut().add_usage(usage);
-    }
-}
 
 pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     let session = lua.create_table()?;
@@ -36,10 +13,10 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     session.set(
         "info",
         bind(lua, api, move |api, lua, ()| {
-            let conversation = api.session().conversation().borrow();
+            let conversation = api.conversation().borrow();
             let info = conversation.info();
             let out = lua.create_table()?;
-            out.set("id", info.id.clone())?;
+            out.set("id", info.id.to_string())?;
             out.set("title", info.title.clone())?;
             out.set("directory", info.directory.clone())?;
             Ok(out)
@@ -50,12 +27,12 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
         "messages",
         bind(lua, api, move |api, lua, ()| {
             let out = lua.create_table()?;
-            let conversation = api.session().conversation().borrow();
+            let conversation = api.conversation().borrow();
             for stored in conversation.messages() {
                 let row = lua.create_table()?;
                 row.set("type", stored.message.type_name())?;
                 row.set("text", stored.message.text())?;
-                if let uji_agent::session::model::Message::Tool { name, .. } = &stored.message {
+                if let uji_core::session::model::Message::Tool { name, .. } = &stored.message {
                     row.set("name", name.clone())?;
                 }
                 out.push(row)?;
@@ -67,7 +44,7 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     session.set(
         "usage",
         bind(lua, api, move |api, lua, ()| {
-            let tally = api.session().conversation().borrow().tally();
+            let tally = api.conversation().borrow().tally();
             let out = usage_table(lua, tally.usage)?;
             out.set("last", usage_table(lua, tally.last)?)?;
             out.set("requests", tally.turns)?;
@@ -82,7 +59,7 @@ pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
             if title.is_empty() {
                 return Err(mlua::Error::runtime("set_title needs non-empty text"));
             }
-            api.session().set_title(title);
+            api.request(Request::SetTitle(title));
             Ok(())
         })?,
     )?;

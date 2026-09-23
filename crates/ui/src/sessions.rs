@@ -9,8 +9,8 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Cell, Paragraph, Row, Table};
 
-use uji_agent::session::id::now_millis;
-use uji_agent::session::model::Session;
+use uji_core::session::id::now_millis;
+use uji_core::session::model::Session;
 
 use crate::render::style::Palette;
 use crate::terminal::{self, Term};

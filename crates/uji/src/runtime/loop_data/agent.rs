@@ -1,13 +1,14 @@
-use std::time::Instant;
+use std::borrow::Cow;
 
 use mlua::serde::SerializeOptions;
-use mlua::{Function, LuaSerdeExt, Table};
+use mlua::{Function, LuaSerdeExt, Table, Value as LuaValue};
 use serde::Serialize;
-use uji_agent::llm::ToolSpec;
-use uji_agent::session::model::Message;
+use uji_core::llm::{ToolSpec, context};
+use uji_core::session::model::Message;
 use uji_ui::model::RunState;
 
 use super::LoopData;
+use crate::api::agent;
 use crate::runtime::events;
 
 const LOOP: &str = "uji.loop";
@@ -16,9 +17,9 @@ const LOOP: &str = "uji.loop";
 struct Turn<'a> {
     text: &'a str,
     system: String,
-    messages: Vec<Message>,
+    messages: Vec<Cow<'a, Message>>,
     tools: Vec<ToolSpec>,
-    model: String,
+    model: &'a str,
     effort: &'static str,
     max_output: u32,
     cache: &'static str,
@@ -36,39 +37,17 @@ impl LoopData {
         }
         self.app.overlay_mut().clear_notices();
         self.app.reset_scroll();
-        self.inner.emit(
-            events::Event::MessageSubmitted.name(),
-            &[("text", text.to_string())],
-        );
+        self.inner.emit(&events::MessageSubmitted { text });
 
         self.append(Message::User {
             text: text.to_string(),
         });
         self.maybe_title(text);
 
-        let mut messages = {
-            let conversation = self.app.messages();
-            uji_agent::llm::context::build(conversation.messages())
-        };
-        let system = self.prompt(text, &mut messages);
-        let turn = Turn {
-            text,
-            system,
-            messages,
-            tools: self.gather_tools(),
-            model: self.inner.llm_model.borrow().clone(),
-            effort: self.inner.llm_effort.borrow().name(),
-            max_output: self.max_output(),
-            cache: self.inner.llm_cache.borrow().name(),
-        };
-        {
-            let state_rc = self.inner.state();
-            let mut state = state_rc.borrow_mut();
-            state.set_run_state(RunState::Working);
-            state.set_turn_started(Some(Instant::now()));
-        }
-        self.inner.emit(events::Event::StatusChanged.name(), &[]);
-        match self.start_turn(&turn) {
+        let (system, extra) = self.prompt(text);
+        let tools = self.gather_tools();
+        self.start_working();
+        match self.start_turn(text, system, extra, tools) {
             Ok(cancel) => self.turn.cancel = Some(cancel),
             Err(err) => {
                 self.fail_assistant(&format!("{LOOP}: {err}"));
@@ -77,15 +56,50 @@ impl LoopData {
         }
     }
 
-    fn start_turn(&self, turn: &Turn<'_>) -> mlua::Result<Function> {
-        let options = SerializeOptions::new()
-            .serialize_none_to_null(false)
-            .serialize_unit_to_null(false);
-        let turn = self.inner.lua.to_value_with(turn, options)?;
+    fn start_turn(
+        &self,
+        text: &str,
+        system: String,
+        extra: Vec<Message>,
+        tools: Vec<ToolSpec>,
+    ) -> mlua::Result<Function> {
+        let turn = self.encode_turn(text, system, extra, tools)?;
+        let host = agent::host(&self.inner.lua, &self.inner.api)?;
         self.inner
             .require::<Table>(LOOP)?
             .get::<Function>("start")?
-            .call(turn)
+            .call((turn, host))
+    }
+
+    fn encode_turn(
+        &self,
+        text: &str,
+        system: String,
+        extra: Vec<Message>,
+        tools: Vec<ToolSpec>,
+    ) -> mlua::Result<LuaValue> {
+        let conversation = self.app.messages();
+        let mut messages = context::build(conversation.messages());
+        messages.extend(extra.into_iter().map(Cow::Owned));
+        let turn = Turn {
+            text,
+            system,
+            messages,
+            tools,
+            model: &self.inner.llm_model,
+            effort: self.inner.llm_effort.name(),
+            max_output: self.max_output(),
+            cache: self.inner.llm_cache.name(),
+        };
+        let options = SerializeOptions::new()
+            .serialize_none_to_null(false)
+            .serialize_unit_to_null(false);
+        self.inner.lua.to_value_with(&turn, options)
+    }
+
+    pub(super) fn start_working(&mut self) {
+        self.inner.state().borrow_mut().begin_work();
+        self.inner.emit(&events::StatusChanged);
     }
 
     pub(crate) fn interrupt(&mut self) -> bool {
@@ -96,7 +110,7 @@ impl LoopData {
             return false;
         };
         if let Err(err) = turn.call::<()>(()) {
-            self.inner.report(format!("{LOOP}: {err}"));
+            self.inner.notify(format!("{LOOP}: {err}"));
         }
         self.dirty = true;
         true
@@ -107,13 +121,8 @@ impl LoopData {
         if let Some(awaiting) = self.turn.awaiting.take() {
             self.release(awaiting);
         }
-        {
-            let state_rc = self.inner.state();
-            let mut state = state_rc.borrow_mut();
-            state.set_run_state(RunState::Idle);
-            state.set_turn_started(None);
-        }
-        self.inner.emit(events::Event::StatusChanged.name(), &[]);
-        self.inner.emit(events::Event::TurnFinished.name(), &[]);
+        self.inner.state().borrow_mut().end_work();
+        self.inner.emit(&events::StatusChanged);
+        self.inner.emit(&events::TurnFinished);
     }
 }

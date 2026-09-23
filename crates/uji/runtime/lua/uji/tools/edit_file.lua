@@ -65,44 +65,47 @@ return {
         return field.text(args, "path")
     end,
     policy = "ask",
-    defer = true,
-    run = function(args, done)
+    display = {
+        verb = "Edited",
+        question = "Would you like to make the following edit?",
+    },
+    run = function(args, ctx)
         local missing = field.missing(args, "path", "old_string")
         if missing then
-            return done(missing)
+            return missing
         end
         local path = field.text(args, "path")
         local old = field.text(args, "old_string")
         local new = field.text(args, "new_string")
         local all = args.replace_all == true
         if old == new then
-            return done("error: old_string and new_string are identical")
+            return "error: old_string and new_string are identical"
         end
         uji.fs.read(path, function(text, err)
             if not text then
-                return done("error: " .. err)
+                return ctx.done("error: " .. err)
             end
             local first = text:find(old, 1, true)
             if not first then
-                return done(
+                return ctx.done(
                     "error: old_string was not found in " .. path .. ". Read the file again and copy the "
                         .. "snippet exactly, without line-number prefixes."
                 )
             end
             local count = occurrences(text, old)
             if count > 1 and not all then
-                return done(
+                return ctx.done(
                     string.format("error: old_string matches %d places in %s. ", count, path)
                         .. "Add surrounding lines to make it unique, or pass replace_all: true."
                 )
             end
             uji.fs.write(path, replace(text, old, new, all), function(written, failure)
                 if not written then
-                    done("error: " .. failure)
+                    ctx.done("error: " .. failure)
                 elseif all then
-                    done(string.format("edited %s: replaced %d occurrences", path, count))
+                    ctx.done(string.format("edited %s: replaced %d occurrences", path, count))
                 else
-                    done(string.format("edited %s at line %d", path, line_of(text, first)))
+                    ctx.done(string.format("edited %s at line %d", path, line_of(text, first)))
                 end
             end)
         end)

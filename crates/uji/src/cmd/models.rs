@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use uji_agent::llm::{self, Provider};
+use uji_core::llm::{self, Catalog, Provider};
 
 use super::{Action, Args, Context};
-use uji_agent::session::store::Setting;
+use uji_core::session::store::Setting;
 
 #[derive(Default)]
 pub struct Models {
@@ -18,46 +18,13 @@ struct Choice {
 impl Action for Models {
     fn start(&mut self, ctx: &mut dyn Context, _args: &Args) {
         let current = ctx.get_setting(&Setting::Provider).unwrap_or_default();
-        let available: Vec<Provider> = ctx
-            .providers()
-            .into_iter()
-            .filter(|provider| !provider.models.is_empty())
-            .filter(|provider| provider.id == current || llm::authenticated(provider))
-            .collect();
-
-        if available.is_empty() {
+        let listed = self.list(&ctx.catalog(), &current);
+        if let Some((title, items)) = listed {
+            ctx.open_select(title, items);
+        } else {
             ctx.notify("Please run /login to configure a provider");
             ctx.finish();
-            return;
         }
-
-        let qualify = available.len() > 1;
-        self.choices.clear();
-        let mut items = Vec::new();
-        for provider in &available {
-            for model in &provider.models {
-                let label = if qualify {
-                    format!("{} · {}", provider.name, model.id)
-                } else {
-                    model.id.clone()
-                };
-                self.choices.insert(
-                    label.clone(),
-                    Choice {
-                        provider_id: provider.id.clone(),
-                        model: model.id.clone(),
-                    },
-                );
-                items.push(label);
-            }
-        }
-
-        let title = if qualify {
-            "Models".to_string()
-        } else {
-            format!("{} models", available[0].name)
-        };
-        ctx.open_select(title, items);
     }
 
     fn on_select(&mut self, ctx: &mut dyn Context, item: String) {
@@ -78,5 +45,43 @@ impl Action for Models {
 
     fn on_cancel(&mut self, ctx: &mut dyn Context) {
         ctx.finish();
+    }
+}
+
+impl Models {
+    fn list(&mut self, catalog: &Catalog, current: &str) -> Option<(String, Vec<String>)> {
+        let available: Vec<&Provider> = catalog
+            .all()
+            .iter()
+            .filter(|provider| !provider.models.is_empty())
+            .filter(|provider| provider.id == current || llm::authenticated(provider))
+            .collect();
+        let first = available.first()?;
+        let qualify = available.len() > 1;
+        self.choices.clear();
+        let mut items = Vec::new();
+        for provider in &available {
+            for model in &provider.models {
+                let label = if qualify {
+                    format!("{} · {}", provider.name, model.id)
+                } else {
+                    model.id.clone()
+                };
+                self.choices.insert(
+                    label.clone(),
+                    Choice {
+                        provider_id: provider.id.clone(),
+                        model: model.id.clone(),
+                    },
+                );
+                items.push(label);
+            }
+        }
+        let title = if qualify {
+            "Models".to_string()
+        } else {
+            format!("{} models", first.name)
+        };
+        Some((title, items))
     }
 }

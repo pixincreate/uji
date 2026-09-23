@@ -1,11 +1,11 @@
 use std::sync::Arc;
-use std::time::Instant;
 
-use uji_agent::llm::{Budget, context};
-use uji_agent::session::model::Message;
-use uji_ui::model::{CompactionOpts, RunState};
+use uji_core::llm::{Budget, context};
+use uji_core::session::model::{Message, StoredMessage};
+use uji_ui::model::RunState;
 
 use super::LoopData;
+use crate::api::context::Compaction;
 use crate::runtime::background::{self, CompactEvent};
 use crate::runtime::events;
 
@@ -25,7 +25,7 @@ impl LoopData {
         if self.run_compaction(self.keep_recent()) {
             return true;
         }
-        self.inner.report(format!(
+        self.inner.notify(format!(
             "context is over the {} token budget but the latest turn cannot be compacted",
             budget.usable()
         ));
@@ -47,12 +47,23 @@ impl LoopData {
             .max(1)
     }
 
-    fn compaction_opts(&self) -> CompactionOpts {
-        self.inner.state().borrow().opts().compaction
+    fn compaction_opts(&self) -> Compaction {
+        *self.inner.api.compaction().borrow()
     }
 
     pub(super) fn compaction_reserve(&self) -> Option<u64> {
         self.compaction_opts().reserve
+    }
+
+    fn span(&self, cut: context::Cut) -> (Option<String>, Vec<String>, Vec<StoredMessage>) {
+        let conversation = self.app.messages();
+        let span = &conversation.messages()[cut.from..cut.compacted];
+        match span.first().map(|entry| &entry.message) {
+            Some(Message::Compaction { summary, files, .. }) => {
+                (Some(summary.clone()), files.clone(), span[1..].to_vec())
+            }
+            _ => (None, Vec::new(), span.to_vec()),
+        }
     }
 
     pub(super) fn run_compaction(&mut self, keep_recent: u64) -> bool {
@@ -62,29 +73,14 @@ impl LoopData {
         let Some(cut) = self.cut(keep_recent) else {
             return false;
         };
-        let (previous, carried, earlier) = {
-            let conversation = self.app.messages();
-            let span = &conversation.messages()[cut.from..cut.compacted];
-            match span.first().map(|entry| &entry.message) {
-                Some(Message::Compaction { summary, files, .. }) => {
-                    (Some(summary.clone()), files.clone(), span[1..].to_vec())
-                }
-                _ => (None, Vec::new(), span.to_vec()),
-            }
-        };
-        {
-            let state_rc = self.inner.state();
-            let mut state = state_rc.borrow_mut();
-            state.set_run_state(RunState::Working);
-            state.set_turn_started(Some(Instant::now()));
-        }
-        self.inner.emit(events::Event::StatusChanged.name(), &[]);
+        let (previous, carried, earlier) = self.span(cut);
+        self.start_working();
         background::compact(
             &self.work,
             background::CompactRequest {
                 client: Arc::clone(&self.inner.client),
-                provider: self.inner.llm.borrow().clone(),
-                model: self.inner.llm_model.borrow().clone(),
+                provider: Arc::clone(&self.inner.llm),
+                model: self.inner.llm_model.clone(),
                 earlier,
                 previous,
                 carried,
@@ -111,19 +107,17 @@ impl LoopData {
                     files,
                 });
                 self.inner
-                    .report(format!("compacted {} earlier messages", cut.span()));
-                self.inner.emit(
-                    events::Event::Compacted.name(),
-                    &[("count", cut.span().to_string())],
-                );
+                    .notify(format!("compacted {} earlier messages", cut.span()));
+                self.inner
+                    .emit(&events::SessionCompacted { count: cut.span() });
             }
             CompactEvent::Failed => self
                 .inner
-                .report(String::from("could not compact; sending the full context")),
+                .notify(String::from("could not compact; sending the full context")),
         }
         self.stop_working();
         self.send_queued();
-        self.drain_diagnostics();
+        self.drain_notices();
         self.dirty = true;
     }
 

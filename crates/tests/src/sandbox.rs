@@ -8,12 +8,10 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use calloop::channel::Sender;
-use uji::runtime::Frontend;
-use uji::session::store::Setting;
-use uji::storage::interface::StorageInterface;
-use uji::storage::sqlite::SqliteStorage;
-use uji::{Runtime, SessionStorage};
-use uji_agent::session::model::Message;
+use uji::runtime::{Frontend, Runtime};
+use uji_core::session::model::Message;
+use uji_core::session::store::{SessionStorage, Setting};
+use uji_core::storage::sqlite::SqliteStorage;
 use uji_ui::app::{App, Mode};
 use uji_ui::input::Input;
 use uji_ui::keymap::{Chord, Key};
@@ -21,7 +19,7 @@ use uji_ui::model::RunState;
 
 pub const ALLOW_ALL: &str = r#"
 local allow = { default = "allow" }
-uji.tool.policy = { default = "allow", read_file = allow, edit_file = allow, write_file = allow, run_command = allow }
+uji.tool.policy({ default = "allow", read_file = allow, edit_file = allow, write_file = allow, run_command = allow })
 "#;
 
 pub const SUBMIT: &str = r#"uji.schedule(function() uji.session.submit("go") end)"#;
@@ -153,9 +151,9 @@ impl Sandbox {
         deadline: Duration,
     ) -> Result<Vec<Message>, Box<dyn Error>> {
         let runtime = Runtime::boot_in(Some(self.root.join("cfg")))?;
-        let diagnostics = runtime.diagnostics();
-        if !diagnostics.is_empty() {
-            return Err(format!("boot diagnostics: {diagnostics:?}").into());
+        let notices = runtime.notices();
+        if !notices.is_empty() {
+            return Err(format!("boot notices: {notices:?}").into());
         }
         let db = self.root.join("uji.db");
         let mut storage = SqliteStorage::open(db.clone())?;
@@ -165,7 +163,7 @@ impl Sandbox {
         session.directory = self.work().display().to_string();
         let id = session.id;
         for message in self.history.take() {
-            storage.append_message(&id, message)?;
+            storage.append_message(&id, &message)?;
         }
         let (commands, waiting) = mpsc::channel();
         let frontend = Headless {
@@ -177,7 +175,7 @@ impl Sandbox {
             until,
             deadline,
         };
-        runtime.run_with(session, Box::new(storage), frontend)?;
+        runtime.run_with(&session, Box::new(storage), frontend)?;
         let mut storage = SqliteStorage::open(db)?;
         Ok(storage
             .messages(&id)?

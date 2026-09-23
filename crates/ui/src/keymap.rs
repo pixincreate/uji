@@ -195,8 +195,8 @@ const COMPOSE: &[Mode] = &[Mode::Normal];
 /// The bindings every session starts with.
 ///
 /// These are readline's, because that is what a terminal input is expected to
-/// answer to. They are ordinary bindings, so `uji.keymap.set` overrides any of
-/// them and `uji.keymap.del` takes one away.
+/// answer to. They are ordinary bindings, so `uji.keymap.add` overrides any of
+/// them and `uji.keymap.remove` takes one away.
 const DEFAULTS: &[(&[Mode], Chord, &str)] = &[
     (ALL, Chord::ctrl(Key::Char('c')), "quit"),
     (EDIT, Chord::ctrl(Key::Char('a')), "cursor_start"),

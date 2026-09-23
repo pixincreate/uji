@@ -1,3 +1,3 @@
-uji.provider.wire("openai-chat", require("uji.wires.openai"))
-uji.provider.wire("anthropic", require("uji.wires.anthropic"))
-uji.provider.wire("gemini", require("uji.wires.gemini"))
+uji.wire.add("openai-chat", require("uji.wires.openai_chat"))
+uji.wire.add("anthropic", require("uji.wires.anthropic"))
+uji.wire.add("gemini", require("uji.wires.gemini"))

@@ -7,9 +7,9 @@
 
 use std::path::PathBuf;
 
-use uji_agent::llm::CancelToken;
-use uji_agent::process::{self, Capture, Exit, Spec};
-use uji_agent::session::model::Message;
+use uji_core::llm::CancelToken;
+use uji_core::process::{self, Capture, Exit, Spec};
+use uji_core::session::model::Message;
 
 use super::LoopData;
 use crate::runtime::events;
@@ -40,7 +40,7 @@ impl LoopData {
         }
         let cancel = CancelToken::new();
         let argv = vec![shell_program(), String::from("-c"), command.to_string()];
-        let cwd = PathBuf::from(&self.app.session().directory);
+        let cwd = PathBuf::from(&self.app.messages().info().directory);
         let token = cancel.clone();
         self.work.stream(|signals| async move {
             let spec = Spec::argv(&argv).in_dir(&cwd);
@@ -62,10 +62,7 @@ impl LoopData {
         self.app
             .overlay_mut()
             .set_running(Some((progress_name(command), String::new())));
-        self.inner.emit(
-            events::Event::ShellStarted.name(),
-            &[("command", command.to_string())],
-        );
+        self.inner.emit(&events::ShellStarted { command });
         self.dirty = true;
     }
 
@@ -106,10 +103,10 @@ impl LoopData {
                 if ours {
                     self.app.overlay_mut().set_running(None);
                 }
-                self.inner.emit(
-                    events::Event::ShellFinished.name(),
-                    &[("command", command.clone()), ("code", code.to_string())],
-                );
+                self.inner.emit(&events::ShellFinished {
+                    command: &command,
+                    code,
+                });
                 self.append(Message::Shell {
                     command,
                     output,

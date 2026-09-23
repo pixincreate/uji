@@ -41,10 +41,10 @@ impl LoopData {
 
     fn copy(&mut self, text: &str) {
         let lines = text.lines().count();
-        self.inner.report(match clipboard::write(text) {
+        self.inner.notify(match clipboard::write(text) {
             Copied::Native => format!("copied {lines} line(s)"),
             Copied::Osc52 => format!("copied {lines} line(s) via the terminal"),
         });
-        self.drain_diagnostics();
+        self.drain_notices();
     }
 }

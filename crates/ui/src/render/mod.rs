@@ -75,20 +75,11 @@ pub(crate) fn write_lines<'a>(
 
 pub fn render(frame: &mut Frame<'_>, app: &App) {
     let state = app.state();
-    let fitted = {
-        let s = state.borrow();
-        fits(frame.area(), app, &s)
-    };
-    {
-        let mut s = state.borrow_mut();
-        for (id, rows) in fitted {
-            s.set_window_fitted(id, rows);
-        }
+    let fitted = fits(frame.area(), app, &state.borrow());
+    for (id, rows) in fitted {
+        state.borrow_mut().set_window_fitted(id, rows);
     }
-    let rects = {
-        let s = state.borrow();
-        layout::layout(frame.area(), s.windows())
-    };
+    let rects = layout::layout(frame.area(), state.borrow().windows());
     let s = state.borrow();
     let rect_of = |builtin: Builtin| {
         s.windows()

@@ -163,7 +163,7 @@ function M.run(spec, reply)
     for name, value in pairs(spec.headers) do
         headers[name] = value
     end
-    local id = uji.http.request({
+    return uji.http.request({
         url = spec.url,
         method = "POST",
         headers = headers,
@@ -205,9 +205,6 @@ function M.run(spec, reply)
         end
         reply.done(state:answer(calls))
     end)
-    return function()
-        uji.http.cancel(id)
-    end
 end
 
 return M

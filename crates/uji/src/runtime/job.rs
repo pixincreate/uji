@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use mlua::{IntoLuaMulti, Lua, MultiValue};
 use tokio::sync::mpsc::UnboundedReceiver;
-use uji_agent::llm::CancelToken;
-use uji_agent::process::{self, Exit, Spec, Stream};
+use uji_core::llm::CancelToken;
+use uji_core::process::{self, Exit, Spec, Stream};
 
 pub(crate) enum JobEvent {
     Stdout { id: u64, line: String },

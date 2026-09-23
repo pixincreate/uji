@@ -8,7 +8,7 @@ use strum::{EnumString, VariantNames};
 
 use super::App;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum KeyAction {
     None,
     Quit,
@@ -26,7 +26,6 @@ pub enum KeyAction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, VariantNames)]
 #[strum(serialize_all = "snake_case")]
 pub enum Action {
-    #[strum(to_string = "nothing", serialize = "noop")]
     Nothing,
     Quit,
     Interrupt,

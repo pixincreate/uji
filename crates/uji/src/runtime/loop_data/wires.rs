@@ -3,8 +3,8 @@ use std::rc::Rc;
 
 use mlua::serde::SerializeOptions;
 use mlua::{Function, Lua, LuaSerdeExt, Table, Value};
-use tokio::sync::{mpsc, oneshot};
-use uji_agent::llm::{Answer, Call, Delta, Failure, LlmError, LlmResponse};
+use tokio::sync::oneshot;
+use uji_core::llm::{Answer, Call, Failure, LlmError, LlmResponse};
 
 use super::LoopData;
 
@@ -31,11 +31,10 @@ impl LoopData {
         let Call {
             wire,
             request,
-            deltas,
             reply,
         } = call;
         let reply: Slot = Rc::new(RefCell::new(Some(reply)));
-        match self.start_wire(&wire, &request, deltas, &reply) {
+        match self.start_wire(&wire, &request, &reply) {
             Ok(cancel) => self.calls.push(Live { reply, cancel }),
             Err(err) => answer(
                 &reply,
@@ -48,7 +47,6 @@ impl LoopData {
         &self,
         wire: &str,
         request: &serde_json::Value,
-        deltas: mpsc::UnboundedSender<Delta>,
         reply: &Slot,
     ) -> mlua::Result<Option<Function>> {
         let lua = &self.inner.lua;
@@ -64,7 +62,7 @@ impl LoopData {
             .serialize_none_to_null(false)
             .serialize_unit_to_null(false);
         let request = lua.to_value_with(request, options)?;
-        stream.call((request, replier(lua, deltas, reply)?))
+        stream.call((request, replier(lua, reply)?))
     }
 
     pub(super) fn reap_calls(&mut self) {
@@ -77,29 +75,17 @@ impl LoopData {
             if let Some(cancel) = live.cancel.filter(|_| abandoned)
                 && let Err(err) = cancel.call::<()>(())
             {
-                self.inner.report(format!("cancelling a wire call: {err}"));
+                self.inner.notify(format!("cancelling a wire call: {err}"));
             }
         }
     }
 }
 
-fn replier(lua: &Lua, deltas: mpsc::UnboundedSender<Delta>, reply: &Slot) -> mlua::Result<Table> {
+fn replier(lua: &Lua, reply: &Slot) -> mlua::Result<Table> {
     let table = lua.create_table()?;
-    let text = deltas.clone();
-    table.set(
-        "text",
-        lua.create_function(move |_, delta: String| {
-            let _ = text.send(Delta::Text(delta));
-            Ok(())
-        })?,
-    )?;
-    table.set(
-        "reasoning",
-        lua.create_function(move |_, delta: String| {
-            let _ = deltas.send(Delta::Reasoning(delta));
-            Ok(())
-        })?,
-    )?;
+    let ignore = lua.create_function(|_, _: String| Ok(()))?;
+    table.set("text", ignore.clone())?;
+    table.set("reasoning", ignore)?;
     let done = Rc::clone(reply);
     table.set(
         "done",
@@ -131,7 +117,8 @@ fn invalid(call: &str, err: &mlua::Error) -> LlmError {
 }
 
 fn answer(reply: &Slot, outcome: Outcome) {
-    if let Some(reply) = reply.borrow_mut().take() {
+    let taken = reply.borrow_mut().take();
+    if let Some(reply) = taken {
         let _ = reply.send(outcome);
     }
 }

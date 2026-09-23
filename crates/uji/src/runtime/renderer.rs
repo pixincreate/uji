@@ -1,86 +1,110 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
-use uji_agent::session::model::Message;
+use mlua::{Lua, LuaSerdeExt, Table, Value as LuaValue};
+use uji_core::session::model::{Message, ToolCall};
 use uji_ui::app::renderer::{Block, BlockRenderer};
 use uji_ui::model::Line;
 
-use super::events;
-use super::inner::Inner;
+use super::events::{self, Event, RenderMessage};
+use crate::api::Api;
 
 pub(crate) struct LuaRenderer {
-    inner: Rc<Inner>,
+    lua: Lua,
+    api: Rc<Api>,
+    labels: RefCell<HashMap<String, Option<String>>>,
 }
 
 impl LuaRenderer {
-    pub(crate) fn new(inner: Rc<Inner>) -> Self {
-        Self { inner }
+    pub(crate) fn new(lua: Lua, api: Rc<Api>) -> Self {
+        Self {
+            lua,
+            api,
+            labels: RefCell::default(),
+        }
     }
 
-    fn payload(&self, block: Block<'_>) -> Option<mlua::Table> {
-        let table = self.inner.lua.create_table().ok()?;
-        let stored = match block {
-            Block::Notice(text) => {
-                table.set("type", "notice").ok()?;
-                table.set("text", text).ok()?;
-                return Some(table);
-            }
-            Block::Pending { text, .. } => {
-                table.set("type", "pending").ok()?;
-                table.set("text", text).ok()?;
-                return Some(table);
-            }
-            Block::Thinking(text) => {
-                table.set("type", "thinking").ok()?;
-                table.set("text", text).ok()?;
-                return Some(table);
-            }
-            Block::Queued(text) => {
-                table.set("type", "queued").ok()?;
-                table.set("text", text).ok()?;
-                return Some(table);
-            }
-            Block::Message(stored) => stored,
+    fn label(&self, call: &ToolCall) -> Option<String> {
+        let tool = self.api.tools().borrow().get(&call.name).map(Rc::clone)?;
+        let arguments = serde_json::from_str::<serde_json::Value>(&call.arguments).ok()?;
+        let LuaValue::Table(arguments) = self.lua.to_value(&arguments).ok()? else {
+            return None;
         };
-        table.set("type", stored.message.type_name()).ok()?;
-        table.set("text", stored.message.text()).ok()?;
-        match &stored.message {
-            Message::Tool { name, .. } => table.set("name", name.as_str()).ok()?,
-            Message::Assistant { tool_calls, .. } if !tool_calls.is_empty() => {
-                let calls = self.inner.lua.create_table().ok()?;
-                for (at, call) in tool_calls.iter().enumerate() {
-                    let entry = self.inner.lua.create_table().ok()?;
-                    entry.set("name", call.name.as_str()).ok()?;
-                    entry.set("arguments", call.arguments.as_str()).ok()?;
-                    calls.set(at.saturating_add(1), entry).ok()?;
-                }
-                table.set("tool_calls", calls).ok()?;
-            }
-            _ => {}
+        let detail = tool.detail(&arguments).unwrap_or_else(|err| {
+            self.api.notify(format!("{} subject: {err}", call.name));
+            None
+        });
+        match (tool.display.verb.as_deref(), detail) {
+            (Some(verb), Some(detail)) => Some(format!("{verb} {detail}")),
+            (Some(verb), None) => Some(format!("{verb} {}", call.name)),
+            (None, Some(detail)) => Some(format!("Called {} {detail}", call.name)),
+            (None, None) => None,
         }
-        Some(table)
+    }
+
+    fn payload(&self, block: Block<'_>) -> mlua::Result<Table> {
+        let message = match block {
+            Block::Notice(text) => shown("notice", text),
+            Block::Pending { text, .. } => shown("pending", text),
+            Block::Thinking(text) => shown("thinking", text),
+            Block::Queued(text) => shown("queued", text),
+            Block::Message(stored) => RenderMessage {
+                kind: stored.message.type_name(),
+                text: stored.message.text(),
+                name: match &stored.message {
+                    Message::Tool { name, .. } => Some(name),
+                    _ => None,
+                },
+                tool_calls: match &stored.message {
+                    Message::Assistant { tool_calls, .. } => tool_calls,
+                    _ => &[],
+                },
+            },
+        };
+        events::payload(&self.lua, &message)
+    }
+}
+
+fn shown<'a>(kind: &'a str, text: &'a str) -> RenderMessage<'a> {
+    RenderMessage {
+        kind,
+        text,
+        name: None,
+        tool_calls: &[],
     }
 }
 
 impl BlockRenderer for LuaRenderer {
     fn overrides(&self) -> bool {
-        self.inner
-            .api
-            .has_handler(events::Event::RenderMessage.name())
+        self.api.has_handler(RenderMessage::NAME)
+    }
+
+    fn tool_label(&self, call: &ToolCall) -> Option<String> {
+        let cached = self.labels.borrow().get(&call.id).cloned();
+        if let Some(label) = cached {
+            return label;
+        }
+        let label = self.label(call);
+        self.labels
+            .borrow_mut()
+            .insert(call.id.clone(), label.clone());
+        label
     }
 
     fn render(&self, block: Block<'_>) -> Option<Vec<Line>> {
         if !self.overrides() {
             return None;
         }
-        let table = self.payload(block)?;
-        let value = self
-            .inner
-            .api
-            .ask(events::Event::RenderMessage.name(), &table)?;
+        let table = self
+            .payload(block)
+            .map_err(|err| self.api.notify(format!("{}: {err}", RenderMessage::NAME)))
+            .ok()?;
+        let value = self.api.ask(RenderMessage::NAME, &table)?;
         match crate::api::window::lines_from_lua(value) {
             Ok(lines) => Some(lines),
             Err(err) => {
-                self.inner.report(format!("render_message: {err}"));
+                self.api.notify(format!("render_message: {err}"));
                 None
             }
         }

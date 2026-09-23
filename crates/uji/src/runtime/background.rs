@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use uji_agent::llm::context::{self, Cut};
-use uji_agent::llm::discover::{self, Windows};
-use uji_agent::llm::{Llm, LlmConfig, Provider, Usage, summary, title};
-use uji_agent::session::model::{Message, StoredMessage};
+use uji_core::llm::context::{self, Cut};
+use uji_core::llm::discover::{self, Windows};
+use uji_core::llm::{Llm, LlmConfig, Provider, Usage, summary, title};
+use uji_core::session::model::{Message, StoredMessage};
 
 use super::signal::Signal;
 use super::work::Work;
@@ -88,8 +88,7 @@ pub(crate) fn model_windows(work: &Work, client: &Arc<reqwest::Client>, provider
         let client = Arc::clone(client);
         work.stream(|signals| async move {
             let key =
-                LlmConfig::for_provider(provider.id.clone(), Some(&provider), String::new(), None)
-                    .resolve_key();
+                LlmConfig::for_provider(provider.id.clone(), Some(&provider), None).resolve_key();
             let Some(windows) = discover::windows(&client, &provider, key.as_deref()).await else {
                 return;
             };

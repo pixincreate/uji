@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use mlua::{Function, Lua, Table, Value};
-use uji_agent::llm::CancelToken;
+use uji_core::llm::CancelToken;
 
 use crate::api::Api;
 use crate::api::bind::bind;
@@ -11,11 +11,10 @@ use crate::api::convert::seconds;
 use crate::api::request::Request;
 
 #[derive(Default)]
-#[allow(clippy::struct_field_names)]
 pub struct JobHandlers {
-    pub on_stdout: Option<Function>,
-    pub on_stderr: Option<Function>,
-    pub on_exit: Option<Function>,
+    pub stdout: Option<Function>,
+    pub stderr: Option<Function>,
+    pub exit: Option<Function>,
 }
 
 struct Job {
@@ -101,14 +100,14 @@ fn command_from(value: &Value) -> mlua::Result<Vec<String>> {
 }
 
 pub(crate) fn start(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    bind(lua, api, move |api, _, opts: Table| {
+    bind(lua, api, move |api, lua, opts: Table| {
         let command = command_from(&opts.get::<Value>("cmd")?)?;
         let cwd = opts.get::<Option<String>>("cwd")?.map(PathBuf::from);
         let timeout = seconds(&opts, "timeout")?;
         let handlers = JobHandlers {
-            on_stdout: opts.get("on_stdout")?,
-            on_stderr: opts.get("on_stderr")?,
-            on_exit: opts.get("on_exit")?,
+            stdout: opts.get("on_stdout")?,
+            stderr: opts.get("on_stderr")?,
+            exit: opts.get("on_exit")?,
         };
         let id = api.jobs().borrow_mut().open(handlers);
         api.request(Request::JobStart {
@@ -117,44 +116,46 @@ pub(crate) fn start(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
             cwd,
             timeout,
         });
-        Ok(id)
+        handle(lua, api, id)
     })
 }
 
-pub(crate) fn stop(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    bind(lua, api, move |api, _, id: u64| {
-        api.request(Request::JobStop(id));
-        Ok(())
-    })
-}
-
-pub(crate) fn send(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    bind(lua, api, move |api, _, (id, data): (u64, String)| {
-        let data = if data.ends_with('\n') {
-            data
-        } else {
-            format!("{data}\n")
-        };
-        api.request(Request::JobWrite {
-            id,
-            data: Some(data),
-        });
-        Ok(())
-    })
-}
-
-pub(crate) fn close(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    bind(lua, api, move |api, _, id: u64| {
-        api.request(Request::JobWrite { id, data: None });
-        Ok(())
-    })
+fn handle(lua: &Lua, api: &Rc<Api>, id: u64) -> mlua::Result<Table> {
+    let job = lua.create_table()?;
+    job.set(
+        "send",
+        bind(lua, api, move |api, _, data: String| {
+            let data = if data.ends_with('\n') {
+                data
+            } else {
+                format!("{data}\n")
+            };
+            api.request(Request::JobWrite {
+                id,
+                data: Some(data),
+            });
+            Ok(())
+        })?,
+    )?;
+    job.set(
+        "close",
+        bind(lua, api, move |api, _, ()| {
+            api.request(Request::JobWrite { id, data: None });
+            Ok(())
+        })?,
+    )?;
+    job.set(
+        "stop",
+        bind(lua, api, move |api, _, ()| {
+            api.request(Request::JobStop(id));
+            Ok(())
+        })?,
+    )?;
+    Ok(job)
 }
 
 pub(crate) fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     let job = lua.create_table()?;
     job.set("start", start(lua, api)?)?;
-    job.set("stop", stop(lua, api)?)?;
-    job.set("send", send(lua, api)?)?;
-    job.set("close", close(lua, api)?)?;
     Ok(job)
 }

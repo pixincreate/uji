@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use serde_json::{Map, Value, json};
-use uji_agent::llm::{Effort, Retention, ToolSpec};
-use uji_agent::session::model::{Message, ToolCall};
+use uji_core::llm::{Effort, Retention, ToolSpec};
+use uji_core::session::model::{Message, ToolCall};
 use uji_tests::{Reply, Request, Sandbox, Server, Until};
 
 const IDENTITY: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
@@ -25,7 +25,7 @@ for line in io.lines(CASES) do
 end
 
 local RETRYABLE = { [408] = true, [409] = true, [425] = true, [429] = true }
-local WIRES = { ["openai-chat"] = "openai", anthropic = "anthropic", gemini = "gemini" }
+local WIRES = { ["openai-chat"] = "openai_chat", anthropic = "anthropic", gemini = "gemini" }
 
 local function display(failure)
     if failure.kind == "auth" then
@@ -110,7 +110,7 @@ fn histories() -> [Vec<Message>; 4] {
             Message::Assistant {
                 text: "hello".into(),
                 tool_calls: vec![],
-                reasoning_content: None,
+                reasoning: None,
             },
             user("again"),
         ],
@@ -123,7 +123,7 @@ fn histories() -> [Vec<Message>; 4] {
                     call("c2", "run_command", ""),
                     call("c3", "edit_file", r#"{"path": "x"#),
                 ],
-                reasoning_content: None,
+                reasoning: None,
             },
             Message::Tool {
                 tool_call_id: "c1".into(),
@@ -163,7 +163,7 @@ fn histories() -> [Vec<Message>; 4] {
             Message::Assistant {
                 text: "a".into(),
                 tool_calls: vec![],
-                reasoning_content: Some("r".into()),
+                reasoning: Some("r".into()),
             },
             Message::System {
                 text: "later note".into(),

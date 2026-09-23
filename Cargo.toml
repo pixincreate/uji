@@ -1,10 +1,14 @@
 [workspace]
 resolver = "3"
-members = ["crates/agent", "crates/tests", "crates/ui", "crates/uji"]
+members = ["crates/core", "crates/tests", "crates/ui", "crates/uji"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.88"
+license = "GPL-3.0-or-later"
+authors = ["dracarys18"]
+repository = "https://github.com/uji-labs/uji"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

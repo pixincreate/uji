@@ -8,13 +8,7 @@ pub fn overlay<T>(slot: &mut T, value: Option<T>) {
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
-pub struct CompactionConfig {
-    pub enabled: Option<bool>,
-    pub reserve: Option<u64>,
-    pub keep_recent: Option<u64>,
-}
-
-#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct ThemeConfig {
     pub text: Option<String>,
     pub muted: Option<String>,
@@ -25,50 +19,54 @@ pub struct ThemeConfig {
     pub cursor: Option<String>,
     pub error: Option<String>,
     pub notice: Option<String>,
+    pub input: Option<String>,
+    pub confirm_title: Option<String>,
+    pub confirm_body: Option<String>,
+    pub confirm_selected: Option<String>,
+    pub confirm_unselected: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
-#[serde(default)]
+#[derive(Debug, Deserialize, Default)]
+#[serde(default, deny_unknown_fields)]
 pub struct UiConfig {
     pub show_thinking: Option<bool>,
     pub theme: ThemeConfig,
-    pub compaction: CompactionConfig,
     pub input: InputConfig,
     pub suggest: SuggestConfig,
     pub waiting: WaitingConfig,
     pub confirm: ConfirmConfig,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct ConfirmConfig {
     pub title: Option<String>,
     pub yes: Option<String>,
     pub no: Option<String>,
-    pub selected: Option<String>,
-    pub unselected: Option<String>,
-    pub title_color: Option<String>,
-    pub body_color: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct InputConfig {
     pub cursor_blink: Option<bool>,
-    pub text_color: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct SuggestConfig {
     pub enabled: Option<bool>,
     pub max_height: Option<u16>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct LoaderConfig {
     pub frames: Option<Vec<String>>,
-    pub interval_ms: Option<u64>,
+    pub interval: Option<f64>,
 }
 
-#[derive(Debug, Clone, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct WaitingConfig {
     pub loader: Option<LoaderConfig>,
 }

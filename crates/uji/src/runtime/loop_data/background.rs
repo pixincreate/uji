@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use super::LoopData;
 use crate::runtime::auth::AuthEvent;
-use uji_agent::llm::Origin;
+use uji_core::llm::Origin;
 
 use crate::runtime::background::{self, ModelsEvent, TitleEvent};
 use crate::runtime::events;
@@ -23,25 +23,23 @@ impl LoopData {
         }
     }
 
-    pub(super) fn set_title(&mut self, title: String) {
-        let id = self.app.session().id;
-        if let Err(err) = self.storage.rename_session(&id, &title) {
+    pub(super) fn set_title(&mut self, title: &str) {
+        let id = self.app.messages().info().id;
+        if let Err(err) = self.storage.rename_session(&id, title) {
             self.inner
-                .report(format!("could not save the session title: {err}"));
+                .notify(format!("could not save the session title: {err}"));
             return;
         }
-        self.app.set_title(title.clone());
         self.app
             .conversation()
             .borrow_mut()
-            .set_title(title.clone());
-        self.inner
-            .emit(events::Event::SessionTitled.name(), &[("title", title)]);
+            .set_title(title.to_string());
+        self.inner.emit(&events::SessionTitled { title });
         self.dirty = true;
     }
 
     pub(super) fn maybe_title(&mut self, first_message: &str) {
-        if !self.app.session().is_untitled() {
+        if !self.app.messages().info().is_untitled() {
             return;
         }
         if self.app.conversation().borrow().messages().len() != 1 {
@@ -50,8 +48,8 @@ impl LoopData {
         background::title(
             &self.work,
             Arc::clone(&self.inner.client),
-            self.inner.llm.borrow().clone(),
-            self.inner.llm_model.borrow().clone(),
+            Arc::clone(&self.inner.llm),
+            self.inner.llm_model.clone(),
             first_message.to_string(),
         );
     }
@@ -63,25 +61,25 @@ impl LoopData {
         if let Some(usage) = usage {
             self.app.conversation().borrow_mut().add_cost(usage);
         }
-        self.set_title(title);
+        self.set_title(&title);
     }
 
     fn on_auth_event(&mut self, event: AuthEvent) {
         match event {
             AuthEvent::Opened { url } => {
                 self.inner
-                    .report(format!("opened your browser to sign in - {url}"));
+                    .notify(format!("opened your browser to sign in - {url}"));
             }
             AuthEvent::Done { provider_id } => {
-                self.inner.report(format!("signed in to {provider_id}"));
+                self.inner.notify(format!("signed in to {provider_id}"));
                 self.inner.resolve_llm(&mut *self.storage);
-                self.inner.emit(events::Event::StatusChanged.name(), &[]);
+                self.inner.emit(&events::StatusChanged);
             }
             AuthEvent::Failed { message } => {
-                self.inner.report(format!("sign-in failed: {message}"));
+                self.inner.notify(format!("sign-in failed: {message}"));
             }
         }
-        self.drain_diagnostics();
+        self.drain_notices();
         self.dirty = true;
     }
 }
@@ -106,7 +104,7 @@ impl LoopData {
         background::model_windows(&self.work, &self.inner.client, registered);
     }
 
-    pub(super) fn on_models(&mut self, event: &ModelsEvent) {
+    fn on_models(&mut self, event: &ModelsEvent) {
         let changed = self
             .inner
             .api
@@ -116,12 +114,12 @@ impl LoopData {
         if changed == 0 {
             return;
         }
-        self.inner.report(format!(
+        self.inner.notify(format!(
             "{}: corrected {changed} model window{} from the endpoint",
             event.provider,
             if changed == 1 { "" } else { "s" }
         ));
-        self.drain_diagnostics();
+        self.drain_notices();
         self.dirty = true;
     }
 }

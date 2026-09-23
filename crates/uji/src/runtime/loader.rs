@@ -3,9 +3,10 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use crate::api::Api;
+use crate::api::bind::bind;
 use mlua::{Function, Integer, Lua, MultiValue, Table, Value};
 
-use uji_agent::config::MODULE_DIR;
+use uji_core::config::MODULE_DIR;
 
 use super::bundled;
 
@@ -36,11 +37,10 @@ fn load(lua: &Lua, source: &[u8], name: &str) -> mlua::Result<MultiValue> {
 }
 
 fn searcher(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |lua, module: String| {
+    bind(lua, api, move |api, lua, module: String| {
         let files = files_for(&module);
         let mut tried = String::new();
-        for path in on_disk(&api, &files) {
+        for path in on_disk(api, &files) {
             if !path.is_file() {
                 let _ = write!(tried, "\n\tno file '{}'", path.display());
                 continue;

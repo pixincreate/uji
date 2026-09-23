@@ -10,7 +10,7 @@ use crate::api::request::Request;
 
 pub fn schedule(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(lua, api, move |api, _, callback: Function| {
-        api.scheduled().push(callback);
+        api.scheduled().borrow_mut().push(callback);
         Ok(())
     })
 }

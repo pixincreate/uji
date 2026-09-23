@@ -3,9 +3,9 @@ use std::rc::Rc;
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
-use uji_agent::session::conversation::Conversation;
-use uji_agent::session::id::{MessageId, SessionId, now_millis};
-use uji_agent::session::model::{Message, Session, StoredMessage, Time};
+use uji_core::session::conversation::Conversation;
+use uji_core::session::id::{MessageId, now_millis};
+use uji_core::session::model::{Message, StoredMessage};
 use uji_ui::app::{App, Echo};
 use uji_ui::keymap::{Chord, Key};
 use uji_ui::model::{Builtin, Size, Split, WinOpts};
@@ -16,18 +16,10 @@ const CURSOR: char = '\u{2588}';
 const MASK: char = '\u{2022}';
 
 fn app() -> App {
-    let session = Session {
-        id: SessionId::new(),
-        parent_id: None,
-        title: String::new(),
-        directory: String::from("."),
-        time: Time {
-            created: 0,
-            updated: 0,
-        },
-    };
-    let state = Rc::new(RefCell::new(UiState::new()));
-    App::new(session, Conversation::shared(), state)
+    App::new(
+        Conversation::shared(),
+        Rc::new(RefCell::new(UiState::new())),
+    )
 }
 
 fn windowed() -> App {

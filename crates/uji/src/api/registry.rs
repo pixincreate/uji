@@ -30,6 +30,13 @@ impl Registry {
         self.entries.is_empty()
     }
 
+    pub fn names(&self) -> Vec<String> {
+        self.entries
+            .iter()
+            .map(|entry| entry.name.clone())
+            .collect()
+    }
+
     pub fn calls(&self) -> Vec<(String, Function)> {
         self.entries
             .iter()

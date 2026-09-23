@@ -5,7 +5,7 @@ local TIMEOUT = 120
 
 local spilled = {}
 
-uji.on("quit", function()
+uji.on("before_quit", function()
     for _, path in ipairs(spilled) do
         os.remove(path)
     end
@@ -88,17 +88,20 @@ return {
         return field.text(args, "command")
     end,
     policy = "ask",
-    defer = true,
-    run = function(args, done, progress)
+    display = {
+        verb = "Ran",
+        question = "Would you like to run the following command?",
+    },
+    run = function(args, ctx)
         local missing = field.missing(args, "command")
         if missing then
-            return done(missing)
+            return missing
         end
         local timeout = math.max(field.count(args, "timeout") or TIMEOUT, 1)
         local output = Output.new(MAX_OUTPUT)
         local function collect(line)
             output:push(line)
-            progress(line)
+            ctx.progress(line)
         end
         local job = uji.job.start({
             cmd = field.text(args, "command"),
@@ -109,19 +112,17 @@ return {
             on_exit = function(code, reason)
                 local text = output:finish()
                 if reason == "timeout" then
-                    done("error: command timed out after " .. timeout .. "s")
+                    ctx.done("error: command timed out after " .. timeout .. "s")
                 elseif reason == "stopped" then
-                    done("error: command interrupted")
+                    ctx.done("error: command interrupted")
                 elseif code == 0 then
-                    done(text:find("%S") and text or text .. "(no output, exit code 0)")
+                    ctx.done(text:find("%S") and text or text .. "(no output, exit code 0)")
                 else
-                    done((text == "" and "" or text .. "\n") .. "(exit code " .. code .. ")")
+                    ctx.done((text == "" and "" or text .. "\n") .. "(exit code " .. code .. ")")
                 end
             end,
         })
-        uji.job.close(job)
-        return function()
-            uji.job.stop(job)
-        end
+        job.close()
+        return job.stop
     end,
 }

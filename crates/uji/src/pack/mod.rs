@@ -5,13 +5,12 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use crate::api::Api;
+use crate::api::bind::bind;
 use mlua::{Function, Lua, Table, Value};
 
-use uji_agent::config;
+use uji_core::config;
 
 use self::lock::{Entry, Lock};
-
-const OPTION_KEYS: &[&str] = &["url", "dir", "tag", "branch", "commit", "name"];
 
 enum Source {
     Git {
@@ -93,28 +92,22 @@ fn spec_from_value(value: &Value) -> Result<Spec, String> {
     }
 }
 
-fn is_single_spec(table: &Table) -> bool {
-    if table.raw_len() == 0 {
-        return true;
-    }
-    OPTION_KEYS
-        .iter()
-        .any(|key| matches!(table.get::<Option<Value>>(*key), Ok(Some(_))))
-}
-
 fn specs_from_argument(value: &Value) -> Result<Vec<Spec>, String> {
-    let Value::Table(table) = value else {
-        return spec_from_value(value).map(|spec| vec![spec]);
+    let list = match value {
+        Value::Table(table) if table.raw_len() == table.pairs::<Value, Value>().count() => table,
+        _ => {
+            return Err(String::from(
+                "uji.pack.add takes a list of packs, for example { \"user/repo\" }",
+            ));
+        }
     };
-    if is_single_spec(table) {
-        return spec_from_table(table).map(|spec| vec![spec]);
-    }
-    let mut specs = Vec::new();
-    for entry in table.clone().sequence_values::<Value>() {
-        let entry = entry.map_err(|err| format!("cannot read pack spec: {err}"))?;
-        specs.push(spec_from_value(&entry)?);
-    }
-    Ok(specs)
+    list.clone()
+        .sequence_values::<Value>()
+        .map(|entry| {
+            let entry = entry.map_err(|err| format!("cannot read pack spec: {err}"))?;
+            spec_from_value(&entry)
+        })
+        .collect()
 }
 
 fn install(spec: &Spec, api: &Api) -> Result<PathBuf, String> {
@@ -198,14 +191,13 @@ pub(crate) fn update_all(api: &Api) {
 }
 
 pub(crate) fn add(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, value: Value| {
+    bind(lua, api, move |api, _, value: Value| {
         let specs = match specs_from_argument(&value) {
             Ok(specs) => specs,
             Err(message) => return Err(mlua::Error::runtime(message)),
         };
         for spec in specs {
-            match install(&spec, &api) {
+            match install(&spec, api) {
                 Ok(dir) => {
                     let mut roots = api.packs().borrow_mut();
                     if !roots.contains(&dir) {
@@ -220,20 +212,19 @@ pub(crate) fn add(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 }
 
 pub(crate) fn list(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |lua, ()| {
-        let out = lua.create_table()?;
-        for root in api.packs().borrow().iter() {
-            out.push(root.display().to_string())?;
-        }
-        Ok(out)
+    bind(lua, api, move |api, _, ()| {
+        Ok(api
+            .packs()
+            .borrow()
+            .iter()
+            .map(|root| root.display().to_string())
+            .collect::<Vec<_>>())
     })
 }
 
 pub(crate) fn update(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    let api = Rc::clone(api);
-    lua.create_function(move |_, ()| {
-        update_all(&api);
+    bind(lua, api, move |api, _, ()| {
+        update_all(api);
         Ok(())
     })
 }

@@ -1,9 +1,11 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::rc::Rc;
 
 use mlua::{Function, Lua, Table, Value as LuaValue};
-use uji_agent::fs::Files;
-use uji_agent::tools::policy::Action;
+use uji_core::config;
+use uji_core::fs::Files;
+use uji_core::tools::policy::Action;
 
 use super::Api;
 use crate::api::bind::bind;
@@ -23,7 +25,7 @@ impl Access {
         &self.roots
     }
 
-    pub fn set_roots(&mut self, roots: Vec<PathBuf>) {
+    fn set_roots(&mut self, roots: Vec<PathBuf>) {
         self.roots = roots;
     }
 
@@ -31,7 +33,7 @@ impl Access {
         self.confined
     }
 
-    pub fn set_confined(&mut self, confined: bool) {
+    fn set_confined(&mut self, confined: bool) {
         self.confined = confined;
     }
 
@@ -52,6 +54,35 @@ impl Access {
     }
 }
 
+#[derive(Default)]
+pub struct Rules {
+    tools: BTreeMap<String, LuaValue>,
+    changed: bool,
+}
+
+impl Rules {
+    fn merge(&mut self, rules: &Table) -> mlua::Result<()> {
+        for pair in rules.pairs::<String, LuaValue>() {
+            let (name, value) = pair?;
+            self.tools.insert(name, value);
+        }
+        self.changed = true;
+        Ok(())
+    }
+
+    pub fn entries(&self) -> &BTreeMap<String, LuaValue> {
+        &self.tools
+    }
+
+    pub fn changed(&self) -> bool {
+        self.changed
+    }
+
+    pub fn settle(&mut self) {
+        self.changed = false;
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Subject {
     Name,
@@ -59,13 +90,19 @@ pub enum Subject {
     Of(Function),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
+pub struct Display {
+    pub verb: Option<String>,
+    pub question: Option<String>,
+}
+
+#[derive(Debug)]
 pub struct Tool {
     pub description: String,
     pub parameters: LuaValue,
     pub subject: Subject,
     pub policy: Option<Action>,
-    pub defer: bool,
+    pub display: Display,
     pub run: Function,
 }
 
@@ -77,6 +114,14 @@ impl Tool {
             Subject::Of(of) => of
                 .call::<Option<String>>(args.clone())
                 .map(Option::unwrap_or_default),
+        }
+    }
+
+    pub fn detail(&self, args: &Table) -> mlua::Result<Option<String>> {
+        match &self.subject {
+            Subject::Name => Ok(None),
+            Subject::Label(label) => Ok(Some(label.clone())),
+            Subject::Of(of) => of.call::<Option<String>>(args.clone()),
         }
     }
 }
@@ -102,21 +147,36 @@ fn policy(value: Option<String>) -> mlua::Result<Option<Action>> {
         .transpose()
 }
 
-pub(crate) fn done(lua: &Lua, api: &Rc<Api>, call: u64) -> mlua::Result<Function> {
-    bind(lua, api, move |api, _, text: String| {
-        api.request(Request::ToolResult { call, text });
-        Ok(())
+fn display(value: Option<Table>) -> mlua::Result<Display> {
+    let Some(table) = value else {
+        return Ok(Display::default());
+    };
+    Ok(Display {
+        verb: table.get("verb")?,
+        question: table.get("question")?,
     })
 }
 
-pub(crate) fn progress(lua: &Lua, api: &Rc<Api>, call: u64) -> mlua::Result<Function> {
-    bind(lua, api, move |api, _, line: String| {
-        api.request(Request::ToolProgress { call, line });
-        Ok(())
-    })
+pub(crate) fn context(lua: &Lua, api: &Rc<Api>, call: u64) -> mlua::Result<Table> {
+    let ctx = lua.create_table()?;
+    ctx.set(
+        "done",
+        bind(lua, api, move |api, _, text: String| {
+            api.request(Request::ToolResult { call, text });
+            Ok(())
+        })?,
+    )?;
+    ctx.set(
+        "progress",
+        bind(lua, api, move |api, _, line: String| {
+            api.request(Request::ToolProgress { call, line });
+            Ok(())
+        })?,
+    )?;
+    Ok(ctx)
 }
 
-pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+pub fn add(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(lua, api, move |api, _, (name, opts): (String, Table)| {
         let description = opts
             .get::<Option<String>>("description")?
@@ -124,48 +184,48 @@ pub fn register(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
         let parameters = opts.get::<LuaValue>("parameters")?;
         let subject = subject(opts.get("subject")?)?;
         let policy = policy(opts.get("policy")?)?;
-        let defer = opts.get::<Option<bool>>("defer")?.unwrap_or(false);
+        let display = display(opts.get("display")?)?;
         let run: Function = opts.get("run")?;
         api.tools().borrow_mut().insert(
             name,
-            Tool {
+            Rc::new(Tool {
                 description,
                 parameters,
                 subject,
                 policy,
-                defer,
+                display,
                 run,
-            },
+            }),
         );
         Ok(())
     })
 }
 
-pub fn unregister(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+pub fn remove(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(lua, api, move |api, _, name: String| {
-        api.tools().borrow_mut().remove(&name);
-        Ok(())
+        Ok(api.tools().borrow_mut().remove(&name).is_some())
+    })
+}
+
+pub fn list(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    bind(lua, api, move |api, _, ()| {
+        Ok(api.tools().borrow().keys().cloned().collect::<Vec<_>>())
     })
 }
 
 pub fn roots(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    bind(lua, api, move |api, _, paths: Vec<String>| {
-        let expanded = paths
-            .iter()
-            .map(|path| PathBuf::from(expand(path)))
-            .collect();
-        api.access().borrow_mut().set_roots(expanded);
-        Ok(())
-    })
-}
-
-pub fn list_roots(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
-    bind(lua, api, move |api, lua, ()| {
-        let out = lua.create_table()?;
-        for (at, root) in api.access().borrow().roots().iter().enumerate() {
-            out.set(at + 1, root.display().to_string())?;
+    bind(lua, api, move |api, _, paths: Option<Vec<String>>| {
+        if let Some(paths) = paths {
+            let expanded = paths.iter().map(|path| config::expand_home(path)).collect();
+            api.access().borrow_mut().set_roots(expanded);
         }
-        Ok(out)
+        Ok(api
+            .access()
+            .borrow()
+            .roots()
+            .iter()
+            .map(|root| root.display().to_string())
+            .collect::<Vec<_>>())
     })
 }
 
@@ -185,18 +245,15 @@ pub fn enable(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
 
 pub fn confine(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     bind(lua, api, move |api, _, enabled: Option<bool>| {
-        api.access()
-            .borrow_mut()
-            .set_confined(enabled.unwrap_or(true));
+        if let Some(enabled) = enabled {
+            api.access().borrow_mut().set_confined(enabled);
+        }
         Ok(api.access().borrow().confined())
     })
 }
 
-fn expand(path: &str) -> String {
-    match path.strip_prefix("~/") {
-        Some(rest) => {
-            std::env::var("HOME").map_or_else(|_| path.to_string(), |home| format!("{home}/{rest}"))
-        }
-        None => path.to_string(),
-    }
+pub fn policy_rules(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    bind(lua, api, move |api, _, rules: Table| {
+        api.rules().borrow_mut().merge(&rules)
+    })
 }

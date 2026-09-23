@@ -12,7 +12,7 @@ pub enum Echo {
     Hidden,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Mode {
     Normal,
     Select {

@@ -4,8 +4,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use mlua::{IntoLua, IntoLuaMulti, Lua, Value};
-use uji_agent::llm::summary::{self, Compacted};
-use uji_agent::session::model::Message;
+use uji_core::llm::summary::{self, Compacted};
+use uji_core::session::model::Message;
 
 use super::LoopData;
 use crate::api::fs::FsOp;
@@ -22,11 +22,13 @@ impl IntoLua for Folded {
             messages,
             summary,
             usage,
+            count,
         } = self.0;
         let table = lua.create_table()?;
         table.set("messages", Json(messages))?;
         table.set("summary", summary)?;
         table.set("usage", Json(usage))?;
+        table.set("count", count)?;
         Ok(Value::Table(table))
     }
 }
@@ -45,7 +47,7 @@ impl LoopData {
     }
 
     pub(super) fn start_fs(&self, id: u64, op: FsOp) {
-        let cwd = PathBuf::from(&self.app.session().directory);
+        let cwd = PathBuf::from(&self.app.messages().info().directory);
         let files = self.inner.api.access().borrow().files(cwd);
         self.work
             .spawn_blocking(move || Signal::Reply(fs::run(id, op, &files)));
@@ -58,13 +60,13 @@ impl LoopData {
         match on_line.call::<Value>(line) {
             Ok(Value::Boolean(false)) => {}
             Ok(_) => self.inner.api.fetches().borrow().progressed(id),
-            Err(err) => self.inner.report(format!("http {id} on_line: {err}")),
+            Err(err) => self.inner.notify(format!("http {id} on_line: {err}")),
         }
         self.dirty = true;
     }
 
     pub(super) fn start_route(&self, id: u64) {
-        let llm = self.inner.llm.borrow().clone();
+        let llm = Arc::clone(&self.inner.llm);
         let client = Arc::clone(&self.inner.client);
         self.work.spawn(async move {
             let route = llm.route(&client).await.map(Json);
@@ -85,8 +87,8 @@ impl LoopData {
             return;
         };
         let keep_recent = self.keep_recent();
-        let llm = self.inner.llm.borrow().clone();
-        let model = self.inner.llm_model.borrow().clone();
+        let llm = Arc::clone(&self.inner.llm);
+        let model = self.inner.llm_model.clone();
         let client = Arc::clone(&self.inner.client);
         self.work.spawn(async move {
             let compacted =
@@ -102,7 +104,7 @@ impl LoopData {
         self.inner.api.fetches().borrow_mut().finish(id);
         match reply.into_args(&self.inner.lua) {
             Ok(args) => self.answer(id, args),
-            Err(err) => self.inner.report(format!("callback {id}: {err}")),
+            Err(err) => self.inner.notify(format!("callback {id}: {err}")),
         }
     }
 
@@ -111,7 +113,7 @@ impl LoopData {
             return;
         };
         if let Err(err) = callback.call::<()>(args) {
-            self.inner.report(format!("callback {id}: {err}"));
+            self.inner.notify(format!("callback {id}: {err}"));
         }
         self.dirty = true;
     }

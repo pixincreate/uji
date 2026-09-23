@@ -2,14 +2,14 @@ use crate::model::WindowSpec;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 
-use crate::app::renderer::Block;
+use crate::app::renderer::{Block, BlockRenderer};
 use crate::render::Context;
 use crate::render::Render;
 use crate::render::Surface;
 use crate::render::style::{Palette, block_for};
 use crate::render::transcript;
 use crate::render::wrap::text as wrap_text;
-use uji_agent::session::model::{Message, StoredMessage};
+use uji_core::session::model::{Message, StoredMessage, ToolCall};
 
 const TRAILING_GAP: u16 = 1;
 
@@ -33,12 +33,12 @@ impl Render for Messages<'_> {
         let pending = ctx.app.pending().unwrap_or_default();
         let (committed, partial) = split_committed(pending);
         let mut transcript = ctx.app.transcript();
-        let split = !renderer.is_some_and(|renderer| renderer.overrides());
+        let split = !renderer.is_some_and(BlockRenderer::overrides);
         let parts = transcript.frame(
             &transcript::Input {
                 conversation: &conversation,
                 notices: ctx.app.overlay().notices(),
-                queued: ctx.app.overlay().queued(),
+                queued: ctx.state.queued(),
                 thinking: ctx.state.opts().show_thinking,
                 pending: committed,
                 reasoning: ctx.app.reasoning(),
@@ -48,7 +48,7 @@ impl Render for Messages<'_> {
             split,
             |lines, block, width| match renderer.and_then(|renderer| renderer.render(block)) {
                 Some(custom) => push_custom(lines, &custom, width),
-                None => push_builtin(lines, block, width, palette),
+                None => push_builtin(lines, block, width, palette, renderer),
             },
         );
 
@@ -122,7 +122,13 @@ impl Render for Messages<'_> {
     }
 }
 
-fn push_builtin(lines: &mut Vec<Line<'static>>, block: Block<'_>, width: usize, palette: Palette) {
+fn push_builtin(
+    lines: &mut Vec<Line<'static>>,
+    block: Block<'_>,
+    width: usize,
+    palette: Palette,
+    renderer: Option<&dyn BlockRenderer>,
+) {
     match block {
         Block::Notice(text) => push_wrapped(
             lines,
@@ -132,7 +138,7 @@ fn push_builtin(lines: &mut Vec<Line<'static>>, block: Block<'_>, width: usize, 
             " ! ",
             Fill::Line,
         ),
-        Block::Message(stored) => push_message(lines, stored, width, palette),
+        Block::Message(stored) => push_message(lines, stored, width, palette, renderer),
         Block::Pending { text, continuing } => {
             push_markdown(lines, text, width, palette, continuing);
         }
@@ -167,11 +173,12 @@ fn push_custom(lines: &mut Vec<Line<'static>>, custom: &[crate::model::Line], wi
     }));
 }
 
-pub(crate) fn push_message(
+fn push_message(
     lines: &mut Vec<Line<'static>>,
     stored: &StoredMessage,
     width: usize,
     palette: Palette,
+    renderer: Option<&dyn BlockRenderer>,
 ) {
     match &stored.message {
         Message::User { text } => {
@@ -191,7 +198,8 @@ pub(crate) fn push_message(
                 if !text.is_empty() {
                     lines.push(Line::from(""));
                 }
-                push_tool_header(lines, &call.name, &call.arguments, width, palette);
+                let label = renderer.and_then(|renderer| renderer.tool_label(call));
+                push_tool_header(lines, call, label, width, palette);
             }
         }
         Message::Tool { content, .. } => push_tool_output(lines, content, width, palette),
@@ -281,45 +289,19 @@ fn push_wrapped(
 
 const MAX_TOOL_PREVIEW_LINES: usize = 8;
 
-fn tool_verb(name: &str) -> &'static str {
-    match name {
-        "read_file" => "Read",
-        "edit_file" => "Edited",
-        "write_file" => "Wrote",
-        "run_command" => "Ran",
-        _ => "Called",
-    }
-}
-
-fn tool_detail(name: &str, arguments: &str) -> String {
-    let args = serde_json::from_str::<serde_json::Value>(arguments).unwrap_or_default();
-    let field = |key: &str| {
-        args.get(key)
-            .and_then(serde_json::Value::as_str)
-            .map(str::to_string)
-    };
-    let detail = match name {
-        "run_command" => field("command"),
-        _ => field("path"),
-    };
-    detail.unwrap_or_else(|| arguments.chars().take(200).collect())
-}
-
 fn push_tool_header(
     lines: &mut Vec<Line<'static>>,
-    name: &str,
-    arguments: &str,
+    call: &ToolCall,
+    label: Option<String>,
     width: usize,
     palette: Palette,
 ) {
-    let verb = tool_verb(name);
-    let detail = tool_detail(name, arguments);
-    let detail = detail.replace('\n', " ");
-    let head = if verb == "Called" {
-        format!("{verb} {name} {detail}")
-    } else {
-        format!("{verb} {detail}")
-    };
+    let head = label
+        .unwrap_or_else(|| {
+            let arguments: String = call.arguments.chars().take(200).collect();
+            format!("Called {} {arguments}", call.name)
+        })
+        .replace('\n', " ");
     let available = width.saturating_sub(4).max(1);
     let mut chunks = wrap_text(&head, available).into_iter();
     let first = chunks.next().unwrap_or_default();

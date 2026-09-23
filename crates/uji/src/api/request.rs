@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use mlua::{Function, Table, Value};
-use uji_agent::session::model::Message;
+use uji_core::session::model::Message;
 
 use crate::api::agent::Report;
 use crate::api::fs::FsOp;

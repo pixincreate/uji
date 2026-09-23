@@ -1,9 +1,10 @@
-use std::rc::Rc;
+use std::cell::Ref;
 use std::sync::Arc;
 
-use crate::api::modal::Answer;
-use uji_agent::credential;
-use uji_agent::llm::Provider;
+use crate::api::bind::bind;
+use crate::api::modal::{self, Answer, Component};
+use uji_core::credential;
+use uji_core::llm::{Catalog, Provider};
 use uji_ui::app::{Echo, SuggestItem};
 
 use super::{Control, LoopData, ModalInput};
@@ -11,7 +12,7 @@ use crate::api::request::Request;
 use crate::cmd::{Action, Args, Context};
 use crate::runtime::builtin::{self, BUILTINS};
 use crate::runtime::events;
-use uji_agent::session::store::Setting;
+use uji_core::session::store::Setting;
 
 impl LoopData {
     pub(crate) fn refresh_suggestions(&mut self) {
@@ -34,10 +35,10 @@ impl LoopData {
             self.command.active = Some(action);
         } else if let Some(command) = lua_command {
             if let Err(err) = command.handler.call::<()>((args.raw.clone(),)) {
-                self.inner.report(format!("{name}: {err}"));
+                self.inner.notify(format!("{name}: {err}"));
             }
         } else {
-            self.inner.report(format!("unknown command: {name}"));
+            self.inner.notify(format!("unknown command: {name}"));
         }
     }
 
@@ -73,40 +74,43 @@ impl LoopData {
 impl LoopData {
     fn ask_ui(
         &self,
-        component: &'static str,
+        component: Component,
         build: impl FnOnce(&mlua::Lua) -> mlua::Result<mlua::Table>,
     ) -> mlua::Result<()> {
         let lua = &self.inner.lua;
         let opts = build(lua)?;
-        let api = Rc::clone(&self.inner.api);
-        let done = lua.create_function(move |_, choice: Option<String>| {
-            api.request(Request::Answer(match component {
-                "prompt" => Answer::Prompt(choice),
-                _ => Answer::Select(choice),
-            }));
-            Ok(())
-        })?;
-        crate::api::modal::ask_ui(lua, component, opts, done)
+        let done = bind(
+            lua,
+            &self.inner.api,
+            move |api, _, choice: Option<String>| {
+                api.request(Request::Answer(match component {
+                    Component::Prompt => Answer::Prompt(choice),
+                    Component::Select => Answer::Select(choice),
+                }));
+                Ok(())
+            },
+        )?;
+        modal::ask_ui(lua, component, opts, done)
     }
 }
 
 impl Context for LoopData {
     fn open_select(&mut self, title: String, items: Vec<String>) {
-        let built = self.ask_ui("select", |lua| {
+        let built = self.ask_ui(Component::Select, |lua| {
             let opts = lua.create_table()?;
             opts.set("title", title.clone())?;
             opts.set("items", items.clone())?;
             Ok(opts)
         });
         if let Err(err) = built {
-            self.inner.report(format!("uji.ui.select: {err}"));
+            self.inner.notify(format!("uji.ui.select: {err}"));
             self.app.open_select(title, items);
         }
     }
 
     fn open_prompt(&mut self, title: String, value: String, echo: Echo) {
         let hidden = echo == Echo::Hidden;
-        let built = self.ask_ui("prompt", |lua| {
+        let built = self.ask_ui(Component::Prompt, |lua| {
             let opts = lua.create_table()?;
             opts.set("title", title.clone())?;
             opts.set("value", value.clone())?;
@@ -114,7 +118,7 @@ impl Context for LoopData {
             Ok(opts)
         });
         if let Err(err) = built {
-            self.inner.report(format!("uji.ui.prompt: {err}"));
+            self.inner.notify(format!("uji.ui.prompt: {err}"));
             self.app.open_prompt(title, value, echo);
         }
     }
@@ -130,13 +134,13 @@ impl Context for LoopData {
     fn save_credential(&mut self, provider: &str, key: &str) {
         if let Err(err) = credential::set(provider, key) {
             self.inner
-                .report(format!("failed to save credential: {err}"));
+                .notify(format!("failed to save credential: {err}"));
         }
     }
 
     fn resolve_llm(&mut self) {
         self.inner.resolve_llm(&mut *self.storage);
-        self.inner.emit(events::Event::StatusChanged.name(), &[]);
+        self.inner.emit(&events::StatusChanged);
         self.dirty = true;
     }
 
@@ -168,7 +172,7 @@ impl Context for LoopData {
             .cloned()
         else {
             self.inner
-                .report(format!("unknown provider: {provider_id}"));
+                .notify(format!("unknown provider: {provider_id}"));
             return;
         };
         crate::runtime::auth::start(&self.work, Arc::clone(&self.inner.client), &provider);
@@ -190,8 +194,8 @@ impl Context for LoopData {
         self.command.done = true;
     }
 
-    fn providers(&self) -> Vec<Provider> {
-        self.inner.api.providers().borrow().all().to_vec()
+    fn catalog(&self) -> Ref<'_, Catalog> {
+        self.inner.api.providers().borrow()
     }
 
     fn provider(&self, id: &str) -> Option<Provider> {

@@ -1,23 +1,19 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::config::{ConfirmConfig, ThemeConfig, UiConfig, overlay};
 use crate::model::{
-    Builtin, Color, ConfirmOpts, GlobalOpts, Line, RunState, Size, WinOpts, WindowSpec,
+    ActiveModel, Builtin, Color, GlobalOpts, Line, ParseError, RunState, Size, WinOpts, WindowSpec,
 };
 
 #[derive(Debug, Default)]
 pub struct UiState {
     windows: Vec<WindowSpec>,
     opts: GlobalOpts,
-    current_provider: Option<String>,
-    current_model: Option<String>,
-    current_effort: Option<String>,
-    context_window: Option<u64>,
+    active: ActiveModel,
     queued: Vec<String>,
     next_window_id: u32,
     run_state: RunState,
     turn_started: Option<Instant>,
-    notices: Vec<String>,
 }
 
 impl UiState {
@@ -95,24 +91,8 @@ impl UiState {
         }
     }
 
-    pub fn opts(&self) -> GlobalOpts {
-        self.opts.clone()
-    }
-
-    pub fn set_cursor_blink(&mut self, on: bool) {
-        self.opts.cursor_blink = on;
-    }
-
-    pub fn set_input_color(&mut self, color: Option<Color>) {
-        self.opts.input_color = color;
-    }
-
-    pub fn set_suggest_enabled(&mut self, enabled: bool) {
-        self.opts.suggest_enabled = enabled;
-    }
-
-    pub fn set_suggest_max_height(&mut self, max_height: u16) {
-        self.opts.suggest_max_height = max_height;
+    pub fn opts(&self) -> &GlobalOpts {
+        &self.opts
     }
 
     pub fn show_thinking(&self) -> bool {
@@ -124,19 +104,14 @@ impl UiState {
         self.opts.show_thinking
     }
 
-    pub fn set_confirm(&mut self, config: &ConfirmConfig) {
-        let mut confirm = ConfirmOpts::default();
+    fn set_confirm(&mut self, config: &ConfirmConfig) {
+        let confirm = &mut self.opts.confirm;
         overlay(&mut confirm.title, config.title.clone());
         overlay(&mut confirm.yes, config.yes.clone());
         overlay(&mut confirm.no, config.no.clone());
-        confirm.selected = parse_color(config.selected.as_deref(), &mut self.notices);
-        confirm.unselected = parse_color(config.unselected.as_deref(), &mut self.notices);
-        confirm.title_color = parse_color(config.title_color.as_deref(), &mut self.notices);
-        confirm.body_color = parse_color(config.body_color.as_deref(), &mut self.notices);
-        self.opts.confirm = confirm;
     }
 
-    fn apply_theme(&mut self, config: &ThemeConfig) {
+    fn apply_theme(&mut self, config: &ThemeConfig) -> Result<(), ParseError> {
         let mut theme = self.opts.theme;
         for (slot, value) in [
             (&mut theme.text, config.text.as_deref()),
@@ -149,63 +124,61 @@ impl UiState {
             (&mut theme.error, config.error.as_deref()),
             (&mut theme.notice, config.notice.as_deref()),
         ] {
-            overlay(slot, parse_color(value, &mut self.notices));
+            overlay(slot, color(value)?);
         }
+        let input = color(config.input.as_deref())?;
+        let title = color(config.confirm_title.as_deref())?;
+        let body = color(config.confirm_body.as_deref())?;
+        let selected = color(config.confirm_selected.as_deref())?;
+        let unselected = color(config.confirm_unselected.as_deref())?;
         self.opts.theme = theme;
+        overlay(&mut self.opts.input_color, input.map(Some));
+        let confirm = &mut self.opts.confirm;
+        overlay(&mut confirm.title_color, title.map(Some));
+        overlay(&mut confirm.body_color, body.map(Some));
+        overlay(&mut confirm.selected, selected.map(Some));
+        overlay(&mut confirm.unselected, unselected.map(Some));
+        Ok(())
     }
 
-    pub fn apply_config(&mut self, config: &UiConfig) {
-        self.apply_theme(&config.theme);
+    pub fn apply_config(&mut self, config: &UiConfig) -> Result<(), ParseError> {
+        let loader = config.waiting.loader.as_ref();
+        let interval = loader
+            .and_then(|loader| loader.interval)
+            .map(interval)
+            .transpose()?;
+        self.apply_theme(&config.theme)?;
         overlay(&mut self.opts.show_thinking, config.show_thinking);
-        overlay(&mut self.opts.compaction.enabled, config.compaction.enabled);
-        overlay(
-            &mut self.opts.compaction.reserve,
-            config.compaction.reserve.map(Some),
-        );
-        overlay(
-            &mut self.opts.compaction.keep_recent,
-            config.compaction.keep_recent,
-        );
-        if let Some(cursor_blink) = config.input.cursor_blink {
-            self.set_cursor_blink(cursor_blink);
-        }
-        if let Some(color) = config.input.text_color.as_deref() {
-            match color.parse::<Color>() {
-                Ok(color) => self.set_input_color(Some(color)),
-                Err(err) => self.notices.push(err.to_string()),
-            }
-        }
-        if let Some(enabled) = config.suggest.enabled {
-            self.set_suggest_enabled(enabled);
-        }
-        if let Some(max_height) = config.suggest.max_height {
-            self.set_suggest_max_height(max_height);
-        }
+        overlay(&mut self.opts.cursor_blink, config.input.cursor_blink);
+        overlay(&mut self.opts.suggest_enabled, config.suggest.enabled);
+        overlay(&mut self.opts.suggest_max_height, config.suggest.max_height);
         self.set_confirm(&config.confirm);
-        if let Some(loader) = &config.waiting.loader {
-            overlay(&mut self.opts.loader_frames, loader.frames.clone());
-            overlay(&mut self.opts.loader_interval_ms, loader.interval_ms);
-        }
+        overlay(
+            &mut self.opts.loader_frames,
+            loader.and_then(|loader| loader.frames.clone()),
+        );
+        overlay(&mut self.opts.loader_interval, interval);
+        Ok(())
     }
 
     pub fn loader_frames(&self) -> &[String] {
         &self.opts.loader_frames
     }
 
-    pub fn loader_interval_ms(&self) -> u64 {
-        self.opts.loader_interval_ms
+    pub fn loader_interval(&self) -> Duration {
+        self.opts.loader_interval
     }
 
     pub fn current_provider(&self) -> Option<&str> {
-        self.current_provider.as_deref()
+        self.active.provider.as_deref()
     }
 
     pub fn current_model(&self) -> Option<&str> {
-        self.current_model.as_deref()
+        self.active.model.as_deref()
     }
 
-    pub fn set_current_provider(&mut self, provider: String) {
-        self.current_provider = Some(provider);
+    pub fn set_active(&mut self, active: ActiveModel) {
+        self.active = active;
     }
 
     pub fn queued(&self) -> &[String] {
@@ -217,39 +190,29 @@ impl UiState {
     }
 
     pub fn context_window(&self) -> Option<u64> {
-        self.context_window
-    }
-
-    pub fn set_context_window(&mut self, window: Option<u64>) {
-        self.context_window = window;
+        self.active.context_window
     }
 
     pub fn current_effort(&self) -> Option<&str> {
-        self.current_effort.as_deref()
-    }
-
-    pub fn set_current_effort(&mut self, effort: Option<String>) {
-        self.current_effort = effort;
-    }
-
-    pub fn set_current_model(&mut self, model: String) {
-        self.current_model = Some(model);
+        self.active.effort.as_deref()
     }
 
     pub fn run_state(&self) -> RunState {
         self.run_state
     }
 
-    pub fn set_run_state(&mut self, state: RunState) {
-        self.run_state = state;
+    pub fn begin_work(&mut self) {
+        self.run_state = RunState::Working;
+        self.turn_started = Some(Instant::now());
+    }
+
+    pub fn end_work(&mut self) {
+        self.run_state = RunState::Idle;
+        self.turn_started = None;
     }
 
     pub fn turn_started(&self) -> Option<Instant> {
         self.turn_started
-    }
-
-    pub fn set_turn_started(&mut self, started: Option<Instant>) {
-        self.turn_started = started;
     }
 
     pub fn loader_frame(&self) -> String {
@@ -260,29 +223,25 @@ impl UiState {
         if frames.is_empty() {
             return String::new();
         }
-        let interval = u128::from(self.opts.loader_interval_ms.max(1));
+        let interval = self.opts.loader_interval.as_millis().max(1);
         let len = u128::try_from(frames.len()).unwrap_or(1);
         let idx = (started.elapsed().as_millis() / interval) % len;
         let idx = usize::try_from(idx).unwrap_or(0);
         frames[idx].clone()
     }
-
-    pub fn notify(&mut self, message: String) {
-        self.notices.push(message);
-    }
-
-    pub fn take_notices(&mut self) -> Vec<String> {
-        std::mem::take(&mut self.notices)
-    }
 }
 
-fn parse_color(value: Option<&str>, notices: &mut Vec<String>) -> Option<Color> {
-    let value = value?;
-    match value.parse::<Color>() {
-        Ok(color) => Some(color),
-        Err(err) => {
-            notices.push(err.to_string());
-            None
-        }
-    }
+fn color(value: Option<&str>) -> Result<Option<Color>, ParseError> {
+    value.map(str::parse).transpose()
+}
+
+fn interval(seconds: f64) -> Result<Duration, ParseError> {
+    Duration::try_from_secs_f64(seconds)
+        .ok()
+        .filter(|interval| !interval.is_zero())
+        .ok_or_else(|| {
+            ParseError(format!(
+                "waiting.loader.interval must be a positive number of seconds, not {seconds}"
+            ))
+        })
 }
