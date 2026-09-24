@@ -62,7 +62,6 @@ impl LoopData {
         name: String,
         content: String,
     ) {
-        let content = self.inner.fold(&events::AfterTool { name: &name }, content);
         self.append(Message::Tool {
             tool_call_id,
             name,

@@ -1,5 +1,7 @@
 use mlua::{Lua, LuaSerdeExt, Table, Value};
 use serde::Serialize;
+
+use crate::api::Api;
 use uji_core::session::id::SessionId;
 use uji_core::session::model::ToolCall;
 
@@ -16,6 +18,13 @@ pub(crate) fn payload<E: Event>(lua: &Lua, event: &E) -> mlua::Result<Table> {
         Value::Table(table) => Ok(table),
         _ => lua.create_table(),
     }
+}
+
+pub(crate) fn fold<H: Hook>(lua: &Lua, api: &Api, hook: &H, value: &str) -> mlua::Result<String> {
+    let payload = payload(lua, hook)?;
+    payload.set(H::FIELD, value)?;
+    api.fold(H::NAME, &payload, H::FIELD);
+    payload.get::<String>(H::FIELD)
 }
 
 #[derive(Serialize)]

@@ -1,0 +1,10 @@
+[book]
+title = "uji"
+authors = ["dracarys18"]
+language = "en"
+src = "src"
+
+[output.html]
+no-section-label = true
+git-repository-url = "https://github.com/uji-labs/uji"
+edit-url-template = "https://github.com/uji-labs/uji/edit/main/docs/{path}"

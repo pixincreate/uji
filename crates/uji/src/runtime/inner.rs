@@ -148,12 +148,7 @@ impl Inner {
     }
 
     pub(crate) fn fold<H: Hook>(&self, hook: &H, value: String) -> String {
-        let folded = events::payload(&self.lua, hook).and_then(|payload| {
-            payload.set(H::FIELD, value.as_str())?;
-            self.api.fold(H::NAME, &payload, H::FIELD);
-            payload.get::<String>(H::FIELD)
-        });
-        folded.unwrap_or_else(|err| {
+        events::fold(&self.lua, &self.api, hook, &value).unwrap_or_else(|err| {
             self.notify(format!("{} left no {}: {err}", H::NAME, H::FIELD));
             value
         })

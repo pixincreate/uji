@@ -8,7 +8,7 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use calloop::channel::Sender;
-use uji::runtime::{Frontend, Runtime};
+use uji::runtime::{Frontend, Runtime, RuntimeError};
 use uji_core::session::model::Message;
 use uji_core::session::store::{SessionStorage, Setting};
 use uji_core::storage::sqlite::SqliteStorage;
@@ -144,13 +144,17 @@ impl Sandbox {
         std::fs::write(self.root.join("cfg/init.lua"), lua)
     }
 
+    pub fn boot(&self) -> Result<Runtime, RuntimeError> {
+        Runtime::boot_in(Some(self.root.join("cfg")))
+    }
+
     pub fn run(
         &self,
         until: Until,
         answers: &[char],
         deadline: Duration,
     ) -> Result<Vec<Message>, Box<dyn Error>> {
-        let runtime = Runtime::boot_in(Some(self.root.join("cfg")))?;
+        let runtime = self.boot()?;
         let notices = runtime.notices();
         if !notices.is_empty() {
             return Err(format!("boot notices: {notices:?}").into());

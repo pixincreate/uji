@@ -273,6 +273,7 @@ function Turn:run_tools(calls)
                 content = "error: interrupted by the user while this tool ran"
             end
         end
+        content = self.host.after_tool(call.name, content)
         self:report({ type = "tool_result", tool_call_id = call.id, name = call.name, content = content })
         self.messages[#self.messages + 1] = { type = "tool", tool_call_id = call.id, name = call.name, content = content }
     end

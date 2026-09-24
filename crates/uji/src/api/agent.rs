@@ -9,6 +9,7 @@ use crate::api::Api;
 use crate::api::bind::bind;
 use crate::api::callbacks::canceller;
 use crate::api::request::Request;
+use crate::runtime::events::{self, Event};
 
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -141,6 +142,18 @@ fn stream(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
     )
 }
 
+fn after_tool(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Function> {
+    bind(lua, api, |api, lua, (name, content): (String, String)| {
+        events::fold(lua, api, &events::AfterTool { name: &name }, &content).or_else(|err| {
+            api.notify(format!(
+                "{} left no content: {err}",
+                events::AfterTool::NAME
+            ));
+            Ok(content)
+        })
+    })
+}
+
 pub(crate) fn host(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     let host = lua.create_table()?;
     host.set("report", report(lua, api)?)?;
@@ -150,5 +163,6 @@ pub(crate) fn host(lua: &Lua, api: &Rc<Api>) -> mlua::Result<Table> {
     host.set("compact", compact(lua, api)?)?;
     host.set("route", route(lua, api)?)?;
     host.set("stream", stream(lua, api)?)?;
+    host.set("after_tool", after_tool(lua, api)?)?;
     Ok(host)
 }

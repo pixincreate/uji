@@ -5,6 +5,8 @@
 
 God's chosen harness.
 
+Read the [documentation](https://uji-labs.github.io/uji).
+
 ## License
 
 Copyright (C) 2026 dracarys18

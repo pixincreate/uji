@@ -26,5 +26,13 @@ scan:
 test:
     cargo nextest run --workspace
 
+# Build the documentation site into docs/book.
+docs:
+    mdbook build docs
+
+# Serve the documentation site and rebuild on change.
+docs-serve:
+    mdbook serve docs --open
+
 # Everything CI would run.
 check: fmt lint test
