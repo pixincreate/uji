@@ -5,17 +5,14 @@ use std::time::Duration;
 use crossterm::event::{
     Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
-use mlua::serde::SerializeOptions;
-use mlua::{
-    AnyUserData, Function, IntoLuaMulti, LuaSerdeExt, MultiValue, ObjectLike, UserData,
-    UserDataMethods,
-};
 use serde::Serialize;
 use tokio::sync::{Mutex, mpsc};
+use uji_macros::{IntoLua, methods};
 
 const POLL: Duration = Duration::from_millis(100);
 
-#[derive(Serialize)]
+#[derive(Serialize, IntoLua)]
+#[lua(nulls = false)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum Incoming {
     Key {
@@ -191,18 +188,10 @@ impl Input {
     }
 }
 
-impl UserData for Input {
-    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_async_method("event", |lua, input, ()| async move {
-            let Some(found) = input.next().await else {
-                return Ok(MultiValue::new());
-            };
-            let options = SerializeOptions::new().serialize_none_to_null(false);
-            lua.to_value_with(&found, options)?.into_lua_multi(&lua)
-        });
-        methods.add_function("events", |_, input: AnyUserData| {
-            let event: Function = input.get("event")?;
-            Ok((event, input))
-        });
+#[methods]
+impl Input {
+    #[iterate(events)]
+    async fn event(&self) -> Option<Incoming> {
+        self.next().await
     }
 }

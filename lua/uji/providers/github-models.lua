@@ -1,4 +1,6 @@
-return {
+local catalog = require("uji.catalog")
+
+catalog.builtin({
     id = "github-models",
     name = "GitHub Models",
     wire = "openai-chat",
@@ -10,4 +12,4 @@ return {
         "gemini-2.5-pro",
         "meta-llama/Llama-3.3-70B-Instruct",
     },
-}
+})

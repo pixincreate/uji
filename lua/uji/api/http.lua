@@ -58,6 +58,6 @@ local function request(opts)
     })
 end
 
-return {
+uji.http = {
     request = task.callback(request),
 }

@@ -1,11 +1,12 @@
 local auth = require("uji.auth")
 local catalog = require("uji.catalog")
+local command = require("uji.command")
 local model = require("uji.model")
 local notices = require("uji.notices")
 local Select = require("uji.ui.views.select")
 local ui = require("uji.ui")
 
-return function()
+command.builtin("models", "pick the default model", function()
     local current = model.setting("llm.provider") or ""
     local available = {}
     for _, provider in ipairs(catalog.all()) do
@@ -38,4 +39,4 @@ return function()
     end
     model.remember(picked.provider, picked.model)
     model.resolve()
-end
+end)

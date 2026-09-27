@@ -39,6 +39,7 @@ pub enum Error {
 }
 
 pub(crate) struct State {
+    pub(crate) layers: Vec<Sources>,
     pub(crate) io: Handle,
     pub(crate) scheduler: Scheduler<()>,
     pub(crate) client: Arc<OnceLock<reqwest::Client>>,
@@ -168,8 +169,10 @@ fn live(
         .handle()
         .insert_source(executor, |(), (), ()| {})
         .map_err(|err| err.error)?;
-    let lua = vm::create(layers(sources, &boot.roots))?;
+    let layers = layers(sources, &boot.roots);
+    let lua = vm::create(layers.clone())?;
     lua.set_app_data(State {
+        layers,
         io: runtime.handle().clone(),
         scheduler,
         client: Arc::clone(client),
@@ -185,7 +188,7 @@ fn live(
     });
     publish(&lua, &boot)?;
     let main = vm::entry(&lua, entry)?;
-    executor::spawn(&lua, &main, lua.create_sequence_from(boot.args)?)?;
+    executor::start(&lua, &main, lua.create_sequence_from(boot.args)?)?;
     let code = turn(&lua, &mut event_loop)?;
     let state = lua.remove_app_data::<State>();
     drop(event_loop);

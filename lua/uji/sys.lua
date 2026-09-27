@@ -1,23 +1,7 @@
-return {
-    task = uji.task,
-    sleep = uji.sleep,
-    promise = uji.promise,
-    fs = uji.fs,
-    proc = uji.proc,
-    net = uji.net,
-    tty = uji.tty,
-    db = uji.db,
-    keychain = uji.keychain,
-    os = uji.os,
-    clipboard = uji.clipboard,
-    json = uji.json,
-    base64 = uji.base64,
-    sha256 = uji.sha256,
-    random = uji.random,
-    width = uji.width,
-    lossy = uji.lossy,
-    markdown = uji.markdown,
-    regex = uji.regex,
-    glob = uji.glob,
-    fuzzy = uji.fuzzy,
-}
+local sys = {}
+
+for name, value in pairs(uji) do
+    sys[name] = value
+end
+
+return sys

@@ -1,49 +1,48 @@
 use keyring::Entry;
-use mlua::{IntoLuaMulti, Lua, MultiValue, Table};
+use mlua::Lua;
+use uji_macros::function;
 
 use crate::io;
 
-fn found(lua: &Lua, secret: Result<String, keyring::Error>) -> mlua::Result<MultiValue> {
-    match secret {
-        Ok(secret) => secret.into_lua_multi(lua),
-        Err(keyring::Error::NoEntry) => Ok(MultiValue::new()),
-        Err(err) => io::failure(lua, &err),
-    }
+#[function(keychain)]
+async fn get(
+    lua: Lua,
+    service: String,
+    account: String,
+) -> mlua::Result<Result<Option<String>, keyring::Error>> {
+    let secret = io::blocking(&lua, move || {
+        Entry::new(&service, &account).and_then(|entry| entry.get_password())
+    })
+    .await?;
+    Ok(match secret {
+        Err(keyring::Error::NoEntry) => Ok(None),
+        secret => secret.map(Some),
+    })
 }
 
-pub(crate) fn register(lua: &Lua) -> mlua::Result<Table> {
-    let keychain = lua.create_table()?;
-    keychain.set(
-        "get",
-        lua.create_async_function(|lua, (service, account): (String, String)| async move {
-            let secret = io::blocking(io::handle(&lua)?, move || {
-                Entry::new(&service, &account).and_then(|entry| entry.get_password())
-            })
-            .await?;
-            found(&lua, secret)
-        })?,
-    )?;
-    keychain.set(
-        "set",
-        lua.create_async_function(
-            |lua, (service, account, secret): (String, String, String)| async move {
-                let stored = io::blocking(io::handle(&lua)?, move || {
-                    Entry::new(&service, &account).and_then(|entry| entry.set_password(&secret))
-                })
-                .await?;
-                io::settle(&lua, stored.map(|()| true))
-            },
-        )?,
-    )?;
-    keychain.set(
-        "delete",
-        lua.create_async_function(|lua, (service, account): (String, String)| async move {
-            let deleted = io::blocking(io::handle(&lua)?, move || {
-                Entry::new(&service, &account).and_then(|entry| entry.delete_credential())
-            })
-            .await?;
-            io::settle(&lua, deleted.map(|()| true))
-        })?,
-    )?;
-    Ok(keychain)
+#[function(keychain)]
+async fn set(
+    lua: Lua,
+    service: String,
+    account: String,
+    secret: String,
+) -> mlua::Result<Result<bool, keyring::Error>> {
+    let stored = io::blocking(&lua, move || {
+        Entry::new(&service, &account).and_then(|entry| entry.set_password(&secret))
+    })
+    .await?;
+    Ok(stored.map(|()| true))
+}
+
+#[function(keychain)]
+async fn delete(
+    lua: Lua,
+    service: String,
+    account: String,
+) -> mlua::Result<Result<bool, keyring::Error>> {
+    let deleted = io::blocking(&lua, move || {
+        Entry::new(&service, &account).and_then(|entry| entry.delete_credential())
+    })
+    .await?;
+    Ok(deleted.map(|()| true))
 }

@@ -1,5 +1,5 @@
-local tool = require("uji.tool")
+local sys = require("uji.sys")
 
-for _, name in ipairs({ "read_file", "edit_file", "write_file", "run_command" }) do
-    tool.add(name, require("uji.tools." .. name))
+for _, name in ipairs(sys.modules("uji.tools")) do
+    require(name)
 end

@@ -1,5 +1,6 @@
 local field = require("uji.tools.field")
 local process = require("uji.system.process")
+local tool = require("uji.tool")
 
 local MAX_OUTPUT = 24000
 local TIMEOUT = 120
@@ -63,7 +64,7 @@ function Output:finish()
     return head .. "\n" .. kept
 end
 
-return {
+tool.add("run_command", {
     description = "Run a shell command and return its combined stdout and stderr, plus the exit code when it "
         .. "is non-zero. Every command starts in the working directory, so there is no need to `cd` "
         .. "into it first. Use it to build, test, run linters, search with `rg`, `grep` or `find`, and "
@@ -120,4 +121,4 @@ return {
         end
         return (text == "" and "" or text .. "\n") .. "(exit code " .. exit.code .. ")"
     end,
-}
+})

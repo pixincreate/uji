@@ -6,10 +6,7 @@ use std::pin::pin;
 
 use futures_util::StreamExt;
 use futures_util::future::{self, Either};
-use mlua::{
-    AnyUserData, IntoLuaMulti, Lua, LuaSerdeExt, MultiValue, Table, UserData, UserDataFields,
-    UserDataMethods, Value,
-};
+use mlua::{AnyUserData, BString, Function, Lua};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Client, Method, Url};
 use serde::Serialize;
@@ -18,6 +15,7 @@ use tokio::net::TcpListener;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::{Mutex, mpsc, oneshot};
+use uji_macros::{FromLua, IntoLua, function, methods};
 
 use crate::io::{self, Abort};
 use crate::kernel::State;
@@ -47,8 +45,19 @@ struct Request {
     idle: Duration,
 }
 
-fn seconds(opts: &Table, key: &str) -> mlua::Result<Option<Duration>> {
-    opts.get::<Option<f64>>(key)?
+#[derive(FromLua)]
+struct RequestOptions {
+    url: String,
+    method: Option<String>,
+    #[lua(default)]
+    headers: HashMap<String, String>,
+    body: Option<BString>,
+    timeout: Option<f64>,
+    idle: Option<f64>,
+}
+
+fn seconds(value: Option<f64>, key: &str) -> mlua::Result<Option<Duration>> {
+    value
         .map(|value| {
             Duration::try_from_secs_f64(value)
                 .map_err(|_| mlua::Error::runtime(format!("{key} needs a number of seconds")))
@@ -57,19 +66,15 @@ fn seconds(opts: &Table, key: &str) -> mlua::Result<Option<Duration>> {
 }
 
 impl Request {
-    fn from_table(opts: &Table) -> mlua::Result<Self> {
-        let method = opts
-            .get::<Option<String>>("method")?
-            .map_or(Ok(Method::GET), |method| {
-                Method::from_bytes(method.to_ascii_uppercase().as_bytes())
-                    .map_err(|_| mlua::Error::runtime(format!("invalid method {method}")))
-            })?;
-        let url = opts.get::<String>("url")?;
-        let url = Url::parse(&url)
-            .map_err(|err| mlua::Error::runtime(format!("invalid url {url}: {err}")))?;
+    fn new(opts: RequestOptions) -> mlua::Result<Self> {
+        let method = opts.method.map_or(Ok(Method::GET), |method| {
+            Method::from_bytes(method.to_ascii_uppercase().as_bytes())
+                .map_err(|_| mlua::Error::runtime(format!("invalid method {method}")))
+        })?;
+        let url = Url::parse(&opts.url)
+            .map_err(|err| mlua::Error::runtime(format!("invalid url {}: {err}", opts.url)))?;
         let headers = opts
-            .get::<Option<HashMap<String, String>>>("headers")?
-            .unwrap_or_default()
+            .headers
             .into_iter()
             .map(|(name, value)| {
                 let invalid = || mlua::Error::runtime(format!("invalid header {name}"));
@@ -83,11 +88,9 @@ impl Request {
             method,
             url,
             headers,
-            body: opts
-                .get::<Option<mlua::LuaString>>("body")?
-                .map(|body| body.as_bytes().to_vec()),
-            timeout: seconds(opts, "timeout")?,
-            idle: seconds(opts, "idle")?.unwrap_or(IDLE),
+            body: opts.body.map(Vec::from),
+            timeout: seconds(opts.timeout, "timeout")?,
+            idle: seconds(opts.idle, "idle")?.unwrap_or(IDLE),
         })
     }
 
@@ -127,7 +130,7 @@ impl Head {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, IntoLua)]
 struct Response {
     #[serde(flatten)]
     head: Head,
@@ -250,7 +253,11 @@ pub(crate) struct Body {
 }
 
 impl Body {
-    async fn line(&self, lua: Lua, limit: Option<Duration>) -> mlua::Result<MultiValue> {
+    async fn next_line(
+        &self,
+        lua: &Lua,
+        limit: Option<Duration>,
+    ) -> mlua::Result<Result<io::Line, NetError>> {
         let mut chunks = self.chunks.lock().await;
         let read = match chunks.ready() {
             Ok(Ready::Line(line)) => Ok(Some(line)),
@@ -259,69 +266,63 @@ impl Body {
             Ok(Ready::Wait) => match limit {
                 None => chunks.line().await,
                 Some(limit) => {
-                    let timer = io::sleep(&io::handle(&lua)?, limit);
+                    let timer = io::sleep(lua, limit)?;
                     match future::select(pin!(chunks.line()), pin!(timer)).await {
                         Either::Left((read, _)) => read,
-                        Either::Right(((), _)) => {
-                            return Value::Boolean(false).into_lua_multi(&lua);
-                        }
+                        Either::Right(((), _)) => return Ok(Ok(io::Line::Late)),
                     }
                 }
             },
         };
-        match read {
-            Ok(Some(line)) => Value::String(lua.create_string(line)?).into_lua_multi(&lua),
-            Ok(None) => Ok(MultiValue::new()),
-            Err(err) => io::failure(&lua, &err),
-        }
+        Ok(read.map(io::Line::from))
     }
 }
 
-impl UserData for Body {
-    fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
-        fields.add_field_method_get("status", |_, body| Ok(body.head.status));
-        fields.add_field_method_get("headers", |lua, body| lua.to_value(&body.head.headers));
+#[methods]
+impl Body {
+    #[get]
+    fn status(&self) -> u16 {
+        self.head.status
     }
 
-    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_async_method("line", |lua, body, wait: Option<f64>| async move {
-            body.line(lua, io::limit(wait)?).await
-        });
-        methods.add_function("lines", |lua, body: AnyUserData| {
-            lua.create_async_function(move |lua, ()| {
-                let body = body.clone();
-                async move { body.borrow::<Body>()?.line(lua, None).await }
-            })
-        });
-        methods.add_async_method("read", |lua, body, ()| async move {
-            match body.chunks.lock().await.rest().await {
-                Ok(rest) => Value::String(lua.create_string(rest)?).into_lua_multi(&lua),
-                Err(err) => io::failure(&lua, &err),
-            }
-        });
+    #[get]
+    fn headers(&self) -> HashMap<String, String> {
+        self.head.headers.clone()
+    }
+
+    async fn line(&self, lua: Lua, wait: Option<f64>) -> mlua::Result<Result<io::Line, NetError>> {
+        self.next_line(&lua, io::limit(wait)?).await
+    }
+
+    fn lines(lua: &Lua, body: AnyUserData) -> mlua::Result<Function> {
+        lua.create_async_function(move |lua, ()| {
+            let body = body.clone();
+            async move { io::settle(&lua, body.borrow::<Body>()?.next_line(&lua, None).await?) }
+        })
+    }
+
+    async fn read(&self) -> Result<BString, NetError> {
+        self.chunks.lock().await.rest().await.map(BString::from)
     }
 }
 
-async fn open(lua: Lua, request: Request) -> mlua::Result<MultiValue> {
-    let io = io::handle(&lua)?;
-    let client = State::of(&lua)?.client();
+async fn connect(lua: &Lua, request: Request) -> mlua::Result<Result<Body, NetError>> {
+    let io = io::handle(lua)?;
+    let client = State::of(lua)?.client();
     let (head, answered) = oneshot::channel();
     let (chunks, receiver) = mpsc::channel(CHUNKS);
     let task = io.spawn(stream(client, request, head, chunks));
     let guard = Abort(task.abort_handle());
-    match answered.await.unwrap_or(Err(NetError::Stopped)) {
-        Ok(head) => Body {
-            head,
-            chunks: Mutex::new(Chunks {
-                receiver,
-                buffer: Vec::new(),
-                done: false,
-            }),
-            _task: guard,
-        }
-        .into_lua_multi(&lua),
-        Err(err) => io::failure(&lua, &err),
-    }
+    let answer = answered.await.unwrap_or(Err(NetError::Stopped));
+    Ok(answer.map(|head| Body {
+        head,
+        chunks: Mutex::new(Chunks {
+            receiver,
+            buffer: Vec::new(),
+            done: false,
+        }),
+        _task: guard,
+    }))
 }
 
 pub(crate) struct Server {
@@ -363,119 +364,91 @@ async fn shutdown(writer: Arc<Mutex<OwnedWriteHalf>>) -> std::io::Result<()> {
     writer.lock().await.shutdown().await
 }
 
-impl UserData for Server {
-    fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
-        fields.add_field_method_get("port", |_, server| Ok(server.port));
+#[methods]
+impl Server {
+    #[get]
+    fn port(&self) -> u16 {
+        self.port
     }
 
-    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_async_method("accept", |lua, server, ()| async move {
-            let Some(listener) = server.listener.lock().await.clone() else {
-                return io::failure(&lua, &"the server is closed");
-            };
-            let accepted =
-                io::run(io::handle(&lua)?, async move { listener.accept().await }).await?;
-            match accepted {
-                Ok((stream, _)) => {
-                    let (reader, writer) = stream.into_split();
-                    Conn {
-                        reader: Arc::new(Mutex::new(BufReader::new(reader))),
-                        writer: Arc::new(Mutex::new(writer)),
-                    }
-                    .into_lua_multi(&lua)
-                }
-                Err(err) => io::failure(&lua, &err),
+    async fn accept(&self, lua: Lua) -> mlua::Result<Result<Conn, std::io::Error>> {
+        let Some(listener) = self.listener.lock().await.clone() else {
+            return Ok(Err(std::io::Error::other("the server is closed")));
+        };
+        let accepted = io::run(&lua, async move { listener.accept().await }).await?;
+        Ok(accepted.map(|(stream, _)| {
+            let (reader, writer) = stream.into_split();
+            Conn {
+                reader: Arc::new(Mutex::new(BufReader::new(reader))),
+                writer: Arc::new(Mutex::new(writer)),
             }
-        });
-        methods.add_async_method("close", |_, server, ()| async move {
-            server.listener.lock().await.take();
-            Ok(())
-        });
+        }))
+    }
+
+    async fn close(&self) {
+        self.listener.lock().await.take();
     }
 }
 
-impl UserData for Conn {
-    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_async_method("line", |lua, conn, wait: Option<f64>| async move {
-            let limit = io::limit(wait)?;
-            let reader = Arc::clone(&conn.reader);
-            let read = io::run(io::handle(&lua)?, async move {
-                match limit {
-                    Some(limit) => tokio::time::timeout(limit, read_line(reader)).await.ok(),
-                    None => Some(read_line(reader).await),
-                }
-            })
-            .await?;
-            match read {
-                Some(read) => io::settle(&lua, read),
-                None => Value::Boolean(false).into_lua_multi(&lua),
+#[methods]
+impl Conn {
+    async fn line(
+        &self,
+        lua: Lua,
+        wait: Option<f64>,
+    ) -> mlua::Result<Result<io::Line, std::io::Error>> {
+        let limit = io::limit(wait)?;
+        let reader = Arc::clone(&self.reader);
+        let read = io::run(&lua, async move {
+            match limit {
+                Some(limit) => tokio::time::timeout(limit, read_line(reader)).await.ok(),
+                None => Some(read_line(reader).await),
             }
-        });
-        methods.add_async_method("read", |lua, conn, count: usize| async move {
-            let read = io::run(
-                io::handle(&lua)?,
-                read_exact(Arc::clone(&conn.reader), count),
-            )
-            .await?;
-            match read {
-                Ok(bytes) => Value::String(lua.create_string(bytes)?).into_lua_multi(&lua),
-                Err(err) => io::failure(&lua, &err),
-            }
-        });
-        methods.add_async_method("write", |lua, conn, data: mlua::LuaString| async move {
-            let bytes = data.as_bytes().to_vec();
-            let written = io::run(
-                io::handle(&lua)?,
-                write_all(Arc::clone(&conn.writer), bytes),
-            )
-            .await?;
-            io::settle(&lua, written.map(|()| true))
-        });
-        methods.add_async_method("close", |lua, conn, ()| async move {
-            let closed = io::run(io::handle(&lua)?, shutdown(Arc::clone(&conn.writer))).await?;
-            io::settle(&lua, closed.map(|()| true))
-        });
+        })
+        .await?;
+        Ok(read.map_or(Ok(io::Line::Late), |read| read.map(io::Line::from)))
+    }
+
+    async fn read(&self, lua: Lua, count: usize) -> mlua::Result<Result<BString, std::io::Error>> {
+        let read = io::run(&lua, read_exact(Arc::clone(&self.reader), count)).await?;
+        Ok(read.map(BString::from))
+    }
+
+    async fn write(
+        &self,
+        lua: Lua,
+        data: &mlua::LuaString,
+    ) -> mlua::Result<Result<bool, std::io::Error>> {
+        let bytes = data.as_bytes().to_vec();
+        let written = io::run(&lua, write_all(Arc::clone(&self.writer), bytes)).await?;
+        Ok(written.map(|()| true))
+    }
+
+    async fn close(&self, lua: Lua) -> mlua::Result<Result<bool, std::io::Error>> {
+        let closed = io::run(&lua, shutdown(Arc::clone(&self.writer))).await?;
+        Ok(closed.map(|()| true))
     }
 }
 
-pub(crate) fn register(lua: &Lua) -> mlua::Result<Table> {
-    let net = lua.create_table()?;
-    net.set(
-        "request",
-        lua.create_async_function(|lua, opts: Table| async move {
-            let request = Request::from_table(&opts)?;
-            let client = State::of(&lua)?.client();
-            let fetched = io::run(io::handle(&lua)?, fetch(client, request)).await?;
-            match fetched {
-                Ok(response) => lua.to_value(&response)?.into_lua_multi(&lua),
-                Err(err) => io::failure(&lua, &err),
-            }
-        })?,
-    )?;
-    net.set(
-        "open",
-        lua.create_async_function(|lua, opts: Table| async move {
-            let request = Request::from_table(&opts)?;
-            open(lua, request).await
-        })?,
-    )?;
-    net.set(
-        "listen",
-        lua.create_async_function(|lua, port: Option<u16>| async move {
-            let bound = io::run(
-                io::handle(&lua)?,
-                TcpListener::bind((LOOPBACK, port.unwrap_or(0))),
-            )
-            .await?;
-            match bound.and_then(|listener| Ok((listener.local_addr()?.port(), listener))) {
-                Ok((port, listener)) => Server {
-                    port,
-                    listener: Mutex::new(Some(Arc::new(listener))),
-                }
-                .into_lua_multi(&lua),
-                Err(err) => io::failure(&lua, &err),
-            }
-        })?,
-    )?;
-    Ok(net)
+#[function(net)]
+async fn request(lua: Lua, opts: RequestOptions) -> mlua::Result<Result<Response, NetError>> {
+    let request = Request::new(opts)?;
+    let client = State::of(&lua)?.client();
+    io::run(&lua, fetch(client, request)).await
+}
+
+#[function(net)]
+async fn open(lua: Lua, opts: RequestOptions) -> mlua::Result<Result<Body, NetError>> {
+    connect(&lua, Request::new(opts)?).await
+}
+
+#[function(net)]
+async fn listen(lua: Lua, port: Option<u16>) -> mlua::Result<Result<Server, std::io::Error>> {
+    let bound = io::run(&lua, TcpListener::bind((LOOPBACK, port.unwrap_or(0)))).await?;
+    Ok(bound.and_then(|listener| {
+        Ok(Server {
+            port: listener.local_addr()?.port(),
+            listener: Mutex::new(Some(Arc::new(listener))),
+        })
+    }))
 }

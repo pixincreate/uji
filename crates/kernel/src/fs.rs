@@ -2,20 +2,21 @@ use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::time::UNIX_EPOCH;
 
-use mlua::{IntoLuaMulti, Lua, LuaSerdeExt, Table, Value};
+use mlua::{BString, Lua};
 use serde::Serialize;
 use tokio::io::AsyncWriteExt;
+use uji_macros::{FromLua, IntoLua, function};
 
 use crate::io;
 
-#[derive(Serialize)]
+#[derive(Serialize, IntoLua)]
 struct Entry {
     name: String,
     #[serde(rename = "type")]
     kind: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, IntoLua)]
 struct Stat {
     #[serde(rename = "type")]
     kind: &'static str,
@@ -50,7 +51,7 @@ fn stat_of(metadata: &std::fs::Metadata) -> Stat {
 const NEWLINE: u8 = b'\n';
 const BUFFER: usize = 64 * 1024;
 
-#[derive(Serialize, Default)]
+#[derive(Serialize, Default, IntoLua)]
 struct Excerpt {
     lines: Vec<String>,
     cut: Vec<usize>,
@@ -58,36 +59,34 @@ struct Excerpt {
     binary: bool,
 }
 
+#[derive(FromLua)]
 struct Window {
+    #[lua(default = 1)]
     from: usize,
+    #[lua(default = usize::MAX)]
     count: usize,
+    #[lua(default = usize::MAX)]
     max: usize,
+    #[lua(default)]
     sniff: usize,
+    #[lua(default)]
     total: bool,
 }
 
-impl Window {
-    fn from_opts(opts: Option<&Table>) -> mlua::Result<Self> {
-        let number = |key: &str, default: usize| -> mlua::Result<usize> {
-            Ok(opts
-                .map(|opts| opts.get::<Option<usize>>(key))
-                .transpose()?
-                .flatten()
-                .unwrap_or(default))
-        };
-        Ok(Self {
-            from: number("from", 1)?.max(1),
-            count: number("count", usize::MAX)?,
-            max: number("max", usize::MAX)?,
-            sniff: number("sniff", 0)?,
-            total: opts
-                .map(|opts| opts.get::<Option<bool>>("total"))
-                .transpose()?
-                .flatten()
-                .unwrap_or(false),
-        })
-    }
+#[derive(FromLua)]
+struct WriteOptions {
+    mode: Option<u32>,
+    #[lua(default)]
+    append: bool,
+}
 
+#[derive(FromLua)]
+struct RemoveOptions {
+    #[lua(default)]
+    recursive: bool,
+}
+
+impl Window {
     fn read(&self, path: &str) -> std::io::Result<Excerpt> {
         let file = std::fs::File::open(path)?;
         let mut reader = BufReader::with_capacity(BUFFER.max(self.sniff), file);
@@ -162,19 +161,13 @@ struct Write {
 }
 
 impl Write {
-    fn from_args(path: String, data: &mlua::LuaString, opts: Option<&Table>) -> mlua::Result<Self> {
-        let option = |key: &str| -> mlua::Result<Option<Value>> {
-            opts.map(|opts| opts.get::<Value>(key)).transpose()
-        };
-        Ok(Self {
+    fn new(path: String, data: &mlua::LuaString, opts: &WriteOptions) -> Self {
+        Self {
             path: PathBuf::from(path),
             data: data.as_bytes().to_vec(),
-            mode: match option("mode")? {
-                Some(Value::Integer(mode)) => u32::try_from(mode).ok(),
-                _ => None,
-            },
-            append: matches!(option("append")?, Some(Value::Boolean(true))),
-        })
+            mode: opts.mode,
+            append: opts.append,
+        }
     }
 
     async fn run(self) -> std::io::Result<()> {
@@ -195,7 +188,7 @@ impl Write {
     }
 }
 
-async fn list(path: String) -> std::io::Result<Vec<Entry>> {
+async fn entries(path: String) -> std::io::Result<Vec<Entry>> {
     let mut reader = tokio::fs::read_dir(path).await?;
     let mut entries = Vec::new();
     while let Some(entry) = reader.next_entry().await? {
@@ -208,93 +201,76 @@ async fn list(path: String) -> std::io::Result<Vec<Entry>> {
     Ok(entries)
 }
 
-pub(crate) fn register(lua: &Lua) -> mlua::Result<Table> {
-    let fs = lua.create_table()?;
-    fs.set(
-        "read",
-        lua.create_async_function(|lua, path: String| async move {
-            match io::run(io::handle(&lua)?, tokio::fs::read(path)).await? {
-                Ok(bytes) => Value::String(lua.create_string(bytes)?).into_lua_multi(&lua),
-                Err(err) => io::failure(&lua, &err),
-            }
-        })?,
-    )?;
-    fs.set(
-        "lines",
-        lua.create_async_function(|lua, (path, opts): (String, Option<Table>)| async move {
-            let window = Window::from_opts(opts.as_ref())?;
-            let read = io::blocking(io::handle(&lua)?, move || window.read(&path)).await?;
-            match read {
-                Ok(excerpt) => lua.to_value(&excerpt)?.into_lua_multi(&lua),
-                Err(err) => io::failure(&lua, &err),
-            }
-        })?,
-    )?;
-    fs.set(
-        "write",
-        lua.create_async_function(
-            |lua, (path, data, opts): (String, mlua::LuaString, Option<Table>)| async move {
-                let write = Write::from_args(path, &data, opts.as_ref())?;
-                let written = io::run(io::handle(&lua)?, write.run()).await?;
-                io::settle(&lua, written.map(|()| true))
-            },
-        )?,
-    )?;
-    fs.set(
-        "list",
-        lua.create_async_function(|lua, path: String| async move {
-            match io::run(io::handle(&lua)?, list(path)).await? {
-                Ok(entries) => lua.to_value(&entries)?.into_lua_multi(&lua),
-                Err(err) => io::failure(&lua, &err),
-            }
-        })?,
-    )?;
-    fs.set(
-        "stat",
-        lua.create_async_function(|lua, path: String| async move {
-            match io::run(io::handle(&lua)?, tokio::fs::metadata(path)).await? {
-                Ok(metadata) => lua.to_value(&stat_of(&metadata))?.into_lua_multi(&lua),
-                Err(err) => io::failure(&lua, &err),
-            }
-        })?,
-    )?;
-    fs.set(
-        "mkdir",
-        lua.create_async_function(|lua, path: String| async move {
-            let made = io::run(io::handle(&lua)?, tokio::fs::create_dir_all(path)).await?;
-            io::settle(&lua, made.map(|()| true))
-        })?,
-    )?;
-    fs.set(
-        "remove",
-        lua.create_async_function(|lua, (path, opts): (String, Option<Table>)| async move {
-            let recursive = opts
-                .map(|opts| opts.get::<Option<bool>>("recursive"))
-                .transpose()?
-                .flatten()
-                .unwrap_or(false);
-            let removed = io::run(io::handle(&lua)?, remove(path, recursive)).await?;
-            io::settle(&lua, removed.map(|()| true))
-        })?,
-    )?;
-    fs.set(
-        "rename",
-        lua.create_async_function(|lua, (from, to): (String, String)| async move {
-            let renamed = io::run(io::handle(&lua)?, tokio::fs::rename(from, to)).await?;
-            io::settle(&lua, renamed.map(|()| true))
-        })?,
-    )?;
-    fs.set(
-        "realpath",
-        lua.create_async_function(|lua, path: String| async move {
-            let resolved = io::run(io::handle(&lua)?, tokio::fs::canonicalize(path)).await?;
-            io::settle(&lua, resolved.map(|path| path.display().to_string()))
-        })?,
-    )?;
-    Ok(fs)
+#[function(fs)]
+async fn read(lua: Lua, path: String) -> mlua::Result<Result<BString, std::io::Error>> {
+    Ok(io::run(&lua, tokio::fs::read(path))
+        .await?
+        .map(BString::from))
 }
 
-async fn remove(path: String, recursive: bool) -> std::io::Result<()> {
+#[function(fs)]
+async fn lines(
+    lua: Lua,
+    path: String,
+    window: Window,
+) -> mlua::Result<Result<Excerpt, std::io::Error>> {
+    io::blocking(&lua, move || window.read(&path)).await
+}
+
+#[function(fs)]
+async fn write(
+    lua: Lua,
+    path: String,
+    data: &mlua::LuaString,
+    opts: &WriteOptions,
+) -> mlua::Result<Result<bool, std::io::Error>> {
+    let write = Write::new(path, data, opts);
+    Ok(io::run(&lua, write.run()).await?.map(|()| true))
+}
+
+#[function(fs)]
+async fn list(lua: Lua, path: String) -> mlua::Result<Result<Vec<Entry>, std::io::Error>> {
+    io::run(&lua, entries(path)).await
+}
+
+#[function(fs)]
+async fn stat(lua: Lua, path: String) -> mlua::Result<Result<Stat, std::io::Error>> {
+    let metadata = io::run(&lua, tokio::fs::metadata(path)).await?;
+    Ok(metadata.map(|metadata| stat_of(&metadata)))
+}
+
+#[function(fs)]
+async fn mkdir(lua: Lua, path: String) -> mlua::Result<Result<bool, std::io::Error>> {
+    Ok(io::run(&lua, tokio::fs::create_dir_all(path))
+        .await?
+        .map(|()| true))
+}
+
+#[function(fs)]
+async fn remove(
+    lua: Lua,
+    path: String,
+    opts: RemoveOptions,
+) -> mlua::Result<Result<bool, std::io::Error>> {
+    Ok(io::run(&lua, delete(path, opts.recursive))
+        .await?
+        .map(|()| true))
+}
+
+#[function(fs)]
+async fn rename(lua: Lua, from: String, to: String) -> mlua::Result<Result<bool, std::io::Error>> {
+    Ok(io::run(&lua, tokio::fs::rename(from, to))
+        .await?
+        .map(|()| true))
+}
+
+#[function(fs)]
+async fn realpath(lua: Lua, path: String) -> mlua::Result<Result<String, std::io::Error>> {
+    let resolved = io::run(&lua, tokio::fs::canonicalize(path)).await?;
+    Ok(resolved.map(|path| path.display().to_string()))
+}
+
+async fn delete(path: String, recursive: bool) -> std::io::Result<()> {
     let metadata = tokio::fs::symlink_metadata(&path).await?;
     if !metadata.is_dir() {
         return tokio::fs::remove_file(path).await;

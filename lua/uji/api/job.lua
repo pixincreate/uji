@@ -101,7 +101,7 @@ local function start(opts)
     }
 end
 
-return {
+uji.job = {
     start = function(opts)
         if type(opts) ~= "table" then
             error("uji.job.start needs a table", 2)

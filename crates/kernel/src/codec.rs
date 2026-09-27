@@ -3,84 +3,45 @@ use base64::engine::GeneralPurpose;
 use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD, URL_SAFE, URL_SAFE_NO_PAD};
 use std::ops::Range;
 
-use mlua::serde::SerializeOptions;
-use mlua::{Lua, LuaSerdeExt, Table, Value};
+use mlua::{BString, Lua, Table, Value};
 use pulldown_cmark::{
     CodeBlockKind, Event, HeadingLevel, Options as Extensions, Parser, Tag, TagEnd,
 };
 use rand::RngCore;
 use sha2::{Digest, Sha256};
+use uji_macros::{FromLua, function};
 use unicode_width::UnicodeWidthStr;
 
-fn json(lua: &Lua) -> mlua::Result<Table> {
-    let json = lua.create_table()?;
-    json.set(
-        "encode",
-        lua.create_function(|_, value: Value| {
-            serde_json::to_string(&value).map_err(mlua::Error::external)
-        })?,
-    )?;
-    json.set(
-        "decode",
-        lua.create_function(|lua, (text, opts): (mlua::LuaString, Option<Table>)| {
-            let value: serde_json::Value =
-                serde_json::from_slice(&text.as_bytes()).map_err(mlua::Error::external)?;
-            let nulls = opts
-                .map(|opts| opts.get::<Option<bool>>("nulls"))
-                .transpose()?
-                .flatten()
-                .unwrap_or(true);
-            let options = SerializeOptions::new()
-                .serialize_none_to_null(nulls)
-                .serialize_unit_to_null(nulls);
-            lua.to_value_with(&value, options)
-        })?,
-    )?;
-    json.set(
-        "array",
-        lua.create_function(|lua, table: Table| {
-            table.set_metatable(Some(lua.array_metatable()))?;
-            Ok(table)
-        })?,
-    )?;
-    json.set("null", lua.null())?;
-    Ok(json)
+#[derive(FromLua)]
+struct Base64Options {
+    #[lua(default)]
+    url: bool,
+    #[lua(default = true)]
+    pad: bool,
 }
 
-fn engine(opts: Option<&Table>) -> mlua::Result<&'static GeneralPurpose> {
-    let flag = |key: &str, default: bool| -> mlua::Result<bool> {
-        Ok(opts
-            .map(|opts| opts.get::<Option<bool>>(key))
-            .transpose()?
-            .flatten()
-            .unwrap_or(default))
-    };
-    Ok(match (flag("url", false)?, flag("pad", true)?) {
-        (false, true) => &STANDARD,
-        (false, false) => &STANDARD_NO_PAD,
-        (true, true) => &URL_SAFE,
-        (true, false) => &URL_SAFE_NO_PAD,
-    })
+impl Base64Options {
+    fn engine(&self) -> &'static GeneralPurpose {
+        match (self.url, self.pad) {
+            (false, true) => &STANDARD,
+            (false, false) => &STANDARD_NO_PAD,
+            (true, true) => &URL_SAFE,
+            (true, false) => &URL_SAFE_NO_PAD,
+        }
+    }
 }
 
-fn base64(lua: &Lua) -> mlua::Result<Table> {
-    let base64 = lua.create_table()?;
-    base64.set(
-        "encode",
-        lua.create_function(|_, (data, opts): (mlua::LuaString, Option<Table>)| {
-            Ok(engine(opts.as_ref())?.encode(data.as_bytes()))
-        })?,
-    )?;
-    base64.set(
-        "decode",
-        lua.create_function(|lua, (text, opts): (mlua::LuaString, Option<Table>)| {
-            let bytes = engine(opts.as_ref())?
-                .decode(text.as_bytes())
-                .map_err(mlua::Error::external)?;
-            lua.create_string(bytes)
-        })?,
-    )?;
-    Ok(base64)
+#[function(base64)]
+fn encode(data: &mlua::LuaString, opts: &Base64Options) -> String {
+    opts.engine().encode(data.as_bytes())
+}
+
+#[function(base64)]
+fn decode(text: &mlua::LuaString, opts: &Base64Options) -> mlua::Result<BString> {
+    opts.engine()
+        .decode(text.as_bytes())
+        .map(BString::from)
+        .map_err(mlua::Error::external)
 }
 
 fn level(level: HeadingLevel) -> i64 {
@@ -171,7 +132,7 @@ fn event(lua: &Lua, event: Event<'_>, range: Range<usize>) -> mlua::Result<Optio
     }
 }
 
-fn markdown(lua: &Lua, source: &str) -> mlua::Result<Table> {
+fn parse(lua: &Lua, source: &str) -> mlua::Result<Table> {
     let mut extensions = Extensions::empty();
     extensions.insert(Extensions::ENABLE_STRIKETHROUGH);
     extensions.insert(Extensions::ENABLE_TABLES);
@@ -185,36 +146,29 @@ fn markdown(lua: &Lua, source: &str) -> mlua::Result<Table> {
     Ok(events)
 }
 
-pub(crate) fn install(lua: &Lua, uji: &Table) -> mlua::Result<()> {
-    uji.set("json", json(lua)?)?;
-    uji.set("base64", base64(lua)?)?;
-    uji.set(
-        "sha256",
-        lua.create_function(|lua, data: mlua::LuaString| {
-            lua.create_string(Sha256::digest(data.as_bytes()))
-        })?,
-    )?;
-    uji.set(
-        "random",
-        lua.create_function(|lua, count: usize| {
-            let mut bytes = vec![0; count];
-            rand::rng().fill_bytes(&mut bytes);
-            lua.create_string(bytes)
-        })?,
-    )?;
-    uji.set(
-        "lossy",
-        lua.create_function(|_, data: mlua::LuaString| Ok(data.to_string_lossy()))?,
-    )?;
-    uji.set(
-        "width",
-        lua.create_function(|_, text: mlua::LuaString| Ok(text.to_string_lossy().width()))?,
-    )?;
-    uji.set(
-        "markdown",
-        lua.create_function(|lua, source: mlua::LuaString| {
-            markdown(lua, &source.to_string_lossy())
-        })?,
-    )?;
-    Ok(())
+#[function]
+fn sha256(data: &mlua::LuaString) -> BString {
+    BString::from(Sha256::digest(data.as_bytes()).to_vec())
+}
+
+#[function]
+fn random(count: usize) -> BString {
+    let mut bytes = vec![0; count];
+    rand::rng().fill_bytes(&mut bytes);
+    BString::from(bytes)
+}
+
+#[function]
+fn lossy(data: &mlua::LuaString) -> String {
+    data.to_string_lossy()
+}
+
+#[function]
+fn width(text: &mlua::LuaString) -> usize {
+    text.to_string_lossy().width()
+}
+
+#[function]
+fn markdown(lua: &Lua, source: &mlua::LuaString) -> mlua::Result<Table> {
+    parse(lua, &source.to_string_lossy())
 }

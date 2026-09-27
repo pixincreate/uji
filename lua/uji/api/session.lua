@@ -63,4 +63,4 @@ function M.interrupt()
     app.agent:interrupt()
 end
 
-return M
+uji.session = M

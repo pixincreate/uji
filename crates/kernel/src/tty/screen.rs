@@ -1,7 +1,8 @@
-use mlua::{Table, UserData, UserDataMethods, Value};
+use mlua::{Table, Value};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
+use uji_macros::methods;
 
 const MODIFIERS: [(&str, Modifier); 7] = [
     ("bold", Modifier::BOLD),
@@ -52,7 +53,7 @@ impl Screen {
         }
     }
 
-    fn style(&self, id: Option<usize>) -> mlua::Result<Style> {
+    fn resolve(&self, id: Option<usize>) -> mlua::Result<Style> {
         match id {
             None | Some(0) => Ok(Style::default()),
             Some(id) => self
@@ -75,59 +76,7 @@ impl Screen {
             .0
     }
 
-    fn line(&mut self, row: u16, col: u16, spans: Value, width: Option<u16>) -> mlua::Result<u16> {
-        let area = self.surface.buffer().area;
-        if row >= area.height {
-            return Ok(col);
-        }
-        let right = width.map_or(area.width, |width| {
-            col.saturating_add(width).min(area.width)
-        });
-        let mut at = col;
-        match spans {
-            Value::String(text) => {
-                at = self.put((at, row), right, &text.to_string_lossy(), Style::default());
-            }
-            Value::Table(spans) => {
-                for span in spans.sequence_values::<Value>() {
-                    let (text, style) = match span? {
-                        Value::String(text) => (text, Style::default()),
-                        Value::Table(span) => {
-                            let style = self.style(span.raw_get::<Option<usize>>(2)?)?;
-                            (span.raw_get::<mlua::LuaString>(1)?, style)
-                        }
-                        other => {
-                            return Err(mlua::Error::runtime(format!(
-                                "a span is a string or a table, not a {}",
-                                other.type_name()
-                            )));
-                        }
-                    };
-                    at = self.put((at, row), right, &text.to_string_lossy(), style);
-                }
-            }
-            Value::Nil => {}
-            other => {
-                return Err(mlua::Error::runtime(format!(
-                    "a line is a string or a list of spans, not a {}",
-                    other.type_name()
-                )));
-            }
-        }
-        Ok(at)
-    }
-
-    fn text(&mut self, row: u16) -> Option<String> {
-        let buffer = self.surface.buffer();
-        let area = buffer.area;
-        (row < area.height).then(|| {
-            (area.left()..area.right())
-                .map(|col| buffer[(col, row)].symbol())
-                .collect()
-        })
-    }
-
-    fn fill(&mut self, area: Rect, style: Style, symbol: &str) {
+    fn cover(&mut self, area: Rect, style: Style, symbol: &str) {
         let buffer = self.surface.buffer();
         let area = area.intersection(buffer.area);
         for row in area.top()..area.bottom() {
@@ -174,78 +123,141 @@ fn shape(name: Option<&str>) -> mlua::Result<Shape> {
     }
 }
 
-impl UserData for Screen {
-    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method_mut("size", |_, screen, ()| screen.surface.size());
-        methods.add_method_mut("style", |_, screen, spec: Table| {
-            screen.styles.push(parse_style(&spec)?);
-            Ok(screen.styles.len())
+#[methods]
+impl Screen {
+    fn size(&mut self) -> mlua::Result<(u16, u16)> {
+        self.surface.size()
+    }
+
+    fn style(&mut self, spec: &Table) -> mlua::Result<usize> {
+        self.styles.push(parse_style(spec)?);
+        Ok(self.styles.len())
+    }
+
+    fn line(&mut self, row: u16, col: u16, spans: Value, width: Option<u16>) -> mlua::Result<u16> {
+        let area = self.surface.buffer().area;
+        if row >= area.height {
+            return Ok(col);
+        }
+        let right = width.map_or(area.width, |width| {
+            col.saturating_add(width).min(area.width)
         });
-        methods.add_method_mut(
-            "line",
-            |_, screen, (row, col, spans, width): (u16, u16, Value, Option<u16>)| {
-                screen.line(row, col, spans, width)
-            },
+        let mut at = col;
+        match spans {
+            Value::String(text) => {
+                at = self.put((at, row), right, &text.to_string_lossy(), Style::default());
+            }
+            Value::Table(spans) => {
+                for span in spans.sequence_values::<Value>() {
+                    let (text, style) = match span? {
+                        Value::String(text) => (text, Style::default()),
+                        Value::Table(span) => {
+                            let style = self.resolve(span.raw_get::<Option<usize>>(2)?)?;
+                            (span.raw_get::<mlua::LuaString>(1)?, style)
+                        }
+                        other => {
+                            return Err(mlua::Error::runtime(format!(
+                                "a span is a string or a table, not a {}",
+                                other.type_name()
+                            )));
+                        }
+                    };
+                    at = self.put((at, row), right, &text.to_string_lossy(), style);
+                }
+            }
+            Value::Nil => {}
+            other => {
+                return Err(mlua::Error::runtime(format!(
+                    "a line is a string or a list of spans, not a {}",
+                    other.type_name()
+                )));
+            }
+        }
+        Ok(at)
+    }
+
+    fn fill(
+        &mut self,
+        row: u16,
+        col: u16,
+        width: u16,
+        height: u16,
+        style: Option<usize>,
+        symbol: Option<&str>,
+    ) -> mlua::Result<()> {
+        let style = self.resolve(style)?;
+        self.cover(
+            Rect::new(col, row, width, height),
+            style,
+            symbol.unwrap_or(" "),
         );
-        methods.add_method_mut(
-            "fill",
-            |_,
-             screen,
-             (row, col, width, height, style, symbol): (
-                u16,
-                u16,
-                u16,
-                u16,
-                Option<usize>,
-                Option<String>,
-            )| {
-                let style = screen.style(style)?;
-                screen.fill(
-                    Rect::new(col, row, width, height),
-                    style,
-                    symbol.as_deref().unwrap_or(" "),
-                );
-                Ok(())
-            },
-        );
-        methods.add_method_mut(
-            "paint",
-            |_, screen, (row, col, width, height, style): (u16, u16, u16, u16, usize)| {
-                let style = screen.style(Some(style))?;
-                let buffer = screen.surface.buffer();
-                let area = Rect::new(col, row, width, height).intersection(buffer.area);
-                buffer.set_style(area, style);
-                Ok(())
-            },
-        );
-        methods.add_method_mut("text", |_, screen, row: u16| Ok(screen.text(row)));
-        methods.add_method_mut("clear", |_, screen, ()| {
-            screen.surface.buffer().reset();
-            Ok(())
-        });
-        methods.add_method_mut(
-            "cursor",
-            |_, screen, (row, col, name): (Option<u16>, Option<u16>, Option<String>)| {
-                screen.cursor = match (row, col) {
-                    (Some(row), Some(col)) => Some(Cursor {
-                        row,
-                        col,
-                        shape: shape(name.as_deref())?,
-                    }),
-                    _ => None,
-                };
-                Ok(())
-            },
-        );
-        methods.add_method_mut("flush", |_, screen, ()| {
-            let cursor = screen.cursor;
-            screen.surface.present(cursor)
-        });
-        methods.add_method_mut("write", |_, screen, bytes: mlua::LuaString| {
-            screen.surface.write(&bytes.as_bytes())
-        });
-        methods.add_method_mut("suspend", |_, screen, ()| screen.surface.suspend());
-        methods.add_method_mut("resume", |_, screen, ()| screen.surface.resume());
-        methods.add_method_mut("close", |_, screen, ()| screen.surface.close());
+        Ok(())
+    }
+
+    fn paint(
+        &mut self,
+        row: u16,
+        col: u16,
+        width: u16,
+        height: u16,
+        style: usize,
+    ) -> mlua::Result<()> {
+        let style = self.resolve(Some(style))?;
+        let buffer = self.surface.buffer();
+        let area = Rect::new(col, row, width, height).intersection(buffer.area);
+        buffer.set_style(area, style);
+        Ok(())
+    }
+
+    fn text(&mut self, row: u16) -> Option<String> {
+        let buffer = self.surface.buffer();
+        let area = buffer.area;
+        (row < area.height).then(|| {
+            (area.left()..area.right())
+                .map(|col| buffer[(col, row)].symbol())
+                .collect()
+        })
+    }
+
+    fn clear(&mut self) {
+        self.surface.buffer().reset();
+    }
+
+    fn cursor(
+        &mut self,
+        row: Option<u16>,
+        col: Option<u16>,
+        name: Option<&str>,
+    ) -> mlua::Result<()> {
+        self.cursor = match (row, col) {
+            (Some(row), Some(col)) => Some(Cursor {
+                row,
+                col,
+                shape: shape(name)?,
+            }),
+            _ => None,
+        };
+        Ok(())
+    }
+
+    fn flush(&mut self) -> mlua::Result<()> {
+        let cursor = self.cursor;
+        self.surface.present(cursor)
+    }
+
+    fn write(&mut self, bytes: &mlua::LuaString) -> mlua::Result<()> {
+        self.surface.write(&bytes.as_bytes())
+    }
+
+    fn suspend(&mut self) -> mlua::Result<()> {
+        self.surface.suspend()
+    }
+
+    fn resume(&mut self) -> mlua::Result<()> {
+        self.surface.resume()
+    }
+
+    fn close(&mut self) -> mlua::Result<()> {
+        self.surface.close()
     }
 }

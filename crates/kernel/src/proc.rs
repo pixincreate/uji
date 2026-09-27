@@ -2,15 +2,13 @@ use std::collections::HashMap;
 use std::process::{ExitStatus, Stdio};
 use std::sync::Arc;
 
-use mlua::{
-    AnyUserData, Function, IntoLuaMulti, Lua, LuaSerdeExt, MultiValue, ObjectLike, Table, UserData,
-    UserDataFields, UserDataMethods,
-};
+use mlua::Lua;
 use serde::Serialize;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::runtime::Handle;
 use tokio::sync::{Mutex, mpsc, watch};
+use uji_macros::{FromLua, IntoLua, function, methods};
 
 use crate::io;
 
@@ -22,7 +20,7 @@ struct Line {
     text: String,
 }
 
-#[derive(Clone, Copy, Serialize)]
+#[derive(Clone, Copy, Serialize, IntoLua)]
 struct Exit {
     code: Option<i32>,
     signal: Option<i32>,
@@ -140,50 +138,67 @@ async fn write(stdin: Arc<Mutex<Option<ChildStdin>>>, data: Vec<u8>) -> std::io:
     pipe.flush().await
 }
 
-impl UserData for Proc {
-    fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
-        fields.add_field_method_get("pid", |_, proc| Ok(proc.pid));
+#[methods]
+impl Proc {
+    #[get]
+    fn pid(&self) -> Option<u32> {
+        self.pid
     }
 
-    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_async_method("line", |lua, proc, ()| async move {
-            match proc.output.lock().await.recv().await {
-                Some(line) => (line.text, line.stream).into_lua_multi(&lua),
-                None => Ok(MultiValue::new()),
-            }
-        });
-        methods.add_function("lines", |_, proc: AnyUserData| {
-            let line: Function = proc.get("line")?;
-            Ok((line, proc))
-        });
-        methods.add_async_method("write", |lua, proc, data: mlua::LuaString| async move {
-            let stdin = Arc::clone(&proc.stdin);
-            let bytes = data.as_bytes().to_vec();
-            let written = io::run(io::handle(&lua)?, write(stdin, bytes)).await?;
-            io::settle(&lua, written.map(|()| true))
-        });
-        methods.add_async_method("close", |_, proc, ()| async move {
-            proc.stdin.lock().await.take();
-            Ok(())
-        });
-        methods.add_method("kill", |_, proc, ()| Ok(proc.kill.send(()).is_ok()));
-        methods.add_async_method("wait", |lua, proc, ()| async move {
-            let mut status = proc.status.clone();
-            let exit = status
-                .wait_for(Option::is_some)
-                .await
-                .map_err(mlua::Error::external)?
-                .unwrap_or(Exit {
-                    code: None,
-                    signal: None,
-                    success: false,
-                });
-            lua.to_value(&exit)
-        });
+    #[iterate(lines)]
+    async fn line(&self) -> (Option<String>, Option<&'static str>) {
+        self.output
+            .lock()
+            .await
+            .recv()
+            .await
+            .map(|line| (line.text, line.stream))
+            .unzip()
+    }
+
+    async fn write(
+        &self,
+        lua: Lua,
+        data: &mlua::LuaString,
+    ) -> mlua::Result<Result<bool, std::io::Error>> {
+        let written = io::run(
+            &lua,
+            write(Arc::clone(&self.stdin), data.as_bytes().to_vec()),
+        )
+        .await?;
+        Ok(written.map(|()| true))
+    }
+
+    async fn close(&self) {
+        self.stdin.lock().await.take();
+    }
+
+    fn kill(&self) -> bool {
+        self.kill.send(()).is_ok()
+    }
+
+    async fn wait(&self) -> mlua::Result<Exit> {
+        let mut status = self.status.clone();
+        Ok(status
+            .wait_for(Option::is_some)
+            .await
+            .map_err(mlua::Error::external)?
+            .unwrap_or(Exit {
+                code: None,
+                signal: None,
+                success: false,
+            }))
     }
 }
 
-fn command(line: &[String], opts: Option<&Table>) -> mlua::Result<Command> {
+#[derive(FromLua)]
+struct SpawnOptions {
+    cwd: Option<String>,
+    env: Option<HashMap<String, String>>,
+    stdio: Option<String>,
+}
+
+fn command(line: &[String], opts: SpawnOptions) -> mlua::Result<Command> {
     let Some((program, args)) = line.split_first() else {
         return Err(mlua::Error::runtime("proc.spawn needs a program"));
     };
@@ -194,10 +209,7 @@ fn command(line: &[String], opts: Option<&Table>) -> mlua::Result<Command> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
-    let Some(opts) = opts else {
-        return Ok(command);
-    };
-    match opts.get::<Option<String>>("stdio")?.as_deref() {
+    match opts.stdio.as_deref() {
         None | Some("pipe") => {}
         Some("inherit") => {
             command
@@ -211,30 +223,25 @@ fn command(line: &[String], opts: Option<&Table>) -> mlua::Result<Command> {
             )));
         }
     }
-    if let Some(cwd) = opts.get::<Option<String>>("cwd")? {
+    if let Some(cwd) = opts.cwd {
         command.current_dir(cwd);
     }
-    if let Some(env) = opts.get::<Option<HashMap<String, String>>>("env")? {
+    if let Some(env) = opts.env {
         command.envs(env);
     }
     Ok(command)
 }
 
-pub(crate) fn register(lua: &Lua) -> mlua::Result<Table> {
-    let proc = lua.create_table()?;
-    proc.set(
-        "spawn",
-        lua.create_function(|lua, (argv, opts): (Vec<String>, Option<Table>)| {
-            let mut command = command(&argv, opts.as_ref())?;
-            let io = io::handle(lua)?;
-            let entered = io.enter();
-            let spawned = command.spawn();
-            drop(entered);
-            match spawned {
-                Ok(child) => Proc::start(&io, child).into_lua_multi(lua),
-                Err(err) => io::failure(lua, &err),
-            }
-        })?,
-    )?;
-    Ok(proc)
+#[function(proc)]
+fn spawn(
+    lua: &Lua,
+    argv: &[String],
+    opts: SpawnOptions,
+) -> mlua::Result<Result<Proc, std::io::Error>> {
+    let mut command = command(argv, opts)?;
+    let io = io::handle(lua)?;
+    let entered = io.enter();
+    let spawned = command.spawn();
+    drop(entered);
+    Ok(spawned.map(|child| Proc::start(&io, child)))
 }

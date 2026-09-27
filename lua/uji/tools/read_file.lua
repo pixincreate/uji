@@ -1,4 +1,5 @@
 local field = require("uji.tools.field")
+local tool = require("uji.tool")
 
 local MAX_LINES = 2000
 local MAX_BYTES = 50 * 1024
@@ -30,7 +31,7 @@ local function page(path, offset, read)
     return text
 end
 
-return {
+tool.add("read_file", {
     description = "Read a text file and return its contents with 1-based line numbers prefixed as `NNN| `. "
         .. "Read a file before editing it so `edit_file` snippets match exactly. Long files come back "
         .. "in pages; when there is more, the output ends with the offset to continue from. The line "
@@ -75,4 +76,4 @@ return {
         local read, err = uji.fs.lines(path, { offset = offset, limit = limit, max_line = MAX_LINE })
         return read and page(path, offset, read) or "error: " .. err
     end,
-}
+})

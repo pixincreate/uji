@@ -1,9 +1,10 @@
+local command = require("uji.command")
 local model = require("uji.model")
 local notices = require("uji.notices")
 local Select = require("uji.ui.views.select")
 local ui = require("uji.ui")
 
-return function()
+command.builtin("effort", "how hard the model should think", function()
     local current = model.setting("llm.effort") or ""
     local items = {}
     for index, name in ipairs(model.EFFORTS) do
@@ -23,4 +24,4 @@ return function()
         end
     end
     notices.push("unknown effort")
-end
+end)

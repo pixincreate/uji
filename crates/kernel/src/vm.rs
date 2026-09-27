@@ -1,10 +1,10 @@
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use mlua::{Function, Lua, MultiValue, Table, Value};
+use uji_macros::function;
 
-use crate::{
-    clipboard, codec, db, executor, fs, fuzzy, keychain, matcher, net, os, proc, promise, tty,
-};
+use crate::kernel::State;
 
 const AFTER_PRELOAD: i64 = 2;
 
@@ -32,6 +32,30 @@ impl Sources {
         }
     }
 
+    fn children(&self, namespace: &str) -> Vec<String> {
+        let dir = namespace.replace('.', "/");
+        match self {
+            Self::Embedded(files) => files
+                .iter()
+                .filter_map(|(file, _)| file.strip_prefix(dir.as_str())?.strip_prefix('/'))
+                .filter_map(child)
+                .collect(),
+            Self::Directory(root) => std::fs::read_dir(root.join(&dir))
+                .into_iter()
+                .flatten()
+                .filter_map(Result::ok)
+                .filter_map(|entry| {
+                    let name = entry.file_name().into_string().ok()?;
+                    if entry.path().join("init.lua").is_file() {
+                        Some(name)
+                    } else {
+                        child(&name)
+                    }
+                })
+                .collect(),
+        }
+    }
+
     fn name(&self, file: &str) -> String {
         match self {
             Self::Embedded(_) => file.to_string(),
@@ -40,27 +64,49 @@ impl Sources {
     }
 }
 
+fn child(rest: &str) -> Option<String> {
+    let name = rest
+        .strip_suffix("/init.lua")
+        .or_else(|| rest.strip_suffix(".lua"))?;
+    (name != "init" && !name.contains('/')).then(|| name.to_string())
+}
+
 pub(crate) fn create(layers: Vec<Sources>) -> mlua::Result<Lua> {
     let lua = Lua::new();
     install_searcher(&lua, layers)?;
     let uji = lua.create_table()?;
-    uji.set("task", executor::register(&lua)?)?;
-    uji.set("sleep", executor::sleep(&lua)?)?;
-    uji.set("promise", promise::constructor(&lua)?)?;
-    uji.set("fs", fs::register(&lua)?)?;
-    uji.set("proc", proc::register(&lua)?)?;
-    uji.set("net", net::register(&lua)?)?;
-    uji.set("tty", tty::register(&lua)?)?;
-    uji.set("db", db::register(&lua)?)?;
-    uji.set("keychain", keychain::register(&lua)?)?;
-    uji.set("os", os::register(&lua)?)?;
-    uji.set("clipboard", clipboard::register(&lua)?)?;
-    uji.set("regex", matcher::regex(&lua)?)?;
-    uji.set("glob", matcher::glob(&lua)?)?;
-    uji.set("fuzzy", fuzzy::function(&lua)?)?;
-    codec::install(&lua, &uji)?;
+    for register in crate::REGISTERED {
+        register(&lua, &uji)?;
+    }
     lua.globals().set("uji", uji)?;
     Ok(lua)
+}
+
+pub(crate) fn table(lua: &Lua, root: &Table, path: &[&str]) -> mlua::Result<Table> {
+    let mut table = root.clone();
+    for name in path {
+        table = if let Some(inner) = table.raw_get::<Option<Table>>(*name)? {
+            inner
+        } else {
+            let inner = lua.create_table()?;
+            table.raw_set(*name, &inner)?;
+            inner
+        };
+    }
+    Ok(table)
+}
+
+#[function]
+fn modules(lua: &Lua, namespace: &str) -> mlua::Result<Vec<String>> {
+    let names: BTreeSet<String> = State::of(lua)?
+        .layers
+        .iter()
+        .flat_map(|layer| layer.children(namespace))
+        .collect();
+    Ok(names
+        .into_iter()
+        .map(|name| format!("{namespace}.{name}"))
+        .collect())
 }
 
 pub(crate) fn entry(lua: &Lua, module: &str) -> mlua::Result<Function> {

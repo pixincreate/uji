@@ -5,6 +5,7 @@ mod executor;
 mod fs;
 mod fuzzy;
 mod io;
+mod json;
 mod kernel;
 mod keychain;
 mod matcher;
@@ -18,3 +19,9 @@ mod vm;
 pub use kernel::{Error, Options, Outcome, run};
 pub use tty::{Terminal, VirtualHandle, VirtualTerminal, virtual_terminal};
 pub use vm::Sources;
+
+type Register = fn(&mlua::Lua, &mlua::Table) -> mlua::Result<()>;
+
+#[allow(unsafe_code)]
+#[linkme::distributed_slice]
+static REGISTERED: [Register];

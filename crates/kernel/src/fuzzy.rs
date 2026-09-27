@@ -1,6 +1,6 @@
-use mlua::{Function, Lua};
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher};
+use uji_macros::function;
 
 struct Candidate<'a> {
     at: usize,
@@ -29,6 +29,7 @@ fn rank(items: &[String], query: &str) -> Vec<usize> {
         .collect()
 }
 
-pub(crate) fn function(lua: &Lua) -> mlua::Result<Function> {
-    lua.create_function(|_, (query, items): (String, Vec<String>)| Ok(rank(&items, &query)))
+#[function]
+fn fuzzy(query: &str, items: &[String]) -> Vec<usize> {
+    rank(items, query)
 }

@@ -1,4 +1,5 @@
 local field = require("uji.tools.field")
+local tool = require("uji.tool")
 
 local function line_count(text)
     local _, newlines = text:gsub("\n", "")
@@ -8,7 +9,7 @@ local function line_count(text)
     return newlines
 end
 
-return {
+tool.add("write_file", {
     description = "Write a file from scratch, creating parent directories as needed. This replaces the entire "
         .. "file, so use it for new files only. To change an existing file use `edit_file` instead - "
         .. "overwriting loses everything you did not include.",
@@ -49,4 +50,4 @@ return {
         local verb = written.created and "created" or "overwrote"
         return string.format("%s %s (%d lines)", verb, path, line_count(content))
     end,
-}
+})

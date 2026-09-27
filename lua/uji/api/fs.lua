@@ -6,7 +6,7 @@ local function files()
     return tool.files(app.session and app.session.directory or nil)
 end
 
-return {
+uji.fs = {
     read = task.callback(function(path)
         return files():read(path)
     end),

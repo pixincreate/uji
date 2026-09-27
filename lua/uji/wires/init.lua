@@ -1,5 +1,5 @@
-local wire = require("uji.wire")
+local sys = require("uji.sys")
 
-wire.add("openai-chat", require("uji.wires.openai_chat"))
-wire.add("anthropic", require("uji.wires.anthropic"))
-wire.add("gemini", require("uji.wires.gemini"))
+for _, name in ipairs(sys.modules("uji.wires")) do
+    require(name)
+end

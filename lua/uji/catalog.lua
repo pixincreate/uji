@@ -142,11 +142,8 @@ local function create(spec, origin)
     }, Provider)
 end
 
-function M.load(specs)
-    M.providers = {}
-    for index, spec in ipairs(specs) do
-        M.providers[index] = create(spec, "builtin")
-    end
+function M.builtin(spec)
+    M.providers[#M.providers + 1] = create(spec, "builtin")
 end
 
 function M.get(id)

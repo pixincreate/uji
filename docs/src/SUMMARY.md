@@ -26,6 +26,7 @@
   - [The system prompt](examples/prompt.md)
 - [Rebuilding uji](rebuilding/index.md)
   - [Where things live](rebuilding/modules.md)
+  - [Adding a module](rebuilding/adding.md)
   - [When a replacement takes effect](rebuilding/reload.md)
   - [Replacing everything](rebuilding/everything.md)
   - [If a replacement breaks uji](rebuilding/recovery.md)

@@ -1,8 +1,7 @@
 use globset::{GlobBuilder, GlobMatcher};
-use mlua::{Function, IntoLuaMulti, Lua, MultiValue, Table, UserData, UserDataMethods};
+use mlua::{IntoLuaMulti, Lua, MultiValue};
 use regex::Regex;
-
-use crate::io;
+use uji_macros::{FromLua, function, methods};
 
 pub(crate) enum Matcher {
     Regex(Regex),
@@ -10,7 +9,7 @@ pub(crate) enum Matcher {
 }
 
 impl Matcher {
-    fn find(&self, subject: &str) -> Option<(usize, usize)> {
+    fn search(&self, subject: &str) -> Option<(usize, usize)> {
         match self {
             Self::Regex(regex) => regex
                 .find(subject)
@@ -20,39 +19,35 @@ impl Matcher {
     }
 }
 
-impl UserData for Matcher {
-    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("test", |_, matcher, subject: mlua::LuaString| {
-            Ok(matcher.find(&subject.to_string_lossy()).is_some())
-        });
-        methods.add_method(
-            "find",
-            |lua, matcher, subject: mlua::LuaString| match matcher.find(&subject.to_string_lossy())
-            {
-                Some((start, end)) => (start.saturating_add(1), end).into_lua_multi(lua),
-                None => Ok(MultiValue::new()),
-            },
-        );
+#[methods]
+impl Matcher {
+    fn test(&self, subject: &mlua::LuaString) -> bool {
+        self.search(&subject.to_string_lossy()).is_some()
+    }
+
+    fn find(&self, lua: &Lua, subject: &mlua::LuaString) -> mlua::Result<MultiValue> {
+        match self.search(&subject.to_string_lossy()) {
+            Some((start, end)) => (start.saturating_add(1), end).into_lua_multi(lua),
+            None => Ok(MultiValue::new()),
+        }
     }
 }
 
-pub(crate) fn regex(lua: &Lua) -> mlua::Result<Function> {
-    lua.create_function(|lua, pattern: String| {
-        io::settle(lua, Regex::new(&pattern).map(Matcher::Regex))
-    })
+#[derive(FromLua)]
+struct GlobOptions {
+    #[lua(default)]
+    separator: bool,
 }
 
-pub(crate) fn glob(lua: &Lua) -> mlua::Result<Function> {
-    lua.create_function(|lua, (pattern, opts): (String, Option<Table>)| {
-        let separator = opts
-            .map(|opts| opts.get::<Option<bool>>("separator"))
-            .transpose()?
-            .flatten()
-            .unwrap_or(false);
-        let built = GlobBuilder::new(&pattern)
-            .literal_separator(separator)
-            .build()
-            .map(|glob| Matcher::Glob(glob.compile_matcher()));
-        io::settle(lua, built)
-    })
+#[function]
+fn regex(pattern: &str) -> Result<Matcher, regex::Error> {
+    Regex::new(pattern).map(Matcher::Regex)
+}
+
+#[function]
+fn glob(pattern: &str, opts: &GlobOptions) -> Result<Matcher, globset::Error> {
+    GlobBuilder::new(pattern)
+        .literal_separator(opts.separator)
+        .build()
+        .map(|glob| Matcher::Glob(glob.compile_matcher()))
 }

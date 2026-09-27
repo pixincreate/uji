@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/kernel", "crates/tests", "crates/uji", "lua"]
+members = ["crates/kernel", "crates/macros", "crates/tests", "crates/uji", "lua"]
 
 [workspace.package]
 version = "0.1.0"
@@ -11,7 +11,7 @@ authors = ["dracarys18"]
 repository = "https://github.com/uji-labs/uji"
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny"
 rust_2018_idioms = { level = "deny", priority = -1 }
 unreachable_pub = "deny"
 unused_qualifications = "deny"

@@ -1,5 +1,6 @@
 local common = require("uji.wires.common")
 local stream = require("uji.wires.stream")
+local wire = require("uji.wire")
 
 local KNOB = {
     effort = function(body, level)
@@ -179,7 +180,7 @@ local function settle(parts, calls)
     end
 end
 
-return {
+local M = {
     stream = function(request, reply)
         local resolved = compat(request.provider)
         local key = request.auth.key
@@ -197,3 +198,7 @@ return {
         }, reply)
     end,
 }
+
+wire.add("openai-chat", M)
+
+return M

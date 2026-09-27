@@ -66,7 +66,7 @@ local function run(args)
     if not packs.same(expected, sys.os.roots) then
         return sys.os.restart({ args = args, roots = expected })
     end
-    require("uji.api").install()
+    require("uji.api")
     local db = paths.db()
     if not db then
         return fail("$HOME is not set")

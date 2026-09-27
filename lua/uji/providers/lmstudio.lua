@@ -1,4 +1,6 @@
-return {
+local catalog = require("uji.catalog")
+
+catalog.builtin({
     id = "lmstudio",
     name = "LM Studio",
     wire = "openai-chat",
@@ -9,4 +11,4 @@ return {
         { id = "openai/gpt-oss-20b", context = 131072, output = 32768, reasoning = true },
         { id = "qwen/qwen3-30b-a3b-2507", context = 262144, output = 16384 },
     },
-}
+})

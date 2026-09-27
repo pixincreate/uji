@@ -1,4 +1,6 @@
-return {
+local catalog = require("uji.catalog")
+
+catalog.builtin({
     id = "perplexity",
     name = "Perplexity",
     wire = "openai-chat",
@@ -10,4 +12,4 @@ return {
         { id = "sonar-reasoning-pro", context = 128000, output = 4096, reasoning = true },
         { id = "sonar-deep-research", context = 128000, output = 32768, reasoning = true },
     },
-}
+})

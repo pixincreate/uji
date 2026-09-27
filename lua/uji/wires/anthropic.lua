@@ -1,5 +1,6 @@
 local common = require("uji.wires.common")
 local stream = require("uji.wires.stream")
+local wire = require("uji.wire")
 
 local VERSION = "2023-06-01"
 local MAX_TOKENS = "max_tokens"
@@ -139,7 +140,7 @@ local function read(event, parts)
     end
 end
 
-return {
+local M = {
     stream = function(request, reply)
         return stream.run({
             url = request.provider.base_url .. "/messages",
@@ -149,3 +150,7 @@ return {
         }, reply)
     end,
 }
+
+wire.add("anthropic", M)
+
+return M

@@ -251,12 +251,8 @@ M.action = {
     list = actions.list,
 }
 
-function M.install()
-    uji.ui = M.ui
-    uji.status = M.status
-    uji.input = M.input
-    uji.keymap = M.keymap
-    uji.action = M.action
-end
-
-return M
+uji.ui = M.ui
+uji.status = M.status
+uji.input = M.input
+uji.keymap = M.keymap
+uji.action = M.action

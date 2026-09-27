@@ -2,7 +2,7 @@ use std::fmt::Display;
 use std::future::Future;
 use std::time::Duration;
 
-use mlua::{IntoLuaMulti, Lua, MultiValue, Value};
+use mlua::{BString, IntoLuaMulti, Lua, MultiValue, Value};
 use tokio::runtime::Handle;
 use tokio::task::AbortHandle;
 use tokio::time::Sleep;
@@ -22,10 +22,10 @@ pub(crate) fn handle(lua: &Lua) -> mlua::Result<Handle> {
 }
 
 pub(crate) async fn run<T: Send + 'static>(
-    io: Handle,
+    lua: &Lua,
     work: impl Future<Output = T> + Send + 'static,
 ) -> mlua::Result<T> {
-    let task = io.spawn(work);
+    let task = handle(lua)?.spawn(work);
     let guard = Abort(task.abort_handle());
     let outcome = task.await;
     drop(guard);
@@ -33,15 +33,19 @@ pub(crate) async fn run<T: Send + 'static>(
 }
 
 pub(crate) async fn blocking<T: Send + 'static>(
-    io: Handle,
+    lua: &Lua,
     work: impl FnOnce() -> T + Send + 'static,
 ) -> mlua::Result<T> {
-    io.spawn_blocking(work).await.map_err(mlua::Error::external)
+    handle(lua)?
+        .spawn_blocking(work)
+        .await
+        .map_err(mlua::Error::external)
 }
 
-pub(crate) fn sleep(io: &Handle, limit: Duration) -> Sleep {
+pub(crate) fn sleep(lua: &Lua, limit: Duration) -> mlua::Result<Sleep> {
+    let io = handle(lua)?;
     let _entered = io.enter();
-    tokio::time::sleep(limit)
+    Ok(tokio::time::sleep(limit))
 }
 
 pub(crate) fn limit(seconds: Option<f64>) -> mlua::Result<Option<Duration>> {
@@ -53,16 +57,34 @@ pub(crate) fn limit(seconds: Option<f64>) -> mlua::Result<Option<Duration>> {
         .transpose()
 }
 
-pub(crate) fn failure(lua: &Lua, err: &impl Display) -> mlua::Result<MultiValue> {
-    (Value::Nil, err.to_string()).into_lua_multi(lua)
-}
-
 pub(crate) fn settle<T: IntoLuaMulti, E: Display>(
     lua: &Lua,
     result: Result<T, E>,
 ) -> mlua::Result<MultiValue> {
     match result {
         Ok(value) => value.into_lua_multi(lua),
-        Err(err) => failure(lua, &err),
+        Err(err) => (Value::Nil, err.to_string()).into_lua_multi(lua),
+    }
+}
+
+pub(crate) enum Line {
+    Text(BString),
+    End,
+    Late,
+}
+
+impl<T: Into<BString>> From<Option<T>> for Line {
+    fn from(line: Option<T>) -> Self {
+        line.map_or(Self::End, |text| Self::Text(text.into()))
+    }
+}
+
+impl IntoLuaMulti for Line {
+    fn into_lua_multi(self, lua: &Lua) -> mlua::Result<MultiValue> {
+        match self {
+            Self::Text(text) => text.into_lua_multi(lua),
+            Self::End => Ok(MultiValue::new()),
+            Self::Late => false.into_lua_multi(lua),
+        }
     }
 }

@@ -1,4 +1,3 @@
-local catalog = require("uji.catalog")
 local discover = require("uji.agent.discover")
 local event = require("uji.event")
 local model = require("uji.model")
@@ -31,7 +30,7 @@ function M.load()
         packs.add_root(config)
     end
     require("uji.wires")
-    catalog.load(require("uji.providers"))
+    require("uji.providers")
     require("uji.tools")
     local init = config and config .. "/" .. paths.INIT_FILE
     package.loaded[DEFAULTS] = nil

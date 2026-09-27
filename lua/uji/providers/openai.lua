@@ -1,4 +1,6 @@
-return {
+local catalog = require("uji.catalog")
+
+catalog.builtin({
     id = "openai",
     name = "OpenAI",
     wire = "openai-chat",
@@ -70,4 +72,4 @@ return {
         { id = "text-embedding-3-small", context = 8191, output = 1536 },
         { id = "text-embedding-3-large", context = 8191, output = 3072 },
     },
-}
+})

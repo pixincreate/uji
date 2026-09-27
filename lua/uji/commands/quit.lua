@@ -1,5 +1,6 @@
+local command = require("uji.command")
 local ui = require("uji.ui")
 
-return function()
+command.builtin("quit", "leave uji", function()
     ui:quit()
-end
+end)

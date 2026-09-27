@@ -1,7 +1,8 @@
 use std::cell::RefCell;
 
-use mlua::{Function, Lua, MultiValue, UserData, UserDataFields, UserDataMethods, Value};
+use mlua::{MultiValue, Value};
 use tokio::sync::oneshot;
+use uji_macros::{function, methods};
 
 #[derive(Default)]
 pub(crate) struct Promise {
@@ -10,8 +11,16 @@ pub(crate) struct Promise {
 }
 
 impl Promise {
-    fn settled(&self) -> Option<Vec<Value>> {
+    fn values(&self) -> Option<Vec<Value>> {
         self.values.borrow().clone()
+    }
+}
+
+#[methods]
+impl Promise {
+    #[get]
+    fn settled(&self) -> bool {
+        self.values.borrow().is_some()
     }
 
     fn resolve(&self, values: MultiValue) -> bool {
@@ -24,33 +33,21 @@ impl Promise {
         });
         true
     }
-}
 
-impl UserData for Promise {
-    fn add_fields<F: UserDataFields<Self>>(fields: &mut F) {
-        fields.add_field_method_get("settled", |_, promise| {
-            Ok(promise.values.borrow().is_some())
-        });
-    }
-
-    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method("resolve", |_, promise, values: MultiValue| {
-            Ok(promise.resolve(values))
-        });
-        methods.add_async_method("await", |_, promise, ()| async move {
-            if let Some(values) = promise.settled() {
-                return Ok(MultiValue::from_vec(values));
-            }
-            let (sender, receiver) = oneshot::channel();
-            promise.waiters.borrow_mut().push(sender);
-            receiver
-                .await
-                .map_err(|_| mlua::Error::runtime("the promise was dropped"))?;
-            Ok(MultiValue::from_vec(promise.settled().unwrap_or_default()))
-        });
+    async fn r#await(&self) -> mlua::Result<MultiValue> {
+        if let Some(values) = self.values() {
+            return Ok(MultiValue::from_vec(values));
+        }
+        let (sender, receiver) = oneshot::channel();
+        self.waiters.borrow_mut().push(sender);
+        receiver
+            .await
+            .map_err(|_| mlua::Error::runtime("the promise was dropped"))?;
+        Ok(MultiValue::from_vec(self.values().unwrap_or_default()))
     }
 }
 
-pub(crate) fn constructor(lua: &Lua) -> mlua::Result<Function> {
-    lua.create_function(|_, ()| Ok(Promise::default()))
+#[function]
+fn promise() -> Promise {
+    Promise::default()
 }

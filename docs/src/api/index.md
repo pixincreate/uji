@@ -187,6 +187,7 @@ Every function lives under the global `uji` table. A function that finishes late
 | [`uji.proc.spawn(argv, opts)`](../runtime/processes.md#ujiprocspawnargv-opts) | Starts a process. |
 | [`uji.db.open(path)`](../runtime/storage.md#ujidbopenpath) | Opens a SQLite database. |
 | [`uji.os`](../runtime/system.md) | Reads the platform, the environment and the clock. |
+| [`uji.modules(namespace)`](../runtime/system.md#ujimodulesnamespace) | Lists the modules inside a namespace. |
 | [`uji.keychain`](../runtime/system.md#ujikeychaingetservice-account) | Reads and writes secrets in the system keychain. |
 | [`uji.clipboard`](../runtime/system.md#ujiclipboardget) | Reads and writes the system clipboard. |
 | [`uji.regex(pattern)`](../runtime/text.md#ujiregexpattern) | Compiles a regular expression. |

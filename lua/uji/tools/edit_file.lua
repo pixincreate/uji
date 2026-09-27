@@ -1,4 +1,5 @@
 local field = require("uji.tools.field")
+local tool = require("uji.tool")
 
 local function occurrences(text, old)
     local count, at = 0, 1
@@ -31,7 +32,7 @@ local function line_of(text, at)
     return newlines + 1
 end
 
-return {
+tool.add("edit_file", {
     description = "Replace an exact snippet of an existing file, leaving the rest untouched. This is the tool "
         .. "to use for changing code. `old_string` must reproduce the file's current text byte for "
         .. "byte, including indentation and newlines, and must appear exactly once unless "
@@ -103,4 +104,4 @@ return {
         end
         return string.format("edited %s at line %d", path, line_of(text, first))
     end,
-}
+})

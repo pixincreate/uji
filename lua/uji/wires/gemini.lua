@@ -1,5 +1,6 @@
 local common = require("uji.wires.common")
 local stream = require("uji.wires.stream")
+local wire = require("uji.wire")
 
 local MAX_TOKENS = "MAX_TOKENS"
 
@@ -90,7 +91,7 @@ local function read(event, parts)
     end
 end
 
-return {
+local M = {
     stream = function(request, reply)
         local key = request.auth.key
         return stream.run({
@@ -101,3 +102,7 @@ return {
         }, reply)
     end,
 }
+
+wire.add("gemini", M)
+
+return M

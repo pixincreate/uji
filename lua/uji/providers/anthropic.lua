@@ -1,4 +1,6 @@
-return {
+local catalog = require("uji.catalog")
+
+catalog.builtin({
     id = "anthropic",
     name = "Anthropic",
     wire = "anthropic",
@@ -37,4 +39,4 @@ return {
         { id = "claude-sonnet-4-6", context = 1000000, output = 128000, cache = true, reasoning = true },
         { id = "claude-sonnet-5", context = 1000000, output = 128000, cache = true, reasoning = true },
     },
-}
+})

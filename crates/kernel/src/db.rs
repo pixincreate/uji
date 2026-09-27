@@ -1,8 +1,7 @@
-use mlua::{Function, Lua, LuaSerdeExt, MultiValue, Table, UserData, UserDataMethods, Value};
+use mlua::{Function, Lua, LuaSerdeExt, MultiValue, Table, Value};
 use rusqlite::types::{Value as SqlValue, ValueRef};
 use rusqlite::{Connection, params_from_iter};
-
-use crate::io;
+use uji_macros::{function, methods, register};
 
 pub(crate) struct Db(Option<Connection>);
 
@@ -116,41 +115,31 @@ fn transaction(connection: &Connection, run: &Function) -> mlua::Result<MultiVal
     }
 }
 
-impl UserData for Db {
-    fn add_methods<M: UserDataMethods<Self>>(methods: &mut M) {
-        methods.add_method(
-            "exec",
-            |_, db, (sql, params): (String, Option<Vec<Value>>)| {
-                exec(db.connection()?, &sql, params)
-            },
-        );
-        methods.add_method(
-            "query",
-            |lua, db, (sql, params): (String, Option<Vec<Value>>)| {
-                query(lua, db.connection()?, &sql, params)
-            },
-        );
-        methods.add_method("transaction", |_, db, run: Function| {
-            transaction(db.connection()?, &run)
-        });
-        methods.add_method_mut("close", |_, db, ()| {
-            db.0.take();
-            Ok(())
-        });
+#[methods]
+impl Db {
+    fn exec(&self, sql: &str, params: Option<Vec<Value>>) -> mlua::Result<usize> {
+        exec(self.connection()?, sql, params)
+    }
+
+    fn query(&self, lua: &Lua, sql: &str, params: Option<Vec<Value>>) -> mlua::Result<Table> {
+        query(lua, self.connection()?, sql, params)
+    }
+
+    fn transaction(&self, run: &Function) -> mlua::Result<MultiValue> {
+        transaction(self.connection()?, run)
+    }
+
+    fn close(&mut self) {
+        self.0.take();
     }
 }
 
-pub(crate) fn register(lua: &Lua) -> mlua::Result<Table> {
-    let db = lua.create_table()?;
-    db.set(
-        "open",
-        lua.create_function(|lua, path: String| {
-            io::settle(
-                lua,
-                Connection::open(path).map(|connection| Db(Some(connection))),
-            )
-        })?,
-    )?;
-    db.set("null", lua.null())?;
-    Ok(db)
+#[function(db)]
+fn open(path: String) -> Result<Db, rusqlite::Error> {
+    Connection::open(path).map(|connection| Db(Some(connection)))
+}
+
+#[register(db)]
+fn null(lua: &Lua) -> Value {
+    lua.null()
 }

@@ -1,4 +1,6 @@
-return {
+local catalog = require("uji.catalog")
+
+catalog.builtin({
     id = "google",
     name = "Google",
     wire = "gemini",
@@ -45,4 +47,4 @@ return {
         { id = "gemini-3.1-flash-image-preview", context = 65536, output = 65536, reasoning = true },
         { id = "gemini-omni-flash-preview", context = 131072, output = 65536, reasoning = true },
     },
-}
+})

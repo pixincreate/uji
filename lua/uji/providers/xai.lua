@@ -1,4 +1,6 @@
-return {
+local catalog = require("uji.catalog")
+
+catalog.builtin({
     id = "xai",
     name = "xAI",
     wire = "openai-chat",
@@ -18,4 +20,4 @@ return {
         { id = "grok-imagine-image-quality", context = 16000 },
         { id = "grok-4.20-0309-non-reasoning", context = 1000000, output = 30000 },
     },
-}
+})

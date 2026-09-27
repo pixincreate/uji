@@ -1,4 +1,6 @@
-return {
+local catalog = require("uji.catalog")
+
+catalog.builtin({
     id = "opencode-zen",
     name = "OpenCode Zen",
     wire = "openai-chat",
@@ -108,4 +110,4 @@ return {
         { id = "qwen3.6-plus-free", context = 262144, output = 65536, reasoning = true },
         { id = "ling-3.0-tiny-free", context = 262144, output = 32768, reasoning = true },
     },
-}
+})

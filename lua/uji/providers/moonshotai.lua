@@ -1,4 +1,6 @@
-return {
+local catalog = require("uji.catalog")
+
+catalog.builtin({
     id = "moonshotai",
     name = "Moonshot AI",
     wire = "openai-chat",
@@ -16,4 +18,4 @@ return {
         { id = "kimi-k2.7-code-highspeed", context = 262144, output = 262144, reasoning = true },
         { id = "kimi-k3", context = 1048576, output = 131072, reasoning = true },
     },
-}
+})

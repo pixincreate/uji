@@ -1,4 +1,6 @@
-return {
+local catalog = require("uji.catalog")
+
+catalog.builtin({
     id = "mistral",
     name = "Mistral",
     wire = "openai-chat",
@@ -41,4 +43,4 @@ return {
         "voxtral-mini-tts-latest",
         "voxtral-mini-latest",
     },
-}
+})

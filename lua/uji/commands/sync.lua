@@ -1,7 +1,8 @@
+local command = require("uji.command")
 local config = require("uji.config")
 local packs = require("uji.packs")
 
-return function()
+command.builtin("sync", "update installed packs", function()
     packs.update()
     config.reload()
-end
+end)

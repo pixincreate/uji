@@ -4,8 +4,9 @@ mod screen;
 mod virtual_screen;
 
 use crossterm::event::Event;
-use mlua::{AnyUserData, IntoLuaMulti, Lua, Table};
+use mlua::{AnyUserData, IntoLuaMulti, Lua, MultiValue};
 use tokio::sync::{mpsc, watch};
+use uji_macros::function;
 
 use crate::kernel::State;
 
@@ -78,25 +79,19 @@ pub(crate) fn restore() {
     real::restore();
 }
 
-pub(crate) fn register(lua: &Lua) -> mlua::Result<Table> {
-    let tty = lua.create_table()?;
-    tty.set(
-        "open",
-        lua.create_function(|lua, ()| {
-            let terminal = State::of_mut(lua)?
-                .terminal
-                .take()
-                .ok_or_else(|| mlua::Error::runtime("the terminal is already open"))?;
-            let (screen, input) = match terminal {
-                Tty::Fresh(Terminal::Real) => real::open()?,
-                Tty::Fresh(Terminal::Virtual(terminal)) => virtual_screen::open(terminal)?,
-                Tty::Opened(screen, input) => (screen, input),
-            };
-            let screen = lua.create_userdata(screen)?;
-            let input = lua.create_userdata(input)?;
-            State::of_mut(lua)?.opened = Some((screen.clone(), input.clone()));
-            (screen, input).into_lua_multi(lua)
-        })?,
-    )?;
-    Ok(tty)
+#[function(tty)]
+fn open(lua: &Lua) -> mlua::Result<MultiValue> {
+    let terminal = State::of_mut(lua)?
+        .terminal
+        .take()
+        .ok_or_else(|| mlua::Error::runtime("the terminal is already open"))?;
+    let (screen, input) = match terminal {
+        Tty::Fresh(Terminal::Real) => real::open()?,
+        Tty::Fresh(Terminal::Virtual(terminal)) => virtual_screen::open(terminal)?,
+        Tty::Opened(screen, input) => (screen, input),
+    };
+    let screen = lua.create_userdata(screen)?;
+    let input = lua.create_userdata(input)?;
+    State::of_mut(lua)?.opened = Some((screen.clone(), input.clone()));
+    (screen, input).into_lua_multi(lua)
 }

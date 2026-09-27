@@ -1,4 +1,6 @@
-return {
+local catalog = require("uji.catalog")
+
+catalog.builtin({
     id = "deepseek",
     name = "DeepSeek",
     wire = "openai-chat",
@@ -10,4 +12,4 @@ return {
         { id = "deepseek-v4-flash-vision-exp", context = 1000000, output = 384000, reasoning = true },
         { id = "deepseek-v4-flash", context = 1000000, output = 384000, reasoning = true },
     },
-}
+})

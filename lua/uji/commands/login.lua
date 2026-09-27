@@ -1,5 +1,6 @@
 local auth = require("uji.auth")
 local catalog = require("uji.catalog")
+local command = require("uji.command")
 local model = require("uji.model")
 local notices = require("uji.notices")
 local Prompt = require("uji.ui.views.prompt")
@@ -50,7 +51,7 @@ local function ask_key(provider)
     return true
 end
 
-return function()
+command.builtin("login", "configure provider and auth", function()
     local names = {}
     for index, provider in ipairs(catalog.all()) do
         names[index] = provider.name
@@ -84,4 +85,4 @@ return function()
     if ask_key(provider) then
         configure(provider, url)
     end
-end
+end)

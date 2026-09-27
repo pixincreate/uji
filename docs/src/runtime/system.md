@@ -21,6 +21,13 @@ Every task, connection and process from this run stops. `opts.args` is the
 command line for the new run, `opts.roots` sets `uji.os.roots` for it, and
 `opts.carry` is text it can read from `uji.os.carry`.
 
+## uji.modules(namespace)
+
+Lists the modules directly inside `namespace`, such as `"uji.commands"`, as
+full names in alphabetical order. It looks in the `lua/` folder of every
+directory in `uji.os.roots` and in the built-in modules. A folder with an
+`init.lua` counts as one module.
+
 ## uji.keychain.get(service, account)
 
 Looks up the secret saved in the system keychain for `service` and `account`,

@@ -1,4 +1,6 @@
-return {
+local catalog = require("uji.catalog")
+
+catalog.builtin({
     id = "nvidia",
     name = "NVIDIA",
     wire = "openai-chat",
@@ -110,4 +112,4 @@ return {
         { id = "black-forest-labs/flux_2-klein-4b", context = 40960, output = 40960 },
         { id = "black-forest-labs/flux.1-dev", context = 4096 },
     },
-}
+})
