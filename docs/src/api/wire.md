@@ -1,11 +1,11 @@
 # uji.wire
 
-A wire turns uji's request into an HTTP call to one kind of API and streams
-the answer back. uji ships three: `openai-chat`, `anthropic` and `gemini`.
-They are Lua modules in `uji.wires`, and the easiest way to write a new wire
-is to copy one of them.
+Wires turn a model call into the HTTP format of one kind of API, and stream
+the answer back. uji ships three, `openai-chat`, `anthropic` and `gemini`, as
+Lua modules in `uji.wires`. Copying one of them is the easiest way to start a
+new one.
 
-### uji.wire.add(name, spec)
+## uji.wire.add(name, spec)
 
 Registers a wire, or replaces the wire with the same name. `spec.stream` is a
 function that receives a request and a reply table. It may return a function
@@ -46,7 +46,7 @@ uji.wire.add("echo", {
 })
 ```
 
-### uji.wire.remove(name)
+## uji.wire.remove(name)
 
 Removes a wire and returns `true` if it existed.
 
@@ -54,7 +54,7 @@ Removes a wire and returns `true` if it existed.
 uji.wire.remove("echo")
 ```
 
-### uji.wire.list()
+## uji.wire.list()
 
 Returns the names of the registered wires.
 

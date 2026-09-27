@@ -11,7 +11,7 @@ end)
 
 Every payload also has an `event` field that holds the event's name.
 
-### uji.on(event, handler, opts)
+## uji.on(event, handler, opts)
 
 Adds a handler for an event and returns the handler's name.
 
@@ -28,7 +28,7 @@ uji.on("turn_finished", function()
 end, { name = "notify-done", priority = 90 })
 ```
 
-### uji.off(event, name)
+## uji.off(event, name)
 
 Removes the handler with that name and returns `true` if it existed.
 
@@ -37,7 +37,7 @@ local name = uji.on("turn_finished", function() end)
 uji.off("turn_finished", name)
 ```
 
-### uji.emit(event, payload)
+## uji.emit(event, payload)
 
 Runs the handlers of any event with the payload you give. Plugins use it for
 events of their own, and to redraw the footer through `status_changed`.

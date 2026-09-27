@@ -1,10 +1,10 @@
 # uji.tool
 
-uji ships four tools: `read_file`, `edit_file`, `write_file` and
-`run_command`. `uji.tool` adds your own, turns tools off, and sets the rules that
+uji ships four tools, `read_file`, `edit_file`, `write_file` and
+`run_command`. The functions below add your own, switch tools off and on, and
 decide which calls need your approval.
 
-### uji.tool.add(name, spec)
+## uji.tool.add(name, spec)
 
 Registers a tool the model can call, or replaces the tool with the same name.
 
@@ -42,7 +42,7 @@ uji.tool.add("branch", {
 })
 ```
 
-### uji.tool.remove(name)
+## uji.tool.remove(name)
 
 Removes a tool and returns `true` if it existed.
 
@@ -50,7 +50,7 @@ Removes a tool and returns `true` if it existed.
 uji.tool.remove("write_file")
 ```
 
-### uji.tool.list()
+## uji.tool.list()
 
 Returns the names of every registered tool.
 
@@ -60,7 +60,7 @@ for _, name in ipairs(uji.tool.list()) do
 end
 ```
 
-### uji.tool.disable(names)
+## uji.tool.disable(names)
 
 Turns tools off. The model still sees them, and uji denies any call to them.
 Plan mode uses this to take away the editing tools.
@@ -69,7 +69,7 @@ Plan mode uses this to take away the editing tools.
 uji.tool.disable({ "edit_file", "write_file" })
 ```
 
-### uji.tool.enable(names)
+## uji.tool.enable(names)
 
 Turns tools back on after `uji.tool.disable`.
 
@@ -77,7 +77,7 @@ Turns tools back on after `uji.tool.disable`.
 uji.tool.enable({ "edit_file", "write_file" })
 ```
 
-### uji.tool.policy(rules)
+## uji.tool.policy(rules)
 
 Sets which tool calls run without asking, which ask first, and which uji
 refuses. `rules` maps a tool name to a table with `allow`, `ask` and `deny`
@@ -107,7 +107,7 @@ Each call replaces the tools it names and keeps the others. A
 [`before_tool`](events.md#before_tool) hook runs before the policy and
 overrides it.
 
-### uji.tool.confine(enabled)
+## uji.tool.confine(enabled)
 
 With `true`, limits `read_file`, `edit_file` and `write_file` to the working
 directory and the roots from `uji.tool.roots`. A `../` path or a symbolic link
@@ -120,7 +120,7 @@ uji.tool.confine(true)
 local confined = uji.tool.confine()
 ```
 
-### uji.tool.roots(paths)
+## uji.tool.roots(paths)
 
 Replaces the directories the file tools may reach besides the working
 directory, and returns the list. A path may start with `~/`. Calling it with no

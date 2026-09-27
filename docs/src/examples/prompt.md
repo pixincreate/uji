@@ -1,5 +1,8 @@
 # The system prompt
 
+Your config can change the instructions that the model gets with every message
+you send.
+
 ## Adding project notes
 
 Adds `NOTES.md` from the working directory to the system prompt on every
@@ -39,4 +42,4 @@ end)
 ```
 
 To replace the prompt entirely, override the built-in `uji.prompt` module, as
-[Configuration](../configuration.md#replacing-a-built-in-module) shows.
+[Rebuilding uji](../rebuilding/index.md) shows.

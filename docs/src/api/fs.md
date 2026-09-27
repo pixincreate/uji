@@ -1,10 +1,10 @@
 # uji.fs
 
-`uji.fs` reads and writes files through the same checks as the file tools.
+Every function here goes through the same checks as the file tools.
 Relative paths start at the working directory, and
 [confinement](tool.md#ujitoolconfineenabled) applies.
 
-### uji.fs.read(path, on_done)
+## uji.fs.read(path, on_done)
 
 Reads a whole file. `on_done` receives the contents, or `nil` and an error
 message.
@@ -17,7 +17,7 @@ uji.fs.read("Cargo.toml", function(text, err)
 end)
 ```
 
-### uji.fs.lines(path, opts, on_done)
+## uji.fs.lines(path, opts, on_done)
 
 Reads a range of lines from a text file. It refuses directories and binary
 files.
@@ -40,7 +40,7 @@ uji.fs.lines("README.md", { offset = 1, limit = 20 }, function(page, err)
 end)
 ```
 
-### uji.fs.write(path, content, on_done)
+## uji.fs.write(path, content, on_done)
 
 Writes a file, creating missing directories. `on_done` receives a table whose
 `created` field is `true` when the file did not exist, or `nil` and an error

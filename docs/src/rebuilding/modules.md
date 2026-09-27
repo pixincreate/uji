@@ -1,0 +1,26 @@
+# Where things live
+
+| Path in `lua/uji/` | What it does |
+|---|---|
+| `boot.lua` | Starts uji. It reads the command line, opens the session and starts the screen. |
+| `cli.lua` | The command line and `uji --help`. |
+| `paths.lua` | Where the config, the data and the session database are. |
+| `config.lua` | Loads your config and plugins, and runs `/reload`. |
+| `packs.lua` | `uji.pack`, and finding modules in your config and packs. |
+| `api/` | The `uji.*` functions in the [API reference](../api/index.md). |
+| `agent/`, `loop.lua` | Runs a turn, which sends the conversation, runs tools, compacts and picks a title. |
+| `prompt.lua` | The system prompt. |
+| `model.lua`, `catalog.lua`, `providers/` | Providers, models and choosing between them. |
+| `wires/` | The request format of each provider API. |
+| `tools/` | `read_file`, `edit_file`, `write_file` and `run_command`. |
+| `tool.lua`, `system/` | Registering tools, the tool policy, file access and processes. |
+| `commands/` | The built-in slash commands, one file each. |
+| `store/` | Sessions and messages in the database. |
+| `auth/` | API keys, the system keychain and subscription sign-in. |
+| `ui/` | Draws the screen, with its layout, windows, input line, markdown, keys and theme. |
+| `ui/views/` | The transcript, the input line, pickers, prompts and the approval question. |
+| `defaults.lua` | The default screen and bindings that `require("uji.defaults")` loads. |
+| `event.lua`, `task.lua`, `plugin.lua`, `registry.lua`, `class.lua` | Events, tasks, plugin ownership and the building blocks the rest is made of. |
+
+The functions in [Runtime](../runtime/index.md) are part of the uji program
+itself. Everything built on them can be replaced.

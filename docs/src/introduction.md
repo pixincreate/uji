@@ -26,7 +26,10 @@ uji.command.add("standup", function()
 end)
 ```
 
-- [Configuration](configuration.md) shows where your config goes.
-- [Available APIs](api/index.md) lists every `uji.*` function.
-- [Examples](examples/tool.md) build tools, commands, a footer, providers and approval rules.
-- [Plugins](plugins.md) lists the plugins and their options.
+- [Getting started](getting-started/index.md) installs uji and signs you in.
+- [Configuration](configuration/index.md) shows where your config goes.
+- [Plugins](plugins/index.md) lists the plugins and their options.
+- [Examples](examples/index.md) build tools, commands, a footer, providers and approval rules.
+- [Rebuilding uji](rebuilding/index.md) replaces any part of uji with your own Lua.
+- [API reference](api/index.md) lists every `uji.*` function.
+- [Runtime](runtime/index.md) covers tasks, the network, processes, storage and the system.

@@ -1,9 +1,9 @@
 # uji.context
 
-`uji.context` controls what the model sees besides the conversation. It adds
-text to each turn, and it sets when uji compacts old messages.
+These functions control what the model sees besides the conversation. They
+add your own lines to each turn and decide when uji compacts old messages.
 
-### uji.context.add(name, provide, opts)
+## uji.context.add(name, provide, opts)
 
 Registers a function that uji calls at the start of every turn. What it
 returns decides where the text goes.
@@ -31,7 +31,7 @@ uji.context.add("branch", function()
 end, { priority = 20 })
 ```
 
-### uji.context.remove(name)
+## uji.context.remove(name)
 
 Removes a context function and returns `true` if it existed.
 
@@ -39,7 +39,7 @@ Removes a context function and returns `true` if it existed.
 uji.context.remove("branch")
 ```
 
-### uji.context.list()
+## uji.context.list()
 
 Returns the names of the context functions, in the order uji calls them.
 
@@ -47,7 +47,7 @@ Returns the names of the context functions, in the order uji calls them.
 local names = uji.context.list()
 ```
 
-### uji.context.configure(opts)
+## uji.context.configure(opts)
 
 Sets how long the provider caches the conversation, and when uji compacts.
 When the conversation grows past the model's context window minus a reserve,

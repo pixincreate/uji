@@ -4,7 +4,7 @@ Every function lives under the global `uji` table. A function that finishes late
 
 ## Tools
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.tool.add(name, spec)`](tool.md#ujitooladdname-spec) | Registers a tool the model can call, or replaces the tool with the same name. |
 | [`uji.tool.remove(name)`](tool.md#ujitoolremovename) | Removes a tool and returns `true` if it existed. |
@@ -15,9 +15,9 @@ Every function lives under the global `uji` table. A function that finishes late
 | [`uji.tool.confine(enabled)`](tool.md#ujitoolconfineenabled) | With `true`, limits `read_file`, `edit_file` and `write_file` to the working directory and the roots from `uji.tool.roots`. |
 | [`uji.tool.roots(paths)`](tool.md#ujitoolrootspaths) | Replaces the directories the file tools may reach besides the working directory, and returns the list. |
 
-## Slash commands
+## Commands
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.command.add(name, spec)`](command.md#ujicommandaddname-spec) | Registers `/name`, or replaces the Lua command with the same name. |
 | [`uji.command.remove(name)`](command.md#ujicommandremovename) | Removes a Lua command and returns `true` if it existed. |
@@ -25,7 +25,7 @@ Every function lives under the global `uji` table. A function that finishes late
 
 ## Keys
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.keymap.add(mode, key, binding)`](keymap.md#ujikeymapaddmode-key-binding) | Binds a key in one mode, replacing what the key did there. |
 | [`uji.keymap.remove(mode, key)`](keymap.md#ujikeymapremovemode-key) | Unbinds a key in one mode, including a default binding. |
@@ -34,7 +34,7 @@ Every function lives under the global `uji` table. A function that finishes late
 
 ## Actions
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.action.add(name, handler)`](action.md#ujiactionaddname-handler) | Registers an action. |
 | [`uji.action.remove(name)`](action.md#ujiactionremovename) | Removes an action you added and returns `true` if it existed. |
@@ -42,7 +42,7 @@ Every function lives under the global `uji` table. A function that finishes late
 
 ## Windows, pickers and appearance
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.ui.open_win(opts)`](ui.md#ujiuiopen_winopts) | Opens a window and returns its id. |
 | [`uji.ui.set_lines(id, lines)`](ui.md#ujiuiset_linesid-lines) | Replaces a window's content. |
@@ -58,7 +58,7 @@ Every function lives under the global `uji` table. A function that finishes late
 
 ## Status and footer
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.status.provider()`](status.md#ujistatusprovider) | Returns the name of the current provider, or `nil` before one is set. |
 | [`uji.status.model()`](status.md#ujistatusmodel) | Returns the current model id, or `nil` before one is set. |
@@ -75,7 +75,7 @@ Every function lives under the global `uji` table. A function that finishes late
 
 ## Model context
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.context.add(name, provide, opts)`](context.md#ujicontextaddname-provide-opts) | Registers a function that uji calls at the start of every turn. |
 | [`uji.context.remove(name)`](context.md#ujicontextremovename) | Removes a context function and returns `true` if it existed. |
@@ -84,7 +84,7 @@ Every function lives under the global `uji` table. A function that finishes late
 
 ## Events
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.on(event, handler, opts)`](events.md#ujionevent-handler-opts) | Adds a handler for an event and returns the handler's name. |
 | [`uji.off(event, name)`](events.md#ujioffevent-name) | Removes the handler with that name and returns `true` if it existed. |
@@ -92,7 +92,7 @@ Every function lives under the global `uji` table. A function that finishes late
 
 ## Session
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.session.info()`](session.md#ujisessioninfo) | Returns a table with the session's `id`, `title` and `directory`. |
 | [`uji.session.messages()`](session.md#ujisessionmessages) | Returns the transcript as a list of tables with `type` and `text`. |
@@ -103,7 +103,7 @@ Every function lives under the global `uji` table. A function that finishes late
 
 ## Input line
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.input.get()`](input.md#ujiinputget) | Returns the text on the input line. |
 | [`uji.input.set(text)`](input.md#ujiinputsettext) | Replaces the text on the input line. |
@@ -114,7 +114,7 @@ Every function lives under the global `uji` table. A function that finishes late
 
 ## Providers
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.provider.add(spec)`](provider.md#ujiprovideraddspec) | Adds a provider, or merges `spec` into the provider with the same `id`. |
 | [`uji.provider.remove(id)`](provider.md#ujiproviderremoveid) | Removes a provider and returns `true` if it existed. |
@@ -122,7 +122,7 @@ Every function lives under the global `uji` table. A function that finishes late
 
 ## Request formats
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.wire.add(name, spec)`](wire.md#ujiwireaddname-spec) | Registers a wire, or replaces the wire with the same name. |
 | [`uji.wire.remove(name)`](wire.md#ujiwireremovename) | Removes a wire and returns `true` if it existed. |
@@ -130,19 +130,19 @@ Every function lives under the global `uji` table. A function that finishes late
 
 ## Processes
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.job.start(opts)`](job.md#ujijobstartopts) | Starts a process and returns a job table. |
 
 ## HTTP
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.http.request(opts, on_done)`](http.md#ujihttprequestopts-on_done) | Sends an HTTP request and returns a function that cancels it. |
 
 ## Files
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.fs.read(path, on_done)`](fs.md#ujifsreadpath-on_done) | Reads a whole file. |
 | [`uji.fs.lines(path, opts, on_done)`](fs.md#ujifslinespath-opts-on_done) | Reads a range of lines from a text file. |
@@ -150,7 +150,7 @@ Every function lives under the global `uji` table. A function that finishes late
 
 ## JSON
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.json.encode(value)`](json.md#ujijsonencodevalue) | Turns a Lua value into a JSON string. |
 | [`uji.json.decode(text, opts)`](json.md#ujijsondecodetext-opts) | Turns a JSON string into a Lua value. |
@@ -158,7 +158,7 @@ Every function lives under the global `uji` table. A function that finishes late
 
 ## Packs
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.pack.add(specs)`](pack.md#ujipackaddspecs) | Installs and loads packs. |
 | [`uji.pack.list()`](pack.md#ujipacklist) | Returns every directory uji searches for modules and `plugin/` files, starting with your config directory. |
@@ -166,7 +166,7 @@ Every function lives under the global `uji` table. A function that finishes late
 
 ## Timers and notices
 
-| Function | Does |
+| Name | Does |
 |---|---|
 | [`uji.schedule(callback)`](timers.md#ujischedulecallback) | Runs `callback` once the code that called it has finished. |
 | [`uji.defer(seconds, callback)`](timers.md#ujideferseconds-callback) | Runs `callback` after a delay and returns a function that cancels it. |
@@ -174,27 +174,27 @@ Every function lives under the global `uji` table. A function that finishes late
 
 ## Runtime
 
-| Function | Does |
+| Name | Does |
 |---|---|
-| [`uji.task.spawn(fn, ...)`](runtime.md#ujitaskspawnfn-) | Starts a function as a task that runs alongside the rest of uji. |
-| [`uji.sleep(seconds)`](runtime.md#ujisleepseconds) | Pauses the current task. |
-| [`uji.task.race(fn, ...)`](runtime.md#ujitaskracefn-) | Runs functions at once and returns the first to finish. |
-| [`uji.task.timeout(seconds, fn)`](runtime.md#ujitasktimeoutseconds-fn) | Runs a function with a time limit. |
-| [`uji.promise()`](runtime.md#ujipromise) | Returns a promise that tasks can wait on. |
-| [`uji.net.request(opts)`](runtime.md#ujinetrequestopts) | Sends an HTTP request and returns the answer. |
-| [`uji.net.open(opts)`](runtime.md#ujinetopenopts) | Sends an HTTP request and streams the answer. |
-| [`uji.net.listen(port)`](runtime.md#ujinetlistenport) | Accepts connections on a local port. |
-| [`uji.proc.spawn(argv, opts)`](runtime.md#ujiprocspawnargv-opts) | Starts a process. |
-| [`uji.db.open(path)`](runtime.md#ujidbopenpath) | Opens a SQLite database. |
-| [`uji.os`](runtime.md#system) | Reads the platform, the environment and the clock. |
-| [`uji.keychain`](runtime.md#ujikeychaingetservice-account) | Reads and writes secrets in the system keychain. |
-| [`uji.clipboard`](runtime.md#ujiclipboardget) | Reads and writes the system clipboard. |
-| [`uji.regex(pattern)`](runtime.md#ujiregexpattern) | Compiles a regular expression. |
-| [`uji.glob(pattern, opts)`](runtime.md#ujiglobpattern-opts) | Compiles a glob. |
-| [`uji.fuzzy(query, items)`](runtime.md#ujifuzzyquery-items) | Ranks strings against a query. |
-| [`uji.markdown(source)`](runtime.md#ujimarkdownsource) | Parses Markdown into events. |
-| [`uji.width(text)`](runtime.md#ujiwidthtext) | Measures text in terminal columns. |
-| [`uji.lossy(data)`](runtime.md#ujilossydata) | Turns bytes into valid UTF-8. |
-| [`uji.base64`](runtime.md#encoding) | Encodes and decodes base64. |
-| [`uji.sha256(data)`](runtime.md#encoding) | Hashes data. |
-| [`uji.random(count)`](runtime.md#encoding) | Returns random bytes. |
+| [`uji.task.spawn(fn, ...)`](../runtime/tasks.md#ujitaskspawnfn-) | Starts a function as a task that runs alongside the rest of uji. |
+| [`uji.sleep(seconds)`](../runtime/tasks.md#ujisleepseconds) | Pauses the current task. |
+| [`uji.task.race(fn, ...)`](../runtime/tasks.md#ujitaskracefn-) | Runs functions at once and returns the first to finish. |
+| [`uji.task.timeout(seconds, fn)`](../runtime/tasks.md#ujitasktimeoutseconds-fn) | Runs a function with a time limit. |
+| [`uji.promise()`](../runtime/tasks.md#ujipromise) | Returns a promise that tasks can wait on. |
+| [`uji.net.request(opts)`](../runtime/network.md#ujinetrequestopts) | Sends an HTTP request and returns the answer. |
+| [`uji.net.open(opts)`](../runtime/network.md#ujinetopenopts) | Sends an HTTP request and streams the answer. |
+| [`uji.net.listen(port)`](../runtime/network.md#ujinetlistenport) | Accepts connections on a local port. |
+| [`uji.proc.spawn(argv, opts)`](../runtime/processes.md#ujiprocspawnargv-opts) | Starts a process. |
+| [`uji.db.open(path)`](../runtime/storage.md#ujidbopenpath) | Opens a SQLite database. |
+| [`uji.os`](../runtime/system.md) | Reads the platform, the environment and the clock. |
+| [`uji.keychain`](../runtime/system.md#ujikeychaingetservice-account) | Reads and writes secrets in the system keychain. |
+| [`uji.clipboard`](../runtime/system.md#ujiclipboardget) | Reads and writes the system clipboard. |
+| [`uji.regex(pattern)`](../runtime/text.md#ujiregexpattern) | Compiles a regular expression. |
+| [`uji.glob(pattern, opts)`](../runtime/text.md#ujiglobpattern-opts) | Compiles a glob. |
+| [`uji.fuzzy(query, items)`](../runtime/text.md#ujifuzzyquery-items) | Ranks strings against a query. |
+| [`uji.markdown(source)`](../runtime/text.md#ujimarkdownsource) | Parses Markdown into events. |
+| [`uji.width(text)`](../runtime/text.md#ujiwidthtext) | Measures text in terminal columns. |
+| [`uji.lossy(data)`](../runtime/text.md#ujilossydata) | Turns bytes into valid UTF-8. |
+| [`uji.base64`](../runtime/encoding.md) | Encodes and decodes base64. |
+| [`uji.sha256(data)`](../runtime/encoding.md) | Hashes data. |
+| [`uji.random(count)`](../runtime/encoding.md) | Returns random bytes. |

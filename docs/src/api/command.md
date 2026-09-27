@@ -1,21 +1,10 @@
 # uji.command
 
 These functions manage the slash commands that your config and plugins add.
-The built-in commands are these.
+[Slash commands](../getting-started/commands.md#slash-commands) lists the
+built-in ones.
 
-| Command | Does |
-|---|---|
-| `/login` | Adds a provider. |
-| `/models` | Picks the model. |
-| `/effort` | Sets reasoning effort: off, minimal, low, medium or high. |
-| `/thinking` | Shows or hides the model's reasoning. |
-| `/compact` | Summarises earlier messages to free context. |
-| `/sync` | Updates installed packs and reloads. |
-| `/reload` | Starts uji again with your current config and files, keeping the conversation and your draft. |
-| `/help` | Lists every command, including the ones plugins add. |
-| `/quit` | Quits. |
-
-### uji.command.add(name, spec)
+## uji.command.add(name, spec)
 
 Registers `/name`, or replaces the Lua command with the same name. `spec` is a
 function, or a table with these fields.
@@ -38,7 +27,7 @@ uji.command.add("standup", {
 })
 ```
 
-### uji.command.remove(name)
+## uji.command.remove(name)
 
 Removes a Lua command and returns `true` if it existed.
 
@@ -46,7 +35,7 @@ Removes a Lua command and returns `true` if it existed.
 uji.command.remove("standup")
 ```
 
-### uji.command.list()
+## uji.command.list()
 
 Returns the names of the Lua commands in alphabetical order. Built-in commands
 are not in the list.

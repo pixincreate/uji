@@ -1,8 +1,9 @@
 # uji.session
 
-`uji.session` reads the current session and drives it.
+These functions read the open conversation, and can post to it, rename it or
+stop the running turn.
 
-### uji.session.info()
+## uji.session.info()
 
 Returns a table with the session's `id`, `title` and `directory`.
 
@@ -10,10 +11,10 @@ Returns a table with the session's `id`, `title` and `directory`.
 local here = uji.session.info().directory
 ```
 
-### uji.session.messages()
+## uji.session.messages()
 
-Returns the transcript as a list of tables with `type` and `text`. Tool
-results also have `name`.
+Returns the transcript as a list of tables with `type` and `text`, and tool
+results also carry the tool's `name`.
 
 ```lua
 local count = 0
@@ -24,36 +25,37 @@ for _, message in ipairs(uji.session.messages()) do
 end
 ```
 
-### uji.session.usage()
+## uji.session.usage()
 
-Returns the tokens spent in this session. The table has `input`, `output`,
-`cache_read`, `cache_write` and `total`. It also has `last`, a table of the
-same fields for the latest request, and `requests`, the number of requests.
+Counts the tokens spent in this session. The table it gives has `input`,
+`output`, `cache_read`, `cache_write` and `total`, plus `last`, a table of the
+same fields for the latest request, and `requests`, the number of requests so
+far.
 
 ```lua
 local usage = uji.session.usage()
 local line = string.format("%d tokens over %d requests", usage.total, usage.requests)
 ```
 
-### uji.session.set_title(title)
+## uji.session.set_title(title)
 
-Renames the session, saves the name, and fires `session_titled`. Raises an
-error when the title is empty.
+Renames the session, saves the name, and fires `session_titled`. An empty
+title raises an error.
 
 ```lua
 uji.session.set_title("fix the flaky login test")
 ```
 
-### uji.session.submit(text)
+## uji.session.submit(text)
 
-Sends a message as if you typed it. While the model works, uji queues it.
-Raises an error when the text is empty.
+Sends a message as if you typed it. While the model works, uji queues it
+until the turn ends. Empty text raises an error.
 
 ```lua
 uji.session.submit("Run the tests and fix what fails.")
 ```
 
-### uji.session.interrupt()
+## uji.session.interrupt()
 
 Stops the current turn, or the running `!` command.
 

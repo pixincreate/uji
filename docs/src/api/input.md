@@ -1,9 +1,9 @@
 # uji.input
 
-`uji.input` reads and writes the text on the input line, and can take over
-the keyboard.
+These functions read and change what you have typed, and can take over the
+keyboard.
 
-### uji.input.get()
+## uji.input.get()
 
 Returns the text on the input line.
 
@@ -11,23 +11,24 @@ Returns the text on the input line.
 local draft = uji.input.get()
 ```
 
-### uji.input.set(text)
+## uji.input.set(text)
 
-Replaces the text on the input line.
+Replaces the text on the input line and puts the cursor at the end. Text such
+as `/models` opens the command list, as typing it would.
 
 ```lua
 uji.input.set("/models")
 ```
 
-### uji.input.append(text)
+## uji.input.append(text)
 
-Adds text to the end of the input line.
+Adds text at the end, with the cursor after it.
 
 ```lua
 uji.input.append(" and add a test")
 ```
 
-### uji.input.clear()
+## uji.input.clear()
 
 Empties the input line.
 
@@ -35,7 +36,7 @@ Empties the input line.
 uji.input.clear()
 ```
 
-### uji.input.capture(handler)
+## uji.input.capture(handler)
 
 Sends every key press to `handler` instead of the normal bindings, until
 `uji.input.release` runs. The handler receives a table with `key`, such as
@@ -50,7 +51,7 @@ uji.input.capture(function(event)
 end)
 ```
 
-### uji.input.release()
+## uji.input.release()
 
 Returns the keyboard to the normal bindings.
 

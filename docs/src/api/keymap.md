@@ -16,7 +16,7 @@ combine, as in `<C-A-x>`. The named keys are `CR`, `Esc`, `BS`, `Del`, `Tab`,
 `S-Tab`, `Left`, `Right`, `Up`, `Down`, `Home`, `End`, `PageUp`, `PageDown`,
 `Insert`, `Space`, `lt` for `<`, `gt` for `>`, and `F1` to `F12`.
 
-### uji.keymap.add(mode, key, binding)
+## uji.keymap.add(mode, key, binding)
 
 Binds a key in one mode, replacing what the key did there.
 
@@ -37,7 +37,7 @@ uji.keymap.add("normal", "<A-i>", function()
 end)
 ```
 
-### uji.keymap.remove(mode, key)
+## uji.keymap.remove(mode, key)
 
 Unbinds a key in one mode, including a default binding.
 
@@ -45,7 +45,7 @@ Unbinds a key in one mode, including a default binding.
 uji.keymap.remove("normal", "<C-t>")
 ```
 
-### uji.keymap.reset()
+## uji.keymap.reset()
 
 Restores the default bindings.
 
@@ -53,7 +53,7 @@ Restores the default bindings.
 uji.keymap.reset()
 ```
 
-### uji.keymap.list()
+## uji.keymap.list()
 
 Returns one row per binding, with `mode`, `key`, and one of `action`,
 `command` or `unbound = true`.

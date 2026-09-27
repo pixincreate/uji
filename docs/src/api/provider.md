@@ -1,9 +1,9 @@
 # uji.provider
 
-uji ships 22 providers. `/login` and `/models` read this list, so a provider
-you add shows up in both.
+uji ships 22 providers, and `/login` and `/models` offer every one you add
+here as well.
 
-### uji.provider.add(spec)
+## uji.provider.add(spec)
 
 Adds a provider, or merges `spec` into the provider with the same `id`.
 
@@ -40,7 +40,7 @@ uji.provider.add({
 uji.provider.add({ id = "openai", base_url = "https://proxy.example.com/v1" })
 ```
 
-### uji.provider.remove(id)
+## uji.provider.remove(id)
 
 Removes a provider and returns `true` if it existed.
 
@@ -48,7 +48,7 @@ Removes a provider and returns `true` if it existed.
 uji.provider.remove("perplexity")
 ```
 
-### uji.provider.list()
+## uji.provider.list()
 
 Returns one table per provider with `id`, `name`, `wire`, `base_url` and
 `models`. Each model has `id`, `context` and `output`.

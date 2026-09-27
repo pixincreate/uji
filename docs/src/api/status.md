@@ -1,9 +1,9 @@
 # uji.status
 
-`uji.status` reads what uji is doing, and keeps the list of footer segments
-that a status line plugin draws.
+These functions report what uji is doing right now, and keep the footer
+segments that a statusline plugin draws.
 
-### uji.status.provider()
+## uji.status.provider()
 
 Returns the name of the current provider, or `nil` before one is set.
 
@@ -11,24 +11,24 @@ Returns the name of the current provider, or `nil` before one is set.
 local provider = uji.status.provider()
 ```
 
-### uji.status.model()
+## uji.status.model()
 
-Returns the current model id, or `nil` before one is set.
+Works like `uji.status.provider`, but gives the model id.
 
 ```lua
 local model = uji.status.model()
 ```
 
-### uji.status.effort()
+## uji.status.effort()
 
-Returns the reasoning effort, such as `"medium"`, or `nil` when reasoning is
-off.
+The reasoning effort comes back as a string such as `"medium"`, or as `nil`
+when reasoning is off.
 
 ```lua
 local effort = uji.status.effort() or "off"
 ```
 
-### uji.status.context()
+## uji.status.context()
 
 Returns a table with `used`, the estimated tokens in the conversation, and
 `window`, the model's context size when uji knows it.
@@ -40,46 +40,46 @@ if context.window then
 end
 ```
 
-### uji.status.queue()
+## uji.status.queue()
 
-Returns the messages you typed while the model worked, which uji has not sent
+Lists the messages you typed while the model worked that uji has not sent
 yet.
 
 ```lua
 local waiting = #uji.status.queue()
 ```
 
-### uji.status.state()
+## uji.status.state()
 
-Returns `"working"` while a turn runs and `"idle"` otherwise.
+Gives `"working"` during a turn, and `"idle"` otherwise.
 
 ```lua
 local busy = uji.status.state() == "working"
 ```
 
-### uji.status.elapsed()
+## uji.status.elapsed()
 
-Returns the seconds since the current turn started, or `nil` when idle.
+Counts the seconds since the current turn started. When idle, the result is
+`nil`.
 
 ```lua
 local seconds = math.floor(uji.status.elapsed() or 0)
 ```
 
-### uji.status.loader_frame()
+## uji.status.loader_frame()
 
-Returns the loader frame to draw now, from `waiting.loader.frames` in
-[`uji.ui.configure`](ui.md#ujiuiconfigureopts). It returns an empty
-string when idle.
+Picks the loader frame to draw now from `waiting.loader.frames` in
+[`uji.ui.configure`](ui.md#ujiuiconfigureopts), or an empty string when idle.
 
 ```lua
 local frame = uji.status.loader_frame()
 ```
 
-### uji.status.add(name, render, opts)
+## uji.status.add(name, render, opts)
 
-Registers a footer segment. `render` returns any value the status line plugin
+Registers a footer segment. `render` returns any value the statusline plugin
 understands, or `nil` to hide the segment. `opts.priority` orders segments,
-lowest first. The default is 50.
+lowest first, and defaults to 50.
 
 ```lua
 uji.status.add("model", function()
@@ -87,26 +87,26 @@ uji.status.add("model", function()
 end, { priority = 10 })
 ```
 
-### uji.status.remove(name)
+## uji.status.remove(name)
 
-Removes a segment and returns `true` if it existed.
+Removes a segment. The result is `true` if it existed.
 
 ```lua
 uji.status.remove("model")
 ```
 
-### uji.status.list()
+## uji.status.list()
 
-Returns the segment names in priority order.
+Gives the segment names in priority order.
 
 ```lua
 local segments = uji.status.list()
 ```
 
-### uji.status.render()
+## uji.status.render()
 
 Calls every segment in priority order and returns the values that are not
-`nil`. A status line plugin calls it to draw the footer.
+`nil`. Footer plugins draw from it.
 
 ```lua
 local parts = uji.status.render()

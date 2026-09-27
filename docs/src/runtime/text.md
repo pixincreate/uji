@@ -1,0 +1,38 @@
+# Text
+
+## uji.regex(pattern)
+
+Compiles a regular expression into a matcher, or gives `nil` and an error
+message.
+
+## uji.glob(pattern, opts)
+
+Compiles a glob such as `*.rs` into a matcher, or gives `nil` and an error
+message. With `opts.separator = true`, `*` does not match `/`.
+
+| Member | Meaning |
+|---|---|
+| `matcher:test(text)` | `true` when the pattern matches somewhere in `text`. |
+| `matcher:find(text)` | The start and end positions of the first match, or `nil`. |
+
+## uji.fuzzy(query, items)
+
+Ranks the list of strings `items` against `query` the way the pickers do, as
+positions in `items` with the best match first. An empty query gives every
+position in order.
+
+## uji.markdown(source)
+
+Parses Markdown into a list of events. Each event is itself a list that starts
+with its kind, one of `"start"`, `"end"`, `"text"`, `"code"`, `"html"`,
+`"break"`, `"rule"` and `"task"`. The details of that event come next, then its
+start and end byte positions in `source`.
+
+## uji.width(text)
+
+Counts the terminal columns `text` takes.
+
+## uji.lossy(data)
+
+Turns `data` into valid UTF-8, replacing each invalid byte sequence with
+U+FFFD.

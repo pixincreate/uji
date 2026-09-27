@@ -1,6 +1,9 @@
 # uji.pack
 
-### uji.pack.add(specs)
+Packs installed here come from GitHub, any git URL or a local folder, and
+`/sync` updates them.
+
+## uji.pack.add(specs)
 
 Installs and loads packs. `specs` is a list, and each entry is one of these:
 - a `"user/repo"` GitHub shorthand or a git URL
@@ -19,7 +22,7 @@ uji.pack.add({
 })
 ```
 
-### uji.pack.list()
+## uji.pack.list()
 
 Returns every directory uji searches for modules and `plugin/` files, starting
 with your config directory.
@@ -30,7 +33,7 @@ for _, root in ipairs(uji.pack.list()) do
 end
 ```
 
-### uji.pack.update()
+## uji.pack.update()
 
 Pulls every installed git pack and records the new commits in the lock file.
 `/sync` does the same and then reloads.

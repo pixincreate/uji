@@ -1,10 +1,10 @@
 # uji.http
 
-### uji.http.request(opts, on_done)
+## uji.http.request(opts, on_done)
 
 Sends an HTTP request and returns a function that cancels it. `on_done`
 receives a response table with `status`, `headers` and `body`, or `nil` and an
-error message. Header names in the response are lower case.
+error message. Header names are lower case.
 
 | Option | Type | Meaning |
 |---|---|---|
@@ -16,8 +16,8 @@ error message. Header names in the response are lower case.
 | `on_line` | function | Streams the response. uji calls it with each line of the body as it arrives. Return `false` for a line that is not progress, such as a keep-alive. |
 | `idle` | number | For a streamed request, the seconds without progress before uji gives up. The default is 120. |
 
-A non-2xx status is still a response, so check `status` yourself. Raises an
-error for an invalid URL, method or header.
+A non-2xx status still counts as a response. Check `status` yourself. An
+invalid URL, method or header raises an error.
 
 ```lua
 uji.http.request({

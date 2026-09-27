@@ -1,6 +1,6 @@
 # uji.ui
 
-### uji.ui.open_win(opts)
+## uji.ui.open_win(opts)
 
 Opens a window and returns its id. The default config opens three.
 
@@ -25,7 +25,7 @@ uji.ui.open_win({ view = "modal", split = "bottom", size = "auto" })
 
 Raises an error for an unknown view, split, border or size.
 
-### uji.ui.set_lines(id, lines)
+## uji.ui.set_lines(id, lines)
 
 Replaces a window's content. Each line is a list of spans. A span is a string,
 or a table with `text` and any of `color`, `bg`, `bold`, `italic` and
@@ -39,7 +39,7 @@ uji.ui.set_lines(panel, {
 })
 ```
 
-### uji.ui.clear(id)
+## uji.ui.clear(id)
 
 Empties a window.
 
@@ -48,7 +48,7 @@ local panel = uji.ui.open_win({ split = "bottom", size = 1 })
 uji.ui.clear(panel)
 ```
 
-### uji.ui.set_size(id, size)
+## uji.ui.set_size(id, size)
 
 Changes a window's size to rows or columns, `"fill"` or `"auto"`.
 
@@ -57,7 +57,7 @@ local panel = uji.ui.open_win({ split = "bottom", size = 0 })
 uji.ui.set_size(panel, 3)
 ```
 
-### uji.ui.set_title(id, title)
+## uji.ui.set_title(id, title)
 
 Sets the title in a window's border, or removes it when `title` is `nil`.
 
@@ -66,7 +66,7 @@ local panel = uji.ui.open_win({ split = "right", size = 30, border = "plain" })
 uji.ui.set_title(panel, "todo")
 ```
 
-### uji.ui.close_win(id)
+## uji.ui.close_win(id)
 
 Closes a window and returns `true` if it was open.
 
@@ -75,7 +75,7 @@ local panel = uji.ui.open_win({ split = "bottom", size = 1 })
 uji.ui.close_win(panel)
 ```
 
-### uji.ui.select(opts, on_done)
+## uji.ui.select(opts, on_done)
 
 Shows a list to choose from. `opts.title` is the title and `opts.items` is a
 list of strings. `on_done` receives the chosen item, or `nil` if you cancel.
@@ -89,7 +89,7 @@ uji.ui.select({ title = "Branch", items = { "main", "dev" } }, function(choice)
 end)
 ```
 
-### uji.ui.pick(opts, on_done)
+## uji.ui.pick(opts, on_done)
 
 Shows a fuzzy finder with a preview pane. `on_done` receives the chosen item,
 or `nil` if you cancel. Without `on_done`, the call waits and returns the
@@ -124,7 +124,7 @@ uji.ui.pick({
 end)
 ```
 
-### uji.ui.prompt(opts, on_done)
+## uji.ui.prompt(opts, on_done)
 
 Asks for a line of text. `opts.title` is the question, `opts.value` fills the
 line, and `opts.hidden = true` masks the input. `on_done` receives the text,
@@ -138,7 +138,7 @@ uji.ui.prompt({ title = "Commit message" }, function(message)
 end)
 ```
 
-### uji.ui.exec(cmd)
+## uji.ui.exec(cmd)
 
 Hides uji, runs a program in the terminal, and comes back when it exits.
 `cmd` is a string, run through `sh -c`, or a list of the program and its
@@ -148,7 +148,7 @@ arguments.
 uji.ui.exec("git log --oneline | less")
 ```
 
-### uji.ui.configure(opts)
+## uji.ui.configure(opts)
 
 Sets colours and screen behaviour. Each call changes only the keys it names.
 Raises an error for an unknown key or an invalid colour.

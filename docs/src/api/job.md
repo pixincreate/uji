@@ -2,7 +2,7 @@
 
 `uji.job` runs a process in the background and streams its output to Lua.
 
-### uji.job.start(opts)
+## uji.job.start(opts)
 
 Starts a process and returns a job table.
 
