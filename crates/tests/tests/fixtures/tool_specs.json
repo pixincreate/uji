@@ -35,7 +35,7 @@
   },
   {
     "function": {
-      "description": "Read a text file and return its contents with 1-based line numbers prefixed as `NNN| `. Read a file before editing it so `edit_file` snippets match exactly. Long files come back in pages; when there is more, the output ends with the offset to continue from. The line numbers are display only - never include them in `edit_file` arguments.",
+      "description": "Read a text file and return its contents with 1-based line numbers prefixed as `NNN| `. Read a file before editing it so `edit_file` snippets match exactly. Long files come back in pages; when there is more, the output ends with the offset to continue from. The line numbers are display only - never include them in `edit_file` arguments. PNG, JPEG, GIF and WebP files come back as images you can see.",
       "name": "read_file",
       "parameters": {
         "additionalProperties": false,

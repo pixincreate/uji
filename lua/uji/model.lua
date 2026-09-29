@@ -2,6 +2,7 @@ local auth = require("uji.auth")
 local catalog = require("uji.catalog")
 local context = require("uji.context")
 local event = require("uji.event")
+local images = require("uji.images")
 local sys = require("uji.sys")
 local wire = require("uji.wire")
 
@@ -97,6 +98,22 @@ function M.window()
     return budget and budget.window
 end
 
+local function text_only(current)
+    return "llm.images." .. current.id .. "/" .. current.model
+end
+
+function M.images()
+    local current = M.current
+    local declared = current.provider and current.provider:images(current.model)
+    if declared ~= nil then
+        return declared
+    end
+    if M.setting(text_only(current)) == "no" then
+        return false
+    end
+    return nil
+end
+
 function M.retention()
     return M.current.caches and context.cache or "off"
 end
@@ -143,7 +160,19 @@ function M.stream(request, reply)
     request.model = request.model or current.model
     request.provider = { id = provider.id, base_url = current.base_url or "", compat = provider.compat }
     request.auth = credentials
-    return M.call(spec.stream, request, reply)
+    local accepts = M.images()
+    local messages = request.messages
+    request.messages = images.prepare(messages, accepts)
+    local answer, failure = M.call(spec.stream, request, reply)
+    if answer or accepts ~= nil or not images.present(request.messages) or not images.refused(failure) then
+        return answer, failure
+    end
+    request.messages = images.prepare(messages, false)
+    answer, failure = M.call(spec.stream, request, reply)
+    if answer then
+        M.set_setting(text_only(current), "no")
+    end
+    return answer, failure
 end
 
 function M.generate(opts)

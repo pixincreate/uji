@@ -19,6 +19,7 @@
 | `auth/` | API keys, the system keychain and subscription sign-in. |
 | `ui/` | Draws the screen, with its layout, windows, input line, markdown, keys and theme. |
 | `ui/views/` | The transcript, the input line, pickers, prompts and the approval question. |
+| `images.lua` | Attaching images from files, pasted paths and the clipboard. |
 | `defaults.lua` | The default screen and bindings that `require("uji.defaults")` loads. |
 | `event.lua`, `task.lua`, `plugin.lua`, `registry.lua`, `class.lua` | Events, tasks, plugin ownership and the building blocks the rest is made of. |
 

@@ -14,7 +14,17 @@ local EDITING = {
     ["end"] = "cursor_end",
 }
 
+local MOVES = { up = "modal_up", down = "modal_down" }
+
 local Modal = class()
+
+function Modal.navigate(chord, ui)
+    local action = MOVES[chord.key]
+    if action then
+        ui:act(action)
+    end
+    return action ~= nil
+end
 
 Modal.mode = "select"
 Modal.CURSOR = CURSOR

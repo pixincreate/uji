@@ -6,6 +6,7 @@ local packs = require("uji.packs")
 local paths = require("uji.paths")
 local plugin = require("uji.plugin")
 local sys = require("uji.sys")
+local tables = require("uji.tables")
 local tool = require("uji.tool")
 
 local DEFAULTS = "uji.defaults"
@@ -61,7 +62,7 @@ end
 function M.settle(args)
     local declared = packs.overriding(packs.list())
     packs.remember(declared)
-    if packs.same(declared, sys.os.roots) then
+    if tables.same(declared, sys.os.roots) then
         return false
     end
     sys.os.restart({ args = args, roots = declared })

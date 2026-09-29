@@ -77,12 +77,8 @@ function M.spawn(spec)
     return proc
 end
 
-function M.run(spec, on_line)
-    local proc, err = M.spawn(spec)
-    if not proc then
-        return nil, err
-    end
-    local finished, exit = task.timeout(spec.timeout, function()
+function M.watch(proc, timeout, on_line)
+    local finished, exit = task.timeout(timeout, function()
         for line, stream in proc:lines() do
             on_line(stream, line)
         end
@@ -94,6 +90,14 @@ function M.run(spec, on_line)
         return { timed_out = true }
     end
     return { code = exit.code or -1, signal = exit.signal }
+end
+
+function M.run(spec, on_line)
+    local proc, err = M.spawn(spec)
+    if not proc then
+        return nil, err
+    end
+    return M.watch(proc, spec.timeout, on_line)
 end
 
 return M

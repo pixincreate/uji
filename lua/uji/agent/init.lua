@@ -2,6 +2,7 @@ local class = require("uji.class")
 local compactor = require("uji.agent.compactor")
 local context = require("uji.context")
 local event = require("uji.event")
+local images = require("uji.images")
 local model = require("uji.model")
 local notices = require("uji.notices")
 local process = require("uji.system.process")
@@ -111,32 +112,42 @@ function Agent:sync_queue()
     event.emit("status_changed", {})
 end
 
-function Agent:enqueue(text)
-    self.queue[#self.queue + 1] = text
+local function said(text, attached)
+    return { type = "user", text = text, images = images.checked(attached) }
+end
+
+function Agent:enqueue(text, images)
+    self.queue[#self.queue + 1] = { text = text, images = images }
     self:sync_queue()
 end
 
+function Agent:queued()
+    return #self.queue > 0
+end
+
 function Agent:steer()
-    local text = table.remove(self.queue, 1)
-    if text then
-        self:clear_stream()
-        self:append({ type = "user", text = text })
-        self:sync_queue()
+    local queued = table.remove(self.queue, 1)
+    if not queued then
+        return nil
     end
-    return text
+    self:clear_stream()
+    local message = said(queued.text, queued.images)
+    self:append(message)
+    self:sync_queue()
+    return message
 end
 
 function Agent:send_queued()
-    local text = table.remove(self.queue, 1)
-    if text then
+    local queued = table.remove(self.queue, 1)
+    if queued then
         self:sync_queue()
-        self:submit(text)
+        self:submit(queued.text, queued.images)
     end
 end
 
 function Agent:repair()
     for _, call in ipairs(self.session:unanswered_calls()) do
-        self:append({ type = "tool", tool_call_id = call.id, name = call.name, content = STOPPED })
+        self:answer(call, STOPPED)
     end
 end
 
@@ -153,15 +164,15 @@ function Agent:prompt(text)
     return system, turn
 end
 
-function Agent:submit(text)
+function Agent:submit(text, images)
     if self:working() then
-        return self:enqueue(text)
+        return self:enqueue(text, images)
     end
     if self:compact_if_needed() then
-        return self:enqueue(text)
+        return self:enqueue(text, images)
     end
     event.emit("message_submitted", { text = text })
-    self:append({ type = "user", text = text })
+    self:append(said(text, images))
     self:maybe_title(text)
     local system, turn = self:prompt(text)
     for _, message in ipairs(turn) do
@@ -231,9 +242,19 @@ function Agent:tool_running(call)
     end
 end
 
-function Agent:tool_result(call, content)
+function Agent:answer(call, content, attached)
+    self:append({
+        type = "tool",
+        tool_call_id = call.id,
+        name = call.name,
+        content = sys.lossy(content),
+        images = attached,
+    })
+end
+
+function Agent:tool_result(call, content, attached)
     event.emit("tool_progress", {})
-    self:append({ type = "tool", tool_call_id = call.id, name = call.name, content = sys.lossy(content) })
+    self:answer(call, content, attached)
     if self.turn then
         self.turn.answered[call.id] = true
         self.turn.running = nil
@@ -305,13 +326,27 @@ function Agent:approve(name, args)
     return { deny = "user denied" }
 end
 
+local function outcome(value)
+    if type(value) == "string" then
+        return value
+    end
+    if type(value) ~= "table" or type(value.text) ~= "string" then
+        return nil
+    end
+    local attached, problem = images.checked(value.images)
+    if problem then
+        return value.text .. "\n[" .. problem .. "]", attached
+    end
+    return value.text, attached
+end
+
 function Agent:run_tool(call, args)
     local entry = tool.get(call.name)
     event.emit("tool_started", { name = call.name })
     local promise = sys.promise()
     local ctx = {
-        done = function(text)
-            promise:resolve(tostring(text))
+        done = function(value)
+            promise:resolve(value)
         end,
         progress = function(line)
             event.emit("tool_progress", { name = call.name, line = line })
@@ -321,8 +356,9 @@ function Agent:run_tool(call, args)
     if not ok then
         return "error: " .. tostring(result)
     end
-    if type(result) == "string" then
-        return result
+    local text, attached = outcome(result)
+    if text then
+        return text, attached
     end
     if type(result) == "function" then
         if self.turn then
@@ -332,7 +368,9 @@ function Agent:run_tool(call, args)
         return "error: " .. call.name .. " returned a " .. type(result)
             .. "; run returns its result, a function that cancels it, or nothing"
     end
-    return promise:await()
+    local value = promise:await()
+    local finished, returned = outcome(value)
+    return finished or tostring(value), returned
 end
 
 function Agent:budget()
@@ -467,12 +505,7 @@ function Agent:interrupt()
     for _, call in ipairs(turn and turn.calls or {}) do
         if not turn.answered[call.id] then
             local content = turn.running == call and WHILE_RUNNING or BEFORE_RUNNING
-            self:append({
-                type = "tool",
-                tool_call_id = call.id,
-                name = call.name,
-                content = self:after_tool(call.name, content),
-            })
+            self:answer(call, self:after_tool(call.name, content))
         end
     end
     self:append({ type = "error", text = "interrupted" })

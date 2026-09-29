@@ -36,6 +36,17 @@ Empties the input line.
 uji.input.clear()
 ```
 
+## uji.input.attach(path)
+
+Attaches the image at `path` to the message on the input line and adds its
+`[image #n]` marker, then gives `true`, or `nil` and an error message when the
+file is not a PNG, JPEG, GIF or WebP image. Relative paths start at the
+session's directory.
+
+```lua
+uji.input.attach("screenshots/login.png")
+```
+
 ## uji.input.capture(handler)
 
 Sends every key press to `handler` instead of the normal bindings, until

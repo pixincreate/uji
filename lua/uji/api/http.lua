@@ -4,16 +4,20 @@ local task = require("uji.task")
 local TIMEOUT = 30
 local IDLE = 120
 
-local function streamed(opts)
-    local idle = opts.idle or IDLE
-    local body, err = sys.net.open({
+local function outgoing(opts, timeout, idle)
+    return {
         url = opts.url,
         method = opts.method,
         headers = opts.headers,
         body = opts.body,
-        timeout = opts.timeout,
+        timeout = timeout,
         idle = idle,
-    })
+    }
+end
+
+local function streamed(opts)
+    local idle = opts.idle or IDLE
+    local body, err = sys.net.open(outgoing(opts, opts.timeout, idle))
     if not body then
         return nil, err
     end
@@ -49,13 +53,7 @@ local function request(opts)
     if opts.on_line then
         return streamed(opts)
     end
-    return sys.net.request({
-        url = opts.url,
-        method = opts.method,
-        headers = opts.headers,
-        body = opts.body,
-        timeout = opts.timeout or TIMEOUT,
-    })
+    return sys.net.request(outgoing(opts, opts.timeout or TIMEOUT))
 end
 
 uji.http = {

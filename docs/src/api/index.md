@@ -109,6 +109,7 @@ Every function lives under the global `uji` table. A function that finishes late
 | [`uji.input.set(text)`](input.md#ujiinputsettext) | Replaces the text on the input line. |
 | [`uji.input.append(text)`](input.md#ujiinputappendtext) | Adds text to the end of the input line. |
 | [`uji.input.clear()`](input.md#ujiinputclear) | Empties the input line. |
+| [`uji.input.attach(path)`](input.md#ujiinputattachpath) | Attaches an image file to the message on the input line. |
 | [`uji.input.capture(handler)`](input.md#ujiinputcapturehandler) | Sends every key press to `handler` instead of the normal bindings, until `uji.input.release` runs. |
 | [`uji.input.release()`](input.md#ujiinputrelease) | Returns the keyboard to the normal bindings. |
 
@@ -189,7 +190,7 @@ Every function lives under the global `uji` table. A function that finishes late
 | [`uji.os`](../runtime/system.md) | Reads the platform, the environment and the clock. |
 | [`uji.modules(namespace)`](../runtime/system.md#ujimodulesnamespace) | Lists the modules inside a namespace. |
 | [`uji.keychain`](../runtime/system.md#ujikeychaingetservice-account) | Reads and writes secrets in the system keychain. |
-| [`uji.clipboard`](../runtime/system.md#ujiclipboardget) | Reads and writes the system clipboard. |
+| [`uji.clipboard`](../runtime/system.md#ujiclipboardget) | Reads and writes the system clipboard, and reads images from it. |
 | [`uji.regex(pattern)`](../runtime/text.md#ujiregexpattern) | Compiles a regular expression. |
 | [`uji.glob(pattern, opts)`](../runtime/text.md#ujiglobpattern-opts) | Compiles a glob. |
 | [`uji.fuzzy(query, items)`](../runtime/text.md#ujifuzzyquery-items) | Ranks strings against a query. |
@@ -199,3 +200,4 @@ Every function lives under the global `uji` table. A function that finishes late
 | [`uji.base64`](../runtime/encoding.md) | Encodes and decodes base64. |
 | [`uji.sha256(data)`](../runtime/encoding.md) | Hashes data. |
 | [`uji.random(count)`](../runtime/encoding.md) | Returns random bytes. |
+| [`uji.image.fit(data, edge, bytes)`](../runtime/images.md#ujiimagefitdata-edge-bytes) | Checks an image and fits it to a size and a byte limit. |

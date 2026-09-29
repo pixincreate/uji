@@ -1,5 +1,6 @@
 local notices = require("uji.notices")
 local sys = require("uji.sys")
+local tables = require("uji.tables")
 
 local function fail(message)
     io.stderr:write("uji: error: " .. message .. "\n")
@@ -63,7 +64,7 @@ local function run(args)
     end
     local packs = require("uji.packs")
     local expected = packs.expected()
-    if not packs.same(expected, sys.os.roots) then
+    if not tables.same(expected, sys.os.roots) then
         return sys.os.restart({ args = args, roots = expected })
     end
     require("uji.api")

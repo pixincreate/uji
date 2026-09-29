@@ -1,3 +1,5 @@
+local task = require("uji.task")
+
 local M = {
     stack = {},
     loaded = {},
@@ -6,11 +8,6 @@ local M = {
     cleanups = {},
 }
 
-local unpack = table.unpack or unpack
-
-local function pack(...)
-    return { n = select("#", ...), ... }
-end
 
 function M.current()
     return M.stack[#M.stack]
@@ -35,12 +32,12 @@ function M.run(name, path, fn, ...)
     end
     M.loaded[name] = { name = name, path = path }
     M.stack[#M.stack + 1] = name
-    local results = pack(pcall(fn, ...))
+    local results = task.pack(pcall(fn, ...))
     M.stack[#M.stack] = nil
     if not results[1] then
         error(results[2], 0)
     end
-    return unpack(results, 2, results.n)
+    return task.unpack(results, 2)
 end
 
 function M.source(path, name)

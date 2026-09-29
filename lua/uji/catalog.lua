@@ -29,6 +29,7 @@ local function model(spec)
         output = spec.output,
         reasoning = spec.reasoning == true,
         cache = spec.cache == true,
+        images = type(spec.images) == "boolean" and spec.images or nil,
     }
 end
 
@@ -84,6 +85,11 @@ end
 function Provider:caches(id)
     local found = self:model(id)
     return found ~= nil and found.cache
+end
+
+function Provider:images(id)
+    local found = self:model(id)
+    return found and found.images
 end
 
 function Provider:budget(id)

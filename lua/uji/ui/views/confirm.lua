@@ -40,13 +40,12 @@ function Confirm:move(delta)
 end
 
 function Confirm:key(chord, ui)
+    if Modal.navigate(chord, ui) then
+        return
+    end
     local key = chord.key
     if key == "esc" or key == "enter" then
         Modal.key(self, chord, ui)
-    elseif key == "up" then
-        ui:act("modal_up")
-    elseif key == "down" then
-        ui:act("modal_down")
     elseif keys.typed(chord) and ALLOW[key] then
         ui:act("confirm_allow")
     elseif keys.typed(chord) and DENY[key] then

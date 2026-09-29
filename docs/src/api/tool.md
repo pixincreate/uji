@@ -25,6 +25,13 @@ the result in one of three ways:
 - It returns a function and calls `ctx.done(text)` later. uji calls that
   function to stop the work if you interrupt the turn.
 
+A result may also be a table with `text` and `images`, in any of the three
+ways. `images` is a list in the format the
+[`uji.wire.add`](wire.md#ujiwireaddname-spec) request describes. The model gets
+the images with the text, and `after_tool` handlers see only the text. An
+image with no supported `media_type`, no `data` or more than 5 MB is left out,
+and a note at the end of the text says so.
+
 `ctx.progress(line)` shows a line under the running tool while it works.
 
 Raises an error when `run` is missing, `policy` is not one of the three

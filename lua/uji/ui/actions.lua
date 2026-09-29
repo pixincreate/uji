@@ -1,6 +1,7 @@
 local Line = require("uji.ui.line")
 local Registry = require("uji.registry")
 local plugin = require("uji.plugin")
+local tables = require("uji.tables")
 
 local function edit(change)
     return function(ui)
@@ -49,6 +50,9 @@ local RUN = {
     delete_to_start = edit(Line.delete_to_start),
     delete_to_end = edit(Line.delete_to_end),
     yank = edit(Line.yank),
+    paste_image = function(ui)
+        ui:paste_image()
+    end,
     transpose = edit(Line.transpose),
     insert_newline = function(ui)
         ui:insert("\n")
@@ -154,13 +158,9 @@ function M.get(name)
 end
 
 function M.list()
-    local names, seen = {}, {}
-    for name in pairs(RUN) do
-        names[#names + 1] = name
-        seen[name] = true
-    end
+    local names = tables.keys(RUN)
     for _, name in ipairs(M.added:names()) do
-        if not seen[name] then
+        if not RUN[name] then
             names[#names + 1] = name
         end
     end

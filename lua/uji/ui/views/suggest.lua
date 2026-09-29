@@ -54,12 +54,11 @@ function Suggest:complete()
 end
 
 function Suggest:key(chord, ui)
+    if Modal.navigate(chord, ui) then
+        return
+    end
     local key = chord.key
-    if key == "up" then
-        ui:act("modal_up")
-    elseif key == "down" then
-        ui:act("modal_down")
-    elseif key == "tab" then
+    if key == "tab" then
         ui:act("suggest_complete")
     elseif key == "esc" or key == "enter" then
         Modal.key(self, chord, ui)

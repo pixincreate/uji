@@ -9,8 +9,8 @@ local function pack(...)
 end
 
 M.pack = pack
-M.unpack = function(values)
-    return unpack(values, 1, values.n)
+M.unpack = function(values, from)
+    return unpack(values, from or 1, values.n)
 end
 
 function M.spawn(fn, ...)
@@ -83,6 +83,24 @@ function M.timeout(seconds, fn)
         return false
     end
     return true, settle(outcome)
+end
+
+function M.sequence()
+    local last
+    return function(fn)
+        local before, done = last, sys.promise()
+        last = done
+        sys.task.spawn(function()
+            if before then
+                before:await()
+            end
+            local ok, err = pcall(fn)
+            done:resolve()
+            if not ok then
+                error(err, 0)
+            end
+        end)
+    end
 end
 
 function M.callback(run)

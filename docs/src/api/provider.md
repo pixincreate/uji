@@ -14,9 +14,9 @@ Adds a provider, or merges `spec` into the provider with the same `id`.
 | `wire` | string | The request format: `"openai-chat"`, `"anthropic"`, `"gemini"`, or one you added with [`uji.wire.add`](wire.md). Required for a new provider. |
 | `base_url` | string | The API root, such as `"https://api.openai.com/v1"`. Required for a new provider. |
 | `auth_env` | list of strings | Environment variables that may hold the API key. |
-| `models` | list | Model ids, or tables with `id`, `context`, `output`, `reasoning` and `cache`. |
+| `models` | list | Model ids, or tables with `id`, `context`, `output`, `reasoning`, `cache` and `images`. `images` is `true` or `false` when you know whether the model takes images. |
 | `context_window` | integer | The context size to assume for a model that does not set one. |
-| `compat` | table | Options for the wire, such as the name of the output limit field. On `openai-chat`, `cache_key = true` sends the session id as `prompt_cache_key`, which the OpenAI API uses to reuse its cache. It is on for `api.openai.com`. |
+| `compat` | table | Options for the wire, such as the name of the output limit field. On `openai-chat`, `cache_key = true` sends the session id as `prompt_cache_key`, which the OpenAI API uses to reuse its cache. It is on for `api.openai.com`. `bridge_tool_images = true` puts a short assistant message between tool results and the images they returned, which Mistral needs, and it is on for `api.mistral.ai`. |
 | `oauth` | table | Subscription sign-in settings. The built-in Anthropic and OpenAI providers show the format. |
 
 When the provider exists, each field you give replaces the old one, except

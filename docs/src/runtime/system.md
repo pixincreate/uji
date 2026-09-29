@@ -50,3 +50,10 @@ Reads the text on the system clipboard, or gives `nil` and an error message.
 
 Puts `text` on the system clipboard and gives `true`, or `nil` and an error
 message.
+
+## uji.clipboard.image(edge, bytes)
+
+Takes the image on the system clipboard and fits it the way
+[`uji.image.fit`](images.md#ujiimagefitdata-edge-bytes) does, with the same
+four results. A clipboard without an image gives `nil` and "the clipboard has
+no image".

@@ -14,9 +14,13 @@ local function tool_use(call)
     return { type = "tool_use", id = call.id, name = call.name, input = common.arguments(call.arguments) }
 end
 
+local function picture(image)
+    return { type = "image", source = { type = "base64", media_type = image.media_type, data = image.data } }
+end
+
 local SHAPES = {
     user = function(item)
-        return { role = "user", content = { text(item.text) } }
+        return { role = "user", content = common.parts(item.images, picture, item.text, text) }
     end,
     assistant = function(item)
         local blocks = common.map(item.tool_calls, tool_use)
@@ -26,9 +30,13 @@ local SHAPES = {
         return { role = "assistant", content = blocks }
     end,
     tool = function(item)
+        local content = item.content
+        if item.images then
+            content = common.parts(item.images, picture, item.content, text)
+        end
         return {
             role = "user",
-            content = { { type = "tool_result", tool_use_id = item.tool_call_id, content = item.content } },
+            content = { { type = "tool_result", tool_use_id = item.tool_call_id, content = content } },
         }
     end,
 }

@@ -31,6 +31,13 @@ function Composer:paste(value)
     end)
 end
 
+function Composer:attach(image)
+    local marker = self.pastes:attach(image)
+    self:edit(function(line)
+        line:insert(marker)
+    end)
+end
+
 function Composer:backspace()
     local id, width = self.pastes:marker_ending_at(self.line.text:sub(1, self.line.cursor))
     if id then
@@ -56,9 +63,11 @@ end
 
 function Composer:take()
     self.recall = nil
-    local expanded = self.pastes:expand(self.line:take())
+    local value = self.line:take()
+    local images = self.pastes:images(value)
+    local expanded = self.pastes:expand(value)
     self.pastes:clear()
-    return expanded
+    return expanded, images
 end
 
 function Composer:continue_line()
@@ -90,7 +99,8 @@ function Composer:recall_prev(lookup)
     if self.recall then
         self.recall.at = at
     else
-        self.recall = { at = at, draft = self.line:take() }
+        self.recall = { at = at, draft = self.line:take(), pastes = self.pastes }
+        self.pastes = Pastes()
     end
     self.line:set(found)
     return true
@@ -103,6 +113,7 @@ function Composer:recall_next(lookup)
     end
     if recall.at == 0 then
         self.recall = nil
+        self.pastes = recall.pastes
         self.line:set(recall.draft)
         return true
     end

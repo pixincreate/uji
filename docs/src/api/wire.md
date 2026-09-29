@@ -14,7 +14,9 @@ that cancels the call.
 The request has these fields:
 - `model`, the model id
 - `system`, the system prompt
-- `messages`, the conversation in uji's message format
+- `messages`, the conversation in uji's message format, where a user or tool
+  message may have `images`, a list of tables with `media_type`, base64
+  `data`, `name`, `width` and `height`
 - `tools`, a list of `name`, `description` and `parameters`
 - `effort`, one of `off`, `minimal`, `low`, `medium` and `high`
 - `max_output`, the output token limit

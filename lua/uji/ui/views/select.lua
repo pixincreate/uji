@@ -1,6 +1,5 @@
 local canvas = require("uji.ui.canvas")
 local class = require("uji.class")
-local layout = require("uji.ui.layout")
 local Line = require("uji.ui.line")
 local Modal = require("uji.ui.views.modal")
 local model = require("uji.model")
@@ -59,12 +58,11 @@ function Select:accept()
 end
 
 function Select:key(chord, ui)
+    if Modal.navigate(chord, ui) then
+        return
+    end
     local key = chord.key
-    if key == "up" then
-        ui:act("modal_up")
-    elseif key == "down" then
-        ui:act("modal_down")
-    elseif key == "pageup" then
+    if key == "pageup" then
         self:move(-PAGE)
     elseif key == "pagedown" then
         self:move(PAGE)
@@ -109,10 +107,7 @@ function Select:draw(ui, screen, area)
     if count > visible then
         lines[#lines + 1] = { { string.format("  %d–%d of %d", start + 1, start + visible, count), palette.dim } }
     end
-    local height = math.min(#lines, area.height)
-    local popup = layout.rect(area.x, area.y + area.height - height, area.width, height)
-    canvas.clear(screen, popup)
-    canvas.lines(screen, popup, lines)
+    canvas.popup(screen, area, lines, math.min(#lines, area.height))
 end
 
 return Select

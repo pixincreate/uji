@@ -35,15 +35,43 @@ function M.nonempty(list)
     end
 end
 
-function M.translate(messages, shapes)
+function M.translate(messages, shapes, show)
     local out = uji.json.array({})
+    local pending = {}
+    local function flush()
+        if #pending > 0 then
+            for _, message in ipairs(show(pending)) do
+                out[#out + 1] = message
+            end
+            pending = {}
+        end
+    end
     for _, item in ipairs(messages) do
         local shape = shapes[item.type]
         if shape then
+            if item.type ~= "tool" then
+                flush()
+            end
             out[#out + 1] = shape(item)
+            if show and item.type == "tool" then
+                for _, image in ipairs(item.images or {}) do
+                    pending[#pending + 1] = image
+                end
+            end
         end
     end
+    flush()
     return out
+end
+
+M.SHOWN = "These are the images the tool calls above returned."
+
+function M.parts(images, picture, text, word)
+    local parts = M.map(images, picture)
+    if text ~= "" or #parts == 0 then
+        parts[#parts + 1] = word(text)
+    end
+    return parts
 end
 
 function M.system(request)

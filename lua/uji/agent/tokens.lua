@@ -1,3 +1,5 @@
+local images = require("uji.images")
+
 local M = {}
 
 local CHARS_PER_TOKEN = 4
@@ -35,7 +37,11 @@ function M.weigh(message)
             count = count + chars(call.name) + chars(call.arguments)
         end
     end
-    return math.floor(count / CHARS_PER_TOKEN)
+    local pictures = 0
+    for _, image in ipairs(message.images or {}) do
+        pictures = pictures + images.tokens(image)
+    end
+    return math.floor(count / CHARS_PER_TOKEN) + pictures
 end
 
 function M.last_compaction(stored)

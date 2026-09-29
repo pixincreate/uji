@@ -1,6 +1,6 @@
 local app = require("uji.app")
 local notices = require("uji.notices")
-local sys = require("uji.sys")
+local process = require("uji.system.process")
 local task = require("uji.task")
 
 local function argv(cmd)
@@ -29,27 +29,11 @@ local function call(handler, ...)
     end
 end
 
-local function ordered()
-    local last
-    return function(operation)
-        local before = last
-        local done = sys.promise()
-        last = done
-        task.spawn(function()
-            if before then
-                before:await()
-            end
-            pcall(operation)
-            done:resolve()
-        end)
-    end
-end
-
 local function start(opts)
     local command = argv(opts.cmd)
     local cwd = opts.cwd or (app.session and app.session.directory)
     local job = { stopped = false }
-    local proc, err = sys.proc.spawn(command, { cwd = cwd })
+    local proc, err = process.spawn({ argv = command, cwd = cwd, stdin = true })
     if not proc then
         task.spawn(function()
             call(opts.on_stderr, "spawn: " .. tostring(err))
@@ -62,23 +46,18 @@ local function start(opts)
         }
     end
     task.spawn(function()
-        local finished, exit = task.timeout(opts.timeout, function()
-            for line, stream in proc:lines() do
-                call(stream == "stderr" and opts.on_stderr or opts.on_stdout, line)
-            end
-            return proc:wait()
+        local result = process.watch(proc, opts.timeout, function(stream, line)
+            call(stream == "stderr" and opts.on_stderr or opts.on_stdout, line)
         end)
-        if not finished then
-            proc:kill()
-            proc:wait()
+        if result.timed_out then
             return call(opts.on_exit, -1, "timeout")
         end
         if job.stopped then
             return call(opts.on_exit, -1, "stopped")
         end
-        call(opts.on_exit, exit.code or -1)
+        call(opts.on_exit, result.code)
     end)
-    local queue = ordered()
+    local queue = task.sequence()
     return {
         send = function(text)
             local data = tostring(text)

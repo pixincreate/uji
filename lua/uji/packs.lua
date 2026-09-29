@@ -1,6 +1,7 @@
 local notices = require("uji.notices")
 local paths = require("uji.paths")
 local sys = require("uji.sys")
+local tables = require("uji.tables")
 
 local CACHE = "overrides.json"
 
@@ -102,11 +103,7 @@ local function save_lock(lock)
     if not path then
         return nil, "$HOME is not set"
     end
-    local names = {}
-    for name in pairs(lock) do
-        names[#names + 1] = name
-    end
-    table.sort(names)
+    local names = tables.keys(lock)
     local blocks = {}
     for index, name in ipairs(names) do
         local entry = lock[name]
@@ -248,11 +245,7 @@ function M.update()
         notices.push("pack: $HOME is not set")
         return
     end
-    local names = {}
-    for name in pairs(lock) do
-        names[#names + 1] = name
-    end
-    table.sort(names)
+    local names = tables.keys(lock)
     if #names == 0 then
         notices.push("pack: nothing installed")
         return
@@ -314,18 +307,6 @@ function M.searcher(module)
     return table.concat(tried)
 end
 
-function M.same(left, right)
-    if #left ~= #right then
-        return false
-    end
-    for index = 1, #left do
-        if left[index] ~= right[index] then
-            return false
-        end
-    end
-    return true
-end
-
 function M.overriding(roots)
     local out = {}
     for _, root in ipairs(roots) do
@@ -350,15 +331,11 @@ end
 
 function M.remember(roots)
     local path = cache_path()
-    if not path or M.same(roots, M.remembered()) then
+    if not path or tables.same(roots, M.remembered()) then
         return
     end
-    local copy = {}
-    for index, root in ipairs(roots) do
-        copy[index] = root
-    end
     sys.fs.mkdir(path:match("^(.*)/[^/]*$"))
-    sys.fs.write(path, sys.json.encode(sys.json.array(copy)))
+    sys.fs.write(path, sys.json.encode(sys.json.array(tables.copy(roots))))
 end
 
 function M.expected()

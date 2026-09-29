@@ -6,10 +6,12 @@ local command = require("uji.command")
 local Composer = require("uji.ui.composer")
 local Confirm = require("uji.ui.views.confirm")
 local event = require("uji.event")
+local images = require("uji.images")
 local Input = require("uji.ui.views.input")
 local keys = require("uji.ui.keys")
 local Keymap = require("uji.ui.keymap")
 local layout = require("uji.ui.layout")
+local model = require("uji.model")
 local Messages = require("uji.ui.views.messages")
 local notices = require("uji.notices")
 local Pastes = require("uji.ui.paste")
@@ -64,6 +66,7 @@ function Ui:init()
     self.keymap = Keymap()
     self.theme = Theme()
     self.composer = Composer()
+    self.sends = task.sequence()
     self.stream = Stream()
     self.reasoning = ""
     self.notices = {}
@@ -304,9 +307,59 @@ function Ui:history(direction)
     self:input_changed()
 end
 
-function Ui:send(value)
+function Ui:directory()
+    return app.session and app.session.directory or sys.os.cwd()
+end
+
+function Ui:send(value, attached)
+    local directory = self:directory()
+    self.sends(function()
+        for _, image in ipairs(images.mentioned(value, directory)) do
+            attached[#attached + 1] = image
+        end
+        app.agent:submit(value, attached)
+    end)
+end
+
+function Ui:attach(image)
+    if model.images() == false then
+        notices.push("the current model does not take images, so it gets the text only")
+    end
+    self.composer:attach(image)
+    self:input_changed()
+    self:invalidate()
+end
+
+function Ui:paste_image()
     task.spawn(function()
-        app.agent:submit(value)
+        local image, err = images.clipboard()
+        if image then
+            return self:attach(image)
+        end
+        local copied = sys.clipboard.get()
+        if copied and copied ~= "" then
+            return self:paste(copied)
+        end
+        notices.push(err)
+    end)
+end
+
+function Ui:drop(value, files)
+    task.spawn(function()
+        local loaded = {}
+        for index, file in ipairs(files) do
+            local image = images.file(file, self:directory())
+            if not image then
+                self.composer:paste(value)
+                self:input_changed()
+                self:invalidate()
+                return
+            end
+            loaded[index] = image
+        end
+        for _, image in ipairs(loaded) do
+            self:attach(image)
+        end
     end)
 end
 
@@ -323,7 +376,8 @@ function Ui:submit()
         self:input_changed()
         return
     end
-    local value = text.trim(composer:take())
+    local taken, attached = composer:take()
+    local value = text.trim(taken)
     self:invalidate()
     if value:sub(1, 1) == "/" then
         return self:run_command(value:sub(2))
@@ -336,7 +390,7 @@ function Ui:submit()
         return
     end
     if value ~= "" then
-        self:send(value)
+        self:send(value, attached)
     end
 end
 
@@ -347,6 +401,10 @@ function Ui:paste(value)
         line:insert(Pastes.single_line(value))
         modal:edited()
     elseif not modal or modal.mode == "suggest" then
+        local files = images.paths(value)
+        if files then
+            return self:drop(value, files)
+        end
         self.composer:paste(value)
         self:input_changed()
     end

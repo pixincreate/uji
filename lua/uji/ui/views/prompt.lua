@@ -1,6 +1,5 @@
 local canvas = require("uji.ui.canvas")
 local class = require("uji.class")
-local layout = require("uji.ui.layout")
 local Line = require("uji.ui.line")
 local Modal = require("uji.ui.views.modal")
 
@@ -39,10 +38,7 @@ function Prompt:draw(ui, screen, area)
         typed[#typed + 1] = span
     end
     local lines = { {}, { { "  " .. self.title, palette.bold } }, {}, typed }
-    local height = math.min(ROWS, area.height)
-    local popup = layout.rect(area.x, area.y + area.height - height, area.width, height)
-    canvas.clear(screen, popup)
-    canvas.lines(screen, popup, lines)
+    canvas.popup(screen, area, lines, math.min(ROWS, area.height))
 end
 
 return Prompt

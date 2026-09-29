@@ -59,9 +59,7 @@ function M.get(name)
 end
 
 function M.list()
-    local names = M.registry:names()
-    table.sort(names)
-    return names
+    return M.registry:sorted()
 end
 
 function M.disable(names)

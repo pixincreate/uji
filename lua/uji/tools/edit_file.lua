@@ -62,9 +62,7 @@ tool.add("edit_file", {
         required = { "path", "old_string", "new_string" },
         additionalProperties = false,
     },
-    subject = function(args)
-        return field.text(args, "path")
-    end,
+    subject = field.subject("path"),
     policy = "ask",
     display = {
         verb = "Edited",

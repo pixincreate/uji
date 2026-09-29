@@ -4,6 +4,7 @@ mod db;
 mod executor;
 mod fs;
 mod fuzzy;
+mod images;
 mod io;
 mod json;
 mod kernel;

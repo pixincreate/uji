@@ -12,6 +12,12 @@ function M.count(args, key)
     end
 end
 
+function M.subject(key)
+    return function(args)
+        return M.text(args, key)
+    end
+end
+
 function M.missing(args, ...)
     for _, key in ipairs({ ... }) do
         if M.text(args, key) == "" then

@@ -8,9 +8,21 @@ local function call(tool_call)
     return { functionCall = { name = tool_call.name, args = common.arguments(tool_call.arguments) } }
 end
 
+local function picture(image)
+    return { inlineData = { mimeType = image.media_type, data = image.data } }
+end
+
+local function said(text)
+    return { text = text }
+end
+
+local function shown(images)
+    return { { role = "user", parts = common.parts(images, picture, common.SHOWN, said) } }
+end
+
 local SHAPES = {
     user = function(item)
-        return { role = "user", parts = { { text = item.text } } }
+        return { role = "user", parts = common.parts(item.images, picture, item.text, said) }
     end,
     assistant = function(item)
         local parts = common.map(item.tool_calls, call)
@@ -40,7 +52,7 @@ local function body(request)
         generationConfig = budget > 0 and { thinkingConfig = { thinkingBudget = budget, includeThoughts = true } }
             or nil,
         systemInstruction = system ~= "" and { parts = { { text = system } } } or nil,
-        contents = common.translate(request.messages, SHAPES),
+        contents = common.translate(request.messages, SHAPES, shown),
         tools = common.nonempty(common.map(request.tools, tool)),
     }
 end

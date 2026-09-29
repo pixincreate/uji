@@ -1,5 +1,6 @@
 local class = require("uji.class")
 local sys = require("uji.sys")
+local tables = require("uji.tables")
 
 local ACTIONS = { allow = true, ask = true, deny = true }
 local STRICTNESS = { allow = 0, ask = 1, deny = 2 }
@@ -36,12 +37,7 @@ end
 function Policy.compile(rules, known)
     local policy = Policy()
     local notices = {}
-    local names = {}
-    for name in pairs(rules) do
-        names[#names + 1] = name
-    end
-    table.sort(names)
-    for _, name in ipairs(names) do
+    for _, name in ipairs(tables.keys(rules)) do
         local value = rules[name]
         if name == "default" then
             if type(value) ~= "string" then

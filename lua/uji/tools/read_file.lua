@@ -1,4 +1,6 @@
 local field = require("uji.tools.field")
+local images = require("uji.images")
+local model = require("uji.model")
 local tool = require("uji.tool")
 
 local MAX_LINES = 2000
@@ -31,11 +33,27 @@ local function page(path, offset, read)
     return text
 end
 
+local function picture(path)
+    local bytes, err = uji.fs.read(path)
+    if not bytes then
+        return "error: " .. err
+    end
+    local image, problem = images.load(bytes, path:match("[^/]+$"))
+    if not image then
+        return "error: " .. problem
+    end
+    return {
+        text = string.format("%s is a %dx%d %s image, attached here.", path, image.width, image.height, image.media_type),
+        images = { image },
+    }
+end
+
 tool.add("read_file", {
     description = "Read a text file and return its contents with 1-based line numbers prefixed as `NNN| `. "
         .. "Read a file before editing it so `edit_file` snippets match exactly. Long files come back "
         .. "in pages; when there is more, the output ends with the offset to continue from. The line "
-        .. "numbers are display only - never include them in `edit_file` arguments.",
+        .. "numbers are display only - never include them in `edit_file` arguments. PNG, JPEG, GIF "
+        .. "and WebP files come back as images you can see.",
     parameters = {
         type = "object",
         properties = {
@@ -57,9 +75,7 @@ tool.add("read_file", {
         required = { "path" },
         additionalProperties = false,
     },
-    subject = function(args)
-        return field.text(args, "path")
-    end,
+    subject = field.subject("path"),
     policy = "allow",
     display = {
         verb = "Read",
@@ -71,6 +87,12 @@ tool.add("read_file", {
             return missing
         end
         local path = field.text(args, "path")
+        if images.named(path) then
+            if model.images() == false then
+                return "error: " .. path .. " is an image, and the current model does not take images"
+            end
+            return picture(path)
+        end
         local offset = math.max(field.count(args, "offset") or 1, 1)
         local limit = math.max(field.count(args, "limit") or MAX_LINES, 1)
         local read, err = uji.fs.lines(path, { offset = offset, limit = limit, max_line = MAX_LINE })

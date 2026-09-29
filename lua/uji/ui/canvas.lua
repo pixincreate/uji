@@ -19,6 +19,12 @@ function M.clear(screen, area)
     end
 end
 
+function M.popup(screen, area, rows, height)
+    local popup = layout.rect(area.x, area.y + area.height - height, area.width, height)
+    M.clear(screen, popup)
+    M.lines(screen, popup, rows)
+end
+
 function M.lines(screen, area, rows)
     for index = 1, math.min(#rows, area.height) do
         M.write(screen, area.y + index - 1, area.x, rows[index], area.width)

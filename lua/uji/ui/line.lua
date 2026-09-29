@@ -100,10 +100,7 @@ function Line:backspace()
     if self.cursor == 0 then
         return
     end
-    local from = prev_boundary(self.text, self.cursor)
-    self:splice(from, self.cursor)
-    self.cursor = from
-    self:touch()
+    self:erase_back_to(prev_boundary(self.text, self.cursor))
 end
 
 function Line:delete_before(bytes)
@@ -111,6 +108,10 @@ function Line:delete_before(bytes)
     while from > 0 and continuation(self.text:byte(from + 1)) do
         from = from - 1
     end
+    self:erase_back_to(from)
+end
+
+function Line:erase_back_to(from)
     self:splice(from, self.cursor)
     self.cursor = from
     self:touch()

@@ -28,9 +28,7 @@ tool.add("write_file", {
         required = { "path", "content" },
         additionalProperties = false,
     },
-    subject = function(args)
-        return field.text(args, "path")
-    end,
+    subject = field.subject("path"),
     policy = "ask",
     display = {
         verb = "Wrote",

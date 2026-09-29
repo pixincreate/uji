@@ -92,6 +92,12 @@ function Registry:names()
     return names
 end
 
+function Registry:sorted()
+    local names = self:names()
+    table.sort(names)
+    return names
+end
+
 function Registry:values()
     local values = {}
     for index, entry in ipairs(self.entries) do

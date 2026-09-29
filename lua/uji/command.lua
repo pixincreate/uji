@@ -33,9 +33,7 @@ function M.remove(name)
 end
 
 function M.list()
-    local names = M.commands:names()
-    table.sort(names)
-    return names
+    return M.commands:sorted()
 end
 
 function M.resolve(name)

@@ -31,6 +31,7 @@ local DEFAULTS = {
     { COMPOSE, "<S-CR>", "insert_newline" },
     { COMPOSE, "<A-CR>", "insert_newline" },
     { COMPOSE, "<C-j>", "insert_newline" },
+    { COMPOSE, "<C-v>", "paste_image" },
 }
 
 local Keymap = class()

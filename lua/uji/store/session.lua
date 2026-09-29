@@ -2,6 +2,7 @@ local class = require("uji.class")
 local event = require("uji.event")
 local id = require("uji.id")
 local sys = require("uji.sys")
+local tables = require("uji.tables")
 local tokens = require("uji.agent.tokens")
 
 local PLACEHOLDERS = { [""] = true, untitled = true, new = true, resumed = true }
@@ -22,10 +23,7 @@ local function prefix(value)
 end
 
 local function encode(message)
-    local copy = {}
-    for key, value in pairs(message) do
-        copy[key] = value
-    end
+    local copy = tables.copy(message)
     if copy.type == "assistant" and copy.tool_calls and #copy.tool_calls == 0 then
         copy.tool_calls = nil
     end

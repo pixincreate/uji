@@ -146,11 +146,11 @@ function Loop:compact()
 end
 
 function Loop:steer()
-    local text = self.agent:steer()
-    if not text then
+    local message = self.agent:steer()
+    if not message then
         return false
     end
-    self.messages[#self.messages + 1] = { type = "user", text = text }
+    self.messages[#self.messages + 1] = message
     return true
 end
 
@@ -176,9 +176,16 @@ end
 function Loop:run_tools(calls)
     for _, call in ipairs(calls) do
         self.agent:tool_running(call)
-        local content = self.agent:after_tool(call.name, self:execute(call))
-        self.agent:tool_result(call, content)
-        self.messages[#self.messages + 1] = { type = "tool", tool_call_id = call.id, name = call.name, content = content }
+        local result, images = self:execute(call)
+        local content = self.agent:after_tool(call.name, result)
+        self.agent:tool_result(call, content, images)
+        self.messages[#self.messages + 1] = {
+            type = "tool",
+            tool_call_id = call.id,
+            name = call.name,
+            content = content,
+            images = images,
+        }
     end
 end
 
@@ -201,11 +208,12 @@ function Loop:run()
         end
         local text, reasoning = answer.text or "", answer.reasoning
         if #calls == 0 then
-            if not self:steer() then
+            if not self.agent:queued() then
                 return self.agent:done(text, reasoning)
             end
             self.agent:assistant_step(text, {}, reasoning)
             self.messages[#self.messages + 1] = { type = "assistant", text = text, reasoning = reasoning }
+            self:steer()
         else
             self.agent:assistant_step(text, calls, reasoning)
             self.messages[#self.messages + 1] = { type = "assistant", text = text, tool_calls = calls, reasoning = reasoning }

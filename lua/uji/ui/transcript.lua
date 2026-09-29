@@ -1,17 +1,6 @@
 local class = require("uji.class")
 local markdown = require("uji.ui.markdown")
-
-local function same(left, right)
-    if #left ~= #right then
-        return false
-    end
-    for index = 1, #left do
-        if left[index] ~= right[index] then
-            return false
-        end
-    end
-    return true
-end
+local tables = require("uji.tables")
 
 local Streamed = class()
 
@@ -85,7 +74,7 @@ function Cached:clear()
 end
 
 function Cached:get(key, render)
-    if not same(self.key, key) then
+    if not tables.same(self.key, key) then
         self.key = { unpack(key) }
         self.lines = {}
         render(self.lines)
@@ -197,8 +186,8 @@ function Transcript:frame(input, split, render, want)
         end
     end)
     local queued = self.queued:get(input.queued, function(lines)
-        for _, value in ipairs(input.queued) do
-            render(lines, { kind = "queued", text = value })
+        for _, queued in ipairs(input.queued) do
+            render(lines, { kind = "queued", text = queued.text })
         end
     end)
     self.reasoning:update(input.thinking and input.reasoning or "", split, function(lines, chunk)

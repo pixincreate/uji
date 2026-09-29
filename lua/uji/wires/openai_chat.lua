@@ -47,6 +47,7 @@ local function guess(base_url)
         tool_result_name = false,
         finish_reason = true,
         cache_key = has("api.openai.com"),
+        bridge_tool_images = has("api.mistral.ai"),
     }
 end
 
@@ -76,12 +77,37 @@ local function tool(spec)
     }
 end
 
+local function picture(image)
+    return { type = "image_url", image_url = { url = "data:" .. image.media_type .. ";base64," .. image.data } }
+end
+
+local BRIDGE = "The tool calls returned images, which follow."
+
+local function written(text)
+    return { type = "text", text = text }
+end
+
+local function showing(resolved)
+    return function(images)
+        local shown = { { role = "user", content = common.parts(images, picture, common.SHOWN, written) } }
+        if resolved.bridge_tool_images then
+            table.insert(shown, 1, { role = "assistant", content = BRIDGE })
+        end
+        return shown
+    end
+end
+
 local function shapes(resolved)
     local function said(item)
         return { role = item.type, content = item.text }
     end
     return {
-        user = said,
+        user = function(item)
+            if not item.images then
+                return said(item)
+            end
+            return { role = "user", content = common.parts(item.images, picture, item.text, written) }
+        end,
         system = said,
         assistant = function(item)
             return {
@@ -102,7 +128,7 @@ local function shapes(resolved)
 end
 
 local function body(request, resolved)
-    local messages = common.translate(request.messages, shapes(resolved))
+    local messages = common.translate(request.messages, shapes(resolved), showing(resolved))
     if request.system then
         table.insert(messages, 1, { role = "system", content = request.system })
     end

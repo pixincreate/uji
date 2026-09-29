@@ -57,3 +57,4 @@
   - [System](runtime/system.md)
   - [Text](runtime/text.md)
   - [Encoding](runtime/encoding.md)
+  - [Images](runtime/images.md)

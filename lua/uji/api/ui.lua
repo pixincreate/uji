@@ -1,5 +1,6 @@
 local actions = require("uji.ui.actions")
 local app = require("uji.app")
+local images = require("uji.images")
 local keys = require("uji.ui.keys")
 local Keymap = require("uji.ui.keymap")
 local model = require("uji.model")
@@ -141,8 +142,8 @@ M.status = {
     end,
     queue = function()
         local out = {}
-        for index, text in ipairs(app.agent and app.agent.queue or {}) do
-            out[index] = text
+        for index, queued in ipairs(app.agent and app.agent.queue or {}) do
+            out[index] = queued.text
         end
         return out
     end,
@@ -194,6 +195,17 @@ M.input = {
     clear = function()
         ui:set_input("")
     end,
+    attach = task.callback(function(file)
+        if type(file) ~= "string" then
+            error("uji.input.attach needs a path", 3)
+        end
+        local image, err = images.file(file, ui:directory())
+        if not image then
+            return nil, err
+        end
+        ui:attach(image)
+        return true
+    end),
     capture = function(handler)
         if type(handler) ~= "function" then
             error("uji.input.capture needs a function", 2)
