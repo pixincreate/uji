@@ -2,21 +2,20 @@ use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::time::UNIX_EPOCH;
 
-use mlua::{BString, Lua};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
-use uji_macros::{FromLua, IntoLua, function};
+use uji_native::{Json, native};
 
-use crate::io;
+use crate::io::{self, Blocked};
 
-#[derive(Serialize, IntoLua)]
+#[derive(Serialize)]
 struct Entry {
     name: String,
     #[serde(rename = "type")]
     kind: &'static str,
 }
 
-#[derive(Serialize, IntoLua)]
+#[derive(Serialize)]
 struct Stat {
     #[serde(rename = "type")]
     kind: &'static str,
@@ -51,7 +50,7 @@ fn stat_of(metadata: &std::fs::Metadata) -> Stat {
 const NEWLINE: u8 = b'\n';
 const BUFFER: usize = 64 * 1024;
 
-#[derive(Serialize, Default, IntoLua)]
+#[derive(Serialize, Default)]
 struct Excerpt {
     lines: Vec<String>,
     cut: Vec<usize>,
@@ -59,30 +58,38 @@ struct Excerpt {
     binary: bool,
 }
 
-#[derive(FromLua)]
+#[derive(Deserialize)]
 struct Window {
-    #[lua(default = 1)]
+    #[serde(default = "first")]
     from: usize,
-    #[lua(default = usize::MAX)]
+    #[serde(default = "unlimited")]
     count: usize,
-    #[lua(default = usize::MAX)]
+    #[serde(default = "unlimited")]
     max: usize,
-    #[lua(default)]
+    #[serde(default)]
     sniff: usize,
-    #[lua(default)]
+    #[serde(default)]
     total: bool,
 }
 
-#[derive(FromLua)]
+fn first() -> usize {
+    1
+}
+
+fn unlimited() -> usize {
+    usize::MAX
+}
+
+#[derive(Deserialize)]
 struct WriteOptions {
     mode: Option<u32>,
-    #[lua(default)]
+    #[serde(default)]
     append: bool,
 }
 
-#[derive(FromLua)]
+#[derive(Deserialize)]
 struct RemoveOptions {
-    #[lua(default)]
+    #[serde(default)]
     recursive: bool,
 }
 
@@ -153,42 +160,40 @@ fn next_line(
     }
 }
 
-struct Write {
-    path: PathBuf,
-    data: Vec<u8>,
-    mode: Option<u32>,
-    append: bool,
+#[native(fs)]
+async fn read(path: String) -> std::io::Result<Vec<u8>> {
+    tokio::fs::read(path).await
 }
 
-impl Write {
-    fn new(path: String, data: &mlua::LuaString, opts: &WriteOptions) -> Self {
-        Self {
-            path: PathBuf::from(path),
-            data: data.as_bytes().to_vec(),
-            mode: opts.mode,
-            append: opts.append,
-        }
-    }
-
-    async fn run(self) -> std::io::Result<()> {
-        let mut options = tokio::fs::OpenOptions::new();
-        options.write(true).create(true);
-        if self.append {
-            options.append(true);
-        } else {
-            options.truncate(true);
-        }
-        #[cfg(unix)]
-        if let Some(mode) = self.mode {
-            options.mode(mode);
-        }
-        let mut file = options.open(&self.path).await?;
-        file.write_all(&self.data).await?;
-        file.flush().await
-    }
+#[native(fs)]
+async fn lines(
+    path: String,
+    window: Json<Window>,
+) -> Result<Json<Excerpt>, Blocked<std::io::Error>> {
+    io::blocking(move || window.0.read(&path)).await.map(Json)
 }
 
-async fn entries(path: String) -> std::io::Result<Vec<Entry>> {
+#[native(fs)]
+async fn write(path: String, data: Vec<u8>, opts: Json<WriteOptions>) -> std::io::Result<()> {
+    let Json(opts) = opts;
+    let mut options = tokio::fs::OpenOptions::new();
+    options.write(true).create(true);
+    if opts.append {
+        options.append(true);
+    } else {
+        options.truncate(true);
+    }
+    #[cfg(unix)]
+    if let Some(mode) = opts.mode {
+        options.mode(mode);
+    }
+    let mut file = options.open(PathBuf::from(path)).await?;
+    file.write_all(&data).await?;
+    file.flush().await
+}
+
+#[native(fs)]
+async fn list(path: String) -> std::io::Result<Json<Vec<Entry>>> {
     let mut reader = tokio::fs::read_dir(path).await?;
     let mut entries = Vec::new();
     while let Some(entry) = reader.next_entry().await? {
@@ -198,76 +203,32 @@ async fn entries(path: String) -> std::io::Result<Vec<Entry>> {
         });
     }
     entries.sort_by(|left, right| left.name.cmp(&right.name));
-    Ok(entries)
+    Ok(Json(entries))
 }
 
-#[function(fs)]
-async fn read(lua: Lua, path: String) -> mlua::Result<Result<BString, std::io::Error>> {
-    Ok(io::run(&lua, tokio::fs::read(path))
-        .await?
-        .map(BString::from))
+#[native(fs)]
+async fn stat(path: String) -> std::io::Result<Json<Stat>> {
+    Ok(Json(stat_of(&tokio::fs::metadata(path).await?)))
 }
 
-#[function(fs)]
-async fn lines(
-    lua: Lua,
-    path: String,
-    window: Window,
-) -> mlua::Result<Result<Excerpt, std::io::Error>> {
-    io::blocking(&lua, move || window.read(&path)).await
+#[native(fs)]
+async fn mkdir(path: String) -> std::io::Result<()> {
+    tokio::fs::create_dir_all(path).await
 }
 
-#[function(fs)]
-async fn write(
-    lua: Lua,
-    path: String,
-    data: &mlua::LuaString,
-    opts: &WriteOptions,
-) -> mlua::Result<Result<bool, std::io::Error>> {
-    let write = Write::new(path, data, opts);
-    Ok(io::run(&lua, write.run()).await?.map(|()| true))
+#[native(fs)]
+async fn remove(path: String, opts: Json<RemoveOptions>) -> std::io::Result<()> {
+    delete(path, opts.0.recursive).await
 }
 
-#[function(fs)]
-async fn list(lua: Lua, path: String) -> mlua::Result<Result<Vec<Entry>, std::io::Error>> {
-    io::run(&lua, entries(path)).await
+#[native(fs)]
+async fn rename(from: String, to: String) -> std::io::Result<()> {
+    tokio::fs::rename(from, to).await
 }
 
-#[function(fs)]
-async fn stat(lua: Lua, path: String) -> mlua::Result<Result<Stat, std::io::Error>> {
-    let metadata = io::run(&lua, tokio::fs::metadata(path)).await?;
-    Ok(metadata.map(|metadata| stat_of(&metadata)))
-}
-
-#[function(fs)]
-async fn mkdir(lua: Lua, path: String) -> mlua::Result<Result<bool, std::io::Error>> {
-    Ok(io::run(&lua, tokio::fs::create_dir_all(path))
-        .await?
-        .map(|()| true))
-}
-
-#[function(fs)]
-async fn remove(
-    lua: Lua,
-    path: String,
-    opts: RemoveOptions,
-) -> mlua::Result<Result<bool, std::io::Error>> {
-    Ok(io::run(&lua, delete(path, opts.recursive))
-        .await?
-        .map(|()| true))
-}
-
-#[function(fs)]
-async fn rename(lua: Lua, from: String, to: String) -> mlua::Result<Result<bool, std::io::Error>> {
-    Ok(io::run(&lua, tokio::fs::rename(from, to))
-        .await?
-        .map(|()| true))
-}
-
-#[function(fs)]
-async fn realpath(lua: Lua, path: String) -> mlua::Result<Result<String, std::io::Error>> {
-    let resolved = io::run(&lua, tokio::fs::canonicalize(path)).await?;
-    Ok(resolved.map(|path| path.display().to_string()))
+#[native(fs)]
+async fn realpath(path: String) -> std::io::Result<String> {
+    Ok(tokio::fs::canonicalize(path).await?.display().to_string())
 }
 
 async fn delete(path: String, recursive: bool) -> std::io::Result<()> {

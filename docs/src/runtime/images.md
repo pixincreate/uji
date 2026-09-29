@@ -8,10 +8,11 @@ long side passes `edge` pixels is scaled down. When the result is still larger
 than `bytes`, it is saved as JPEG at lower quality, and then at half the size
 until it fits.
 
-The result is the image bytes, the media type such as `"image/png"`, the width
-and the height. An image that needs no change comes back as it was. Anything
-else gives `nil` and an error message.
+The result is a table with four fields. `data` holds the image encoded as
+base64, `media_type` names its type such as `"image/png"`, and `width` and
+`height` give its size in pixels. An image that needs no change keeps its
+original bytes. Anything else gives `nil` and an error message.
 
 ```lua
-local data, media_type, width, height = uji.image.fit(uji.fs.read("shot.png"), 1568, 3 * 1024 * 1024)
+local image = uji.image.fit(uji.fs.read("shot.png"), 1568, 3 * 1024 * 1024)
 ```

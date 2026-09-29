@@ -1,10 +1,10 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use mlua::{Function, Lua, MultiValue, Table, Value};
-use uji_macros::function;
+use mlua::{FromLua, Lua, LuaOptions, MultiValue, StdLib, Table, Value};
+use uji_native::{Json, native};
 
-use crate::kernel::State;
+use crate::context;
 
 const AFTER_PRELOAD: i64 = 2;
 
@@ -71,46 +71,39 @@ fn child(rest: &str) -> Option<String> {
     (name != "init" && !name.contains('/')).then(|| name.to_string())
 }
 
+#[allow(unsafe_code)]
+fn lua() -> Lua {
+    unsafe { Lua::unsafe_new_with(StdLib::ALL_SAFE | StdLib::FFI, LuaOptions::new()) }
+}
+
 pub(crate) fn create(layers: Vec<Sources>) -> mlua::Result<Lua> {
-    let lua = Lua::new();
+    let lua = lua();
     install_searcher(&lua, layers)?;
-    let uji = lua.create_table()?;
-    for register in crate::REGISTERED {
-        register(&lua, &uji)?;
-    }
-    lua.globals().set("uji", uji)?;
+    lua.globals().set("uji", lua.create_table()?)?;
+    crate::native::install(&lua)?;
     Ok(lua)
 }
 
-pub(crate) fn table(lua: &Lua, root: &Table, path: &[&str]) -> mlua::Result<Table> {
-    let mut table = root.clone();
-    for name in path {
-        table = if let Some(inner) = table.raw_get::<Option<Table>>(*name)? {
-            inner
-        } else {
-            let inner = lua.create_table()?;
-            table.raw_set(*name, &inner)?;
-            inner
-        };
-    }
-    Ok(table)
+#[native]
+fn modules(namespace: &str) -> Json<Vec<String>> {
+    let names: BTreeSet<String> = context::with(|context| {
+        context
+            .layers
+            .iter()
+            .flat_map(|layer| layer.children(namespace))
+            .collect()
+    })
+    .unwrap_or_default();
+    Json(
+        names
+            .into_iter()
+            .map(|name| format!("{namespace}.{name}"))
+            .collect(),
+    )
 }
 
-#[function]
-fn modules(lua: &Lua, namespace: &str) -> mlua::Result<Vec<String>> {
-    let names: BTreeSet<String> = State::of(lua)?
-        .layers
-        .iter()
-        .flat_map(|layer| layer.children(namespace))
-        .collect();
-    Ok(names
-        .into_iter()
-        .map(|name| format!("{namespace}.{name}"))
-        .collect())
-}
-
-pub(crate) fn entry(lua: &Lua, module: &str) -> mlua::Result<Function> {
-    lua.globals().get::<Function>("require")?.call(module)
+pub(crate) fn require<T: FromLua>(lua: &Lua, module: &str) -> mlua::Result<T> {
+    lua.globals().get::<mlua::Function>("require")?.call(module)
 }
 
 fn install_searcher(lua: &Lua, layers: Vec<Sources>) -> mlua::Result<()> {

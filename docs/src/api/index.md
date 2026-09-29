@@ -120,6 +120,7 @@ Every function lives under the global `uji` table. A function that finishes late
 | [`uji.provider.add(spec)`](provider.md#ujiprovideraddspec) | Adds a provider, or merges `spec` into the provider with the same `id`. |
 | [`uji.provider.remove(id)`](provider.md#ujiproviderremoveid) | Removes a provider and returns `true` if it existed. |
 | [`uji.provider.list()`](provider.md#ujiproviderlist) | Returns one table per provider with `id`, `name`, `wire`, `base_url` and `models`. |
+| [`uji.auth.configure(opts)`](auth.md#ujiauthconfigureopts) | Chooses between `auth.toml` and the system keychain for API keys and sign-ins. |
 
 ## Request formats
 
@@ -198,6 +199,7 @@ Every function lives under the global `uji` table. A function that finishes late
 | [`uji.width(text)`](../runtime/text.md#ujiwidthtext) | Measures text in terminal columns. |
 | [`uji.lossy(data)`](../runtime/text.md#ujilossydata) | Turns bytes into valid UTF-8. |
 | [`uji.base64`](../runtime/encoding.md) | Encodes and decodes base64. |
+| [`uji.toml`](../runtime/encoding.md) | Reads and writes TOML. |
 | [`uji.sha256(data)`](../runtime/encoding.md) | Hashes data. |
 | [`uji.random(count)`](../runtime/encoding.md) | Returns random bytes. |
 | [`uji.image.fit(data, edge, bytes)`](../runtime/images.md#ujiimagefitdata-edge-bytes) | Checks an image and fits it to a size and a byte limit. |

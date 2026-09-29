@@ -1,3 +1,7 @@
+use std::convert::Infallible;
+use std::io;
+use std::sync::Arc;
+
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
@@ -33,51 +37,55 @@ impl Surface for Virtual {
         self.terminal.current_buffer_mut()
     }
 
-    fn size(&mut self) -> mlua::Result<(u16, u16)> {
+    fn size(&mut self) -> io::Result<(u16, u16)> {
         let (width, height) = *self.size.borrow_and_update();
         let area = self.terminal.current_buffer_mut().area;
         if (area.width, area.height) != (width, height) {
             self.terminal.backend_mut().resize(width, height);
             self.terminal
                 .resize(Rect::new(0, 0, width, height))
-                .map_err(mlua::Error::external)?;
+                .unwrap_or_else(never);
         }
         Ok((width, height))
     }
 
-    fn present(&mut self, _cursor: Option<Cursor>) -> mlua::Result<()> {
-        self.terminal.flush().map_err(mlua::Error::external)?;
+    fn present(&mut self, _cursor: Option<Cursor>) -> io::Result<()> {
+        self.terminal.flush().unwrap_or_else(never);
         self.terminal.swap_buffers();
         self.frames.send_replace(self.snapshot());
         Ok(())
     }
 
-    fn write(&mut self, _bytes: &[u8]) -> mlua::Result<()> {
+    fn write(&mut self, _bytes: &[u8]) -> io::Result<()> {
         Ok(())
     }
 
-    fn suspend(&mut self) -> mlua::Result<()> {
+    fn suspend(&mut self) -> io::Result<()> {
         Ok(())
     }
 
-    fn resume(&mut self) -> mlua::Result<()> {
+    fn resume(&mut self) -> io::Result<()> {
         Ok(())
     }
 
-    fn close(&mut self) -> mlua::Result<()> {
+    fn close(&mut self) -> io::Result<()> {
         Ok(())
     }
 }
 
-pub(crate) fn open(terminal: VirtualTerminal) -> mlua::Result<(Screen, Input)> {
+fn never<T>(impossible: Infallible) -> T {
+    match impossible {}
+}
+
+pub(crate) fn open(terminal: VirtualTerminal) -> (Screen, Arc<Input>) {
     let (width, height) = *terminal.size.borrow();
-    let surface = Terminal::new(TestBackend::new(width, height)).map_err(mlua::Error::external)?;
-    Ok((
+    let surface = Terminal::new(TestBackend::new(width, height)).unwrap_or_else(never);
+    (
         Screen::new(Box::new(Virtual {
             terminal: surface,
             frames: terminal.frames,
             size: terminal.size,
         })),
-        Input::new(terminal.events, None),
-    ))
+        Arc::new(Input::new(terminal.events, None)),
+    )
 }

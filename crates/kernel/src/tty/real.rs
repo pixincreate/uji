@@ -93,52 +93,50 @@ impl Surface for Real {
         self.terminal.current_buffer_mut()
     }
 
-    fn size(&mut self) -> mlua::Result<(u16, u16)> {
-        self.terminal.autoresize().map_err(mlua::Error::external)?;
+    fn size(&mut self) -> io::Result<(u16, u16)> {
+        self.terminal.autoresize()?;
         let area = self.terminal.current_buffer_mut().area;
         Ok((area.width, area.height))
     }
 
-    fn present(&mut self, cursor: Option<Cursor>) -> mlua::Result<()> {
-        self.terminal.flush().map_err(mlua::Error::external)?;
+    fn present(&mut self, cursor: Option<Cursor>) -> io::Result<()> {
+        self.terminal.flush()?;
         match cursor {
             Some(cursor) => {
-                queue!(self.terminal.backend_mut(), cursor_style(cursor.shape))
-                    .map_err(mlua::Error::external)?;
+                queue!(self.terminal.backend_mut(), cursor_style(cursor.shape))?;
                 self.terminal
-                    .set_cursor_position(Position::new(cursor.col, cursor.row))
-                    .map_err(mlua::Error::external)?;
-                self.terminal.show_cursor().map_err(mlua::Error::external)?;
+                    .set_cursor_position(Position::new(cursor.col, cursor.row))?;
+                self.terminal.show_cursor()?;
             }
-            None => self.terminal.hide_cursor().map_err(mlua::Error::external)?,
+            None => self.terminal.hide_cursor()?,
         }
         self.terminal.swap_buffers();
-        Backend::flush(self.terminal.backend_mut()).map_err(mlua::Error::external)
+        Backend::flush(self.terminal.backend_mut())
     }
 
-    fn write(&mut self, bytes: &[u8]) -> mlua::Result<()> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<()> {
         let backend = self.terminal.backend_mut();
-        backend.write_all(bytes).map_err(mlua::Error::external)?;
-        Write::flush(backend).map_err(mlua::Error::external)
+        backend.write_all(bytes)?;
+        Write::flush(backend)
     }
 
-    fn suspend(&mut self) -> mlua::Result<()> {
+    fn suspend(&mut self) -> io::Result<()> {
         self.paused.store(true, Ordering::Relaxed);
         Reader::settle();
-        leave(self.terminal.backend_mut()).map_err(mlua::Error::external)
+        leave(self.terminal.backend_mut())
     }
 
-    fn resume(&mut self) -> mlua::Result<()> {
-        enter(self.terminal.backend_mut()).map_err(mlua::Error::external)?;
-        self.terminal.clear().map_err(mlua::Error::external)?;
+    fn resume(&mut self) -> io::Result<()> {
+        enter(self.terminal.backend_mut())?;
+        self.terminal.clear()?;
         self.paused.store(false, Ordering::Relaxed);
         Ok(())
     }
 
-    fn close(&mut self) -> mlua::Result<()> {
+    fn close(&mut self) -> io::Result<()> {
         self.paused.store(true, Ordering::Relaxed);
         if ACTIVE.load(Ordering::Relaxed) {
-            leave(self.terminal.backend_mut()).map_err(mlua::Error::external)?;
+            leave(self.terminal.backend_mut())?;
         }
         Ok(())
     }
@@ -150,16 +148,16 @@ impl Drop for Real {
     }
 }
 
-pub(crate) fn open() -> mlua::Result<(Screen, Input)> {
+pub(crate) fn open() -> io::Result<(Screen, Arc<Input>)> {
     GUARDED.call_once(guard_against_panic);
     let mut stdout = io::stdout();
-    enter(&mut stdout).map_err(mlua::Error::external)?;
-    let terminal = Terminal::new(CrosstermBackend::new(stdout)).map_err(mlua::Error::external)?;
+    enter(&mut stdout)?;
+    let terminal = Terminal::new(CrosstermBackend::new(stdout))?;
     let paused = Arc::new(AtomicBool::new(false));
     let (sender, events) = mpsc::unbounded_channel();
     let reader = Reader::spawn(sender, Arc::clone(&paused));
     Ok((
         Screen::new(Box::new(Real { terminal, paused })),
-        Input::new(events, Some(reader)),
+        Arc::new(Input::new(events, Some(reader))),
     ))
 }

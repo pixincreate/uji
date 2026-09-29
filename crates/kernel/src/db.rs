@@ -1,145 +1,78 @@
-use mlua::{Function, Lua, LuaSerdeExt, MultiValue, Table, Value};
-use rusqlite::types::{Value as SqlValue, ValueRef};
-use rusqlite::{Connection, params_from_iter};
-use uji_macros::{function, methods, register};
+use rusqlite::types::{ToSqlOutput, Value as SqlValue, ValueRef};
+use rusqlite::{Connection, ToSql, params_from_iter};
+use serde::Deserialize;
+use serde_json::{Map, Number, Value};
+use uji_native::{Held, Json, List, native};
 
-pub(crate) struct Db(Option<Connection>);
+pub(crate) struct Db(Connection);
 
-impl Db {
-    fn connection(&self) -> mlua::Result<&Connection> {
-        self.0
-            .as_ref()
-            .ok_or_else(|| mlua::Error::runtime("the database is closed"))
+#[derive(Deserialize)]
+struct Param(Value);
+
+impl ToSql for Param {
+    fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+        Ok(match &self.0 {
+            Value::Null => ToSqlOutput::Owned(SqlValue::Null),
+            Value::Bool(flag) => ToSqlOutput::Owned(SqlValue::Integer(i64::from(*flag))),
+            Value::Number(number) => ToSqlOutput::Owned(number.as_i64().map_or_else(
+                || SqlValue::Real(number.as_f64().unwrap_or_default()),
+                SqlValue::Integer,
+            )),
+            Value::String(text) => ToSqlOutput::Borrowed(ValueRef::Text(text.as_bytes())),
+            Value::Array(_) | Value::Object(_) => {
+                return Err(rusqlite::Error::ToSqlConversionFailure(
+                    "a table cannot be stored in the database".into(),
+                ));
+            }
+        })
     }
 }
 
-fn sql_value(value: Value) -> mlua::Result<SqlValue> {
-    Ok(match value {
-        Value::Nil => SqlValue::Null,
-        Value::LightUserData(data) if data.0.is_null() => SqlValue::Null,
-        Value::Boolean(flag) => SqlValue::Integer(i64::from(flag)),
-        Value::Integer(number) => SqlValue::Integer(number),
-        Value::Number(number) => SqlValue::Real(number),
-        Value::String(text) => match text.to_str() {
-            Ok(text) => SqlValue::Text(text.to_string()),
-            Err(_) => SqlValue::Blob(text.as_bytes().to_vec()),
-        },
-        other => {
-            return Err(mlua::Error::runtime(format!(
-                "a {} cannot be stored in the database",
-                other.type_name()
-            )));
+fn column(value: ValueRef<'_>) -> Value {
+    match value {
+        ValueRef::Null => Value::Null,
+        ValueRef::Integer(number) => Value::from(number),
+        ValueRef::Real(number) => Number::from_f64(number).map_or(Value::Null, Value::Number),
+        ValueRef::Text(bytes) | ValueRef::Blob(bytes) => {
+            Value::String(String::from_utf8_lossy(bytes).into_owned())
         }
-    })
-}
-
-fn sql_values(params: Option<Vec<Value>>) -> mlua::Result<Vec<SqlValue>> {
-    params
-        .unwrap_or_default()
-        .into_iter()
-        .map(sql_value)
-        .collect()
-}
-
-fn lua_value(lua: &Lua, value: ValueRef<'_>) -> mlua::Result<Value> {
-    Ok(match value {
-        ValueRef::Null => Value::Nil,
-        ValueRef::Integer(number) => Value::Integer(number),
-        ValueRef::Real(number) => Value::Number(number),
-        ValueRef::Text(bytes) | ValueRef::Blob(bytes) => Value::String(lua.create_string(bytes)?),
-    })
-}
-
-fn row(lua: &Lua, columns: &[String], row: &rusqlite::Row<'_>) -> mlua::Result<Table> {
-    let table = lua.create_table()?;
-    for (index, name) in columns.iter().enumerate() {
-        let value = row.get_ref(index).map_err(mlua::Error::external)?;
-        table.raw_set(name.as_str(), lua_value(lua, value)?)?;
     }
-    Ok(table)
 }
 
+#[native(db)]
+fn open(path: &str) -> Result<Held<Db>, rusqlite::Error> {
+    Connection::open(path).map(|connection| Held::new(Db(connection)))
+}
+
+#[native]
+fn exec(db: &Db, sql: &str, params: Json<List<Param>>) -> Result<usize, rusqlite::Error> {
+    let List(params) = params.0;
+    if params.is_empty() {
+        return db.0.execute_batch(sql).map(|()| 0);
+    }
+    db.0.prepare_cached(sql)?.execute(params_from_iter(params))
+}
+
+#[native]
 fn query(
-    lua: &Lua,
-    connection: &Connection,
+    db: &Db,
     sql: &str,
-    params: Option<Vec<Value>>,
-) -> mlua::Result<Table> {
-    let mut statement = connection
-        .prepare_cached(sql)
-        .map_err(mlua::Error::external)?;
+    params: Json<List<Param>>,
+) -> Result<Json<Vec<Map<String, Value>>>, rusqlite::Error> {
+    let mut statement = db.0.prepare_cached(sql)?;
     let columns: Vec<String> = statement
         .column_names()
         .into_iter()
         .map(str::to_string)
         .collect();
-    let mut rows = statement
-        .query(params_from_iter(sql_values(params)?))
-        .map_err(mlua::Error::external)?;
-    let out = lua.create_table()?;
-    while let Some(found) = rows.next().map_err(mlua::Error::external)? {
-        out.raw_push(row(lua, &columns, found)?)?;
-    }
-    Ok(out)
-}
-
-fn exec(connection: &Connection, sql: &str, params: Option<Vec<Value>>) -> mlua::Result<usize> {
-    let Some(params) = params else {
-        return connection
-            .execute_batch(sql)
-            .map(|()| 0)
-            .map_err(mlua::Error::external);
-    };
-    let values = sql_values(Some(params))?;
-    connection
-        .prepare_cached(sql)
-        .and_then(|mut statement| statement.execute(params_from_iter(values)))
-        .map_err(mlua::Error::external)
-}
-
-fn transaction(connection: &Connection, run: &Function) -> mlua::Result<MultiValue> {
-    connection
-        .execute_batch("BEGIN")
-        .map_err(mlua::Error::external)?;
-    match run.call::<MultiValue>(()) {
-        Ok(values) => connection
-            .execute_batch("COMMIT")
-            .map(|()| values)
-            .map_err(mlua::Error::external),
-        Err(err) => {
-            connection
-                .execute_batch("ROLLBACK")
-                .map_err(mlua::Error::external)?;
-            Err(err)
+    let mut rows = statement.query(params_from_iter(params.0.0))?;
+    let mut out = Vec::new();
+    while let Some(row) = rows.next()? {
+        let mut fields = Map::new();
+        for (index, name) in columns.iter().enumerate() {
+            fields.insert(name.clone(), column(row.get_ref(index)?));
         }
+        out.push(fields);
     }
-}
-
-#[methods]
-impl Db {
-    fn exec(&self, sql: &str, params: Option<Vec<Value>>) -> mlua::Result<usize> {
-        exec(self.connection()?, sql, params)
-    }
-
-    fn query(&self, lua: &Lua, sql: &str, params: Option<Vec<Value>>) -> mlua::Result<Table> {
-        query(lua, self.connection()?, sql, params)
-    }
-
-    fn transaction(&self, run: &Function) -> mlua::Result<MultiValue> {
-        transaction(self.connection()?, run)
-    }
-
-    fn close(&mut self) {
-        self.0.take();
-    }
-}
-
-#[function(db)]
-fn open(path: String) -> Result<Db, rusqlite::Error> {
-    Connection::open(path).map(|connection| Db(Some(connection)))
-}
-
-#[register(db)]
-fn null(lua: &Lua) -> Value {
-    lua.null()
+    Ok(Json(out))
 }

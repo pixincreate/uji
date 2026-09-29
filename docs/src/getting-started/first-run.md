@@ -20,9 +20,10 @@ Type `/login` and pick a provider from the list.
 - Custom asks for the `base_url` and model of a server that takes OpenAI chat
   requests.
 
-uji saves keys in the system keychain. On a system without one, they go in
-`auth.json` in the [data directory](../configuration/files.md), readable only
-by you.
+uji saves keys in `auth.toml` in the
+[data directory](../configuration/files.md), readable only by you. To keep them
+in the system keychain instead, call
+[`uji.auth.configure`](../api/auth.md) in your config.
 
 ## Choosing a model
 

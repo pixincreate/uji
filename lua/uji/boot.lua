@@ -54,6 +54,10 @@ local function run(args)
     paths.overrides.config = parsed.flags["config-dir"]
     paths.overrides.data = parsed.flags["data-dir"]
     paths.overrides.db = parsed.flags.db
+    local config = paths.config()
+    if config then
+        table.insert(sys.native.paths, config .. "/native")
+    end
     if parsed.command == "help" then
         io.stdout:write(cli.USAGE, "\n")
         return

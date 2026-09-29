@@ -11,14 +11,12 @@ description = "The Lua runtime and operating system primitives uji is built on"
 [dependencies]
 arboard = { version = "3", default-features = false, features = ["image-data", "wayland-data-control"] }
 base64 = "0.22"
-calloop = { version = "0.14.4", features = ["executor"] }
 crossterm = "0.29"
 futures-util = "0.3"
 globset = "0.4"
 image = { version = "0.25", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
 keyring = "4"
-linkme = "0.3"
-mlua = { version = "0.12", features = ["luajit52", "vendored", "serialize", "async"] }
+mlua = { version = "0.12", features = ["luajit52", "vendored"] }
 nucleo-matcher = "0.3"
 pulldown-cmark = { version = "0.13.4", default-features = false }
 rand = "0.9"
@@ -31,8 +29,9 @@ serde_json = "1"
 sha2 = "0.10"
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "process", "time", "net", "io-util", "sync", "fs", "macros"] }
+toml = "1"
 unicode-width = "0.2"
-uji-macros = { path = "../macros" }
+uji-native = { path = "../native" }
 
 [lints]
 workspace = true

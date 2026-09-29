@@ -7,7 +7,7 @@
 | Session database | `uji.db` in the data directory | `--db` or `UJI_DB` |
 | Installed packs | `site/` in the data directory | |
 | Pack versions | `uji-lock.json` in the config directory | |
-| Credentials | The system keychain, or `auth.json` in the data directory | |
+| Credentials | `auth.toml` in the data directory | [`uji.auth.configure`](../api/auth.md) |
 
 An option on the command line wins over the `UJI_` variable, which wins over
 the `XDG_` one. uji adds `/uji` to the `XDG_` directories.

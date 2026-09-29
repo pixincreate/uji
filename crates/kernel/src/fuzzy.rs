@@ -1,35 +1,34 @@
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher};
-use uji_macros::function;
+use uji_native::{Json, List, native};
 
-struct Candidate<'a> {
+struct Candidate {
     at: usize,
-    text: &'a str,
+    text: String,
 }
 
-impl AsRef<str> for Candidate<'_> {
+impl AsRef<str> for Candidate {
     fn as_ref(&self) -> &str {
-        self.text
+        &self.text
     }
 }
 
-fn rank(items: &[String], query: &str) -> Vec<usize> {
+#[native]
+fn fuzzy(query: &str, items: Json<List<String>>) -> Json<Vec<usize>> {
+    let items = items.0.0;
     if query.is_empty() {
-        return (1..=items.len()).collect();
+        return Json((1..=items.len()).collect());
     }
-    let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
-    let candidates = items.iter().enumerate().map(|(at, text)| Candidate {
+    let candidates = items.into_iter().enumerate().map(|(at, text)| Candidate {
         at: at.saturating_add(1),
-        text: text.as_str(),
+        text,
     });
-    Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart)
-        .match_list(candidates, &mut matcher)
-        .into_iter()
-        .map(|(candidate, _)| candidate.at)
-        .collect()
-}
-
-#[function]
-fn fuzzy(query: &str, items: &[String]) -> Vec<usize> {
-    rank(items, query)
+    let mut matcher = Matcher::new(Config::DEFAULT.match_paths());
+    Json(
+        Pattern::parse(query, CaseMatching::Ignore, Normalization::Smart)
+            .match_list(candidates, &mut matcher)
+            .into_iter()
+            .map(|(candidate, _)| candidate.at)
+            .collect(),
+    )
 }

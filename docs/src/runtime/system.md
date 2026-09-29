@@ -54,6 +54,6 @@ message.
 ## uji.clipboard.image(edge, bytes)
 
 Takes the image on the system clipboard and fits it the way
-[`uji.image.fit`](images.md#ujiimagefitdata-edge-bytes) does, with the same
-four results. A clipboard without an image gives `nil` and "the clipboard has
+[`uji.image.fit`](images.md#ujiimagefitdata-edge-bytes) does, and gives the
+same table. A clipboard without an image gives `nil` and "the clipboard has
 no image".

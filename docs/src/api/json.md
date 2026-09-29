@@ -6,7 +6,8 @@ answers.
 ## uji.json.encode(value)
 
 Turns a Lua value into a JSON string, where an empty table becomes `{}` unless
-[`uji.json.array`](#ujijsonarraytable) marked it.
+[`uji.json.array`](#ujijsonarraytable) marked it. A function, a table that
+contains itself, or a key that is not a string or a number raises an error.
 
 ```lua
 local body = uji.json.encode({ model = "gpt-4.1", stream = true })

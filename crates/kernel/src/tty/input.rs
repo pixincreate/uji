@@ -7,12 +7,11 @@ use crossterm::event::{
 };
 use serde::Serialize;
 use tokio::sync::{Mutex, mpsc};
-use uji_macros::{IntoLua, methods};
+use uji_native::{Json, native};
 
 const POLL: Duration = Duration::from_millis(100);
 
-#[derive(Serialize, IntoLua)]
-#[lua(nulls = false)]
+#[derive(Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum Incoming {
     Key {
@@ -177,21 +176,14 @@ impl Input {
             _reader: reader,
         }
     }
-
-    async fn next(&self) -> Option<Incoming> {
-        let mut events = self.events.lock().await;
-        loop {
-            if let Some(found) = incoming(events.recv().await?) {
-                return Some(found);
-            }
-        }
-    }
 }
 
-#[methods]
-impl Input {
-    #[iterate(events)]
-    async fn event(&self) -> Option<Incoming> {
-        self.next().await
+#[native(iterate = events)]
+async fn event(input: Arc<Input>) -> Option<Json<Incoming>> {
+    let mut events = input.events.lock().await;
+    loop {
+        if let Some(found) = incoming(events.recv().await?) {
+            return Some(Json(found));
+        }
     }
 }

@@ -2,15 +2,14 @@ use std::collections::HashMap;
 use std::process::{ExitStatus, Stdio};
 use std::sync::Arc;
 
-use mlua::Lua;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
 use tokio::runtime::Handle;
 use tokio::sync::{Mutex, mpsc, watch};
-use uji_macros::{FromLua, IntoLua, function, methods};
+use uji_native::{Held, Json, List, native};
 
-use crate::io;
+use crate::context;
 
 const NEWLINE: u8 = b'\n';
 const RETURN: u8 = b'\r';
@@ -20,7 +19,7 @@ struct Line {
     text: String,
 }
 
-#[derive(Clone, Copy, Serialize, IntoLua)]
+#[derive(Clone, Copy, Serialize)]
 struct Exit {
     code: Option<i32>,
     signal: Option<i32>,
@@ -28,13 +27,15 @@ struct Exit {
 }
 
 impl Exit {
+    const LOST: Self = Self {
+        code: None,
+        signal: None,
+        success: false,
+    };
+
     fn of(status: &std::io::Result<ExitStatus>) -> Self {
         let Ok(status) = status else {
-            return Self {
-                code: None,
-                signal: None,
-                success: false,
-            };
+            return Self::LOST;
         };
         Self {
             code: status.code(),
@@ -56,8 +57,7 @@ fn signal(_: ExitStatus) -> Option<i32> {
 }
 
 pub(crate) struct Proc {
-    pid: Option<u32>,
-    stdin: Arc<Mutex<Option<ChildStdin>>>,
+    stdin: Mutex<Option<ChildStdin>>,
     output: Mutex<mpsc::UnboundedReceiver<Line>>,
     status: watch::Receiver<Option<Exit>>,
     kill: mpsc::UnboundedSender<()>,
@@ -74,12 +74,10 @@ impl Proc {
         }
         let (report, status) = watch::channel(None);
         let (kill, killed) = mpsc::unbounded_channel();
-        let pid = child.id();
         let stdin = child.stdin.take();
         io.spawn(supervise(child, killed, report));
         Self {
-            pid,
-            stdin: Arc::new(Mutex::new(stdin)),
+            stdin: Mutex::new(stdin),
             output: Mutex::new(output),
             status,
             kill,
@@ -129,8 +127,15 @@ async fn supervise(
     report.send_replace(Some(Exit::of(&status)));
 }
 
-async fn write(stdin: Arc<Mutex<Option<ChildStdin>>>, data: Vec<u8>) -> std::io::Result<()> {
-    let mut stdin = stdin.lock().await;
+#[native(iterate = lines)]
+async fn line(process: Arc<Proc>) -> Option<(String, &'static str)> {
+    let line = process.output.lock().await.recv().await?;
+    Some((line.text, line.stream))
+}
+
+#[native]
+async fn write(process: Arc<Proc>, data: Vec<u8>) -> std::io::Result<()> {
+    let mut stdin = process.stdin.lock().await;
     let pipe = stdin
         .as_mut()
         .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::BrokenPipe))?;
@@ -138,69 +143,42 @@ async fn write(stdin: Arc<Mutex<Option<ChildStdin>>>, data: Vec<u8>) -> std::io:
     pipe.flush().await
 }
 
-#[methods]
-impl Proc {
-    #[get]
-    fn pid(&self) -> Option<u32> {
-        self.pid
-    }
-
-    #[iterate(lines)]
-    async fn line(&self) -> (Option<String>, Option<&'static str>) {
-        self.output
-            .lock()
-            .await
-            .recv()
-            .await
-            .map(|line| (line.text, line.stream))
-            .unzip()
-    }
-
-    async fn write(
-        &self,
-        lua: Lua,
-        data: &mlua::LuaString,
-    ) -> mlua::Result<Result<bool, std::io::Error>> {
-        let written = io::run(
-            &lua,
-            write(Arc::clone(&self.stdin), data.as_bytes().to_vec()),
-        )
-        .await?;
-        Ok(written.map(|()| true))
-    }
-
-    async fn close(&self) {
-        self.stdin.lock().await.take();
-    }
-
-    fn kill(&self) -> bool {
-        self.kill.send(()).is_ok()
-    }
-
-    async fn wait(&self) -> mlua::Result<Exit> {
-        let mut status = self.status.clone();
-        Ok(status
-            .wait_for(Option::is_some)
-            .await
-            .map_err(mlua::Error::external)?
-            .unwrap_or(Exit {
-                code: None,
-                signal: None,
-                success: false,
-            }))
-    }
+#[native]
+async fn close(process: Arc<Proc>) {
+    process.stdin.lock().await.take();
 }
 
-#[derive(FromLua)]
+#[native]
+fn kill(process: &Arc<Proc>) -> bool {
+    process.kill.send(()).is_ok()
+}
+
+#[native]
+async fn wait(process: Arc<Proc>) -> Json<Exit> {
+    let mut status = process.status.clone();
+    let exit = status
+        .wait_for(Option::is_some)
+        .await
+        .ok()
+        .and_then(|exit| *exit);
+    Json(exit.unwrap_or(Exit::LOST))
+}
+
+#[derive(Deserialize)]
 struct SpawnOptions {
     cwd: Option<String>,
     env: Option<HashMap<String, String>>,
     stdio: Option<String>,
 }
 
-fn command(line: &[String], opts: SpawnOptions) -> mlua::Result<Command> {
+#[derive(Serialize)]
+struct Spawned {
+    pid: Option<u32>,
+}
+
+fn command(line: &[String], opts: SpawnOptions) -> std::io::Result<Command> {
     let Some((program, args)) = line.split_first() else {
-        return Err(mlua::Error::runtime("proc.spawn needs a program"));
+        return Err(std::io::Error::other("proc.spawn needs a program"));
     };
     let mut command = Command::new(program);
     command
@@ -218,7 +196,7 @@ fn command(line: &[String], opts: SpawnOptions) -> mlua::Result<Command> {
                 .stderr(Stdio::inherit());
         }
         Some(other) => {
-            return Err(mlua::Error::runtime(format!(
+            return Err(std::io::Error::other(format!(
                 "stdio must be \"pipe\" or \"inherit\", not {other:?}"
             )));
         }
@@ -232,16 +210,19 @@ fn command(line: &[String], opts: SpawnOptions) -> mlua::Result<Command> {
     Ok(command)
 }
 
-#[function(proc)]
+#[native(proc)]
 fn spawn(
-    lua: &Lua,
-    argv: &[String],
-    opts: SpawnOptions,
-) -> mlua::Result<Result<Proc, std::io::Error>> {
-    let mut command = command(argv, opts)?;
-    let io = io::handle(lua)?;
+    argv: Json<List<String>>,
+    opts: Json<SpawnOptions>,
+) -> std::io::Result<Held<Arc<Proc>, Spawned>> {
+    let Json(List(argv)) = argv;
+    let mut command = command(&argv, opts.0)?;
+    let io = context::with(|context| context.io.clone())
+        .ok_or_else(|| std::io::Error::other("the kernel is not running"))?;
     let entered = io.enter();
     let spawned = command.spawn();
     drop(entered);
-    Ok(spawned.map(|child| Proc::start(&io, child)))
+    let child = spawned?;
+    let pid = child.id();
+    Ok(Held(Arc::new(Proc::start(&io, child)), Spawned { pid }))
 }

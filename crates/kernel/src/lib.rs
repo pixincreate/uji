@@ -1,7 +1,7 @@
 mod clipboard;
 mod codec;
+mod context;
 mod db;
-mod executor;
 mod fs;
 mod fuzzy;
 mod images;
@@ -9,20 +9,16 @@ mod io;
 mod json;
 mod kernel;
 mod keychain;
+mod markdown;
 mod matcher;
+mod native;
 mod net;
 mod os;
 mod proc;
-mod promise;
+mod queue;
 mod tty;
 mod vm;
 
 pub use kernel::{Error, Options, Outcome, run};
 pub use tty::{Terminal, VirtualHandle, VirtualTerminal, virtual_terminal};
 pub use vm::Sources;
-
-type Register = fn(&mlua::Lua, &mlua::Table) -> mlua::Result<()>;
-
-#[allow(unsafe_code)]
-#[linkme::distributed_slice]
-static REGISTERED: [Register];

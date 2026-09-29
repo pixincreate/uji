@@ -52,15 +52,15 @@ local function unlink(word)
     end))
 end
 
-local function attachment(name, data, media, width, height)
-    if not data then
-        return nil, name .. ": " .. tostring(media)
+local function attachment(name, image, err)
+    if not image then
+        return nil, name .. ": " .. tostring(err)
     end
-    local encoded = sys.base64.encode(data)
-    if #encoded > LIMIT then
+    if #image.data > LIMIT then
         return nil, name .. " is larger than 5 MB"
     end
-    return { media_type = media, data = encoded, name = name, width = width, height = height }
+    image.name = name
+    return image
 end
 
 function M.load(data, name)

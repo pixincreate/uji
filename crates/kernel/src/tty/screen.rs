@@ -1,8 +1,14 @@
-use mlua::{Table, Value};
+use std::collections::HashMap;
+use std::io;
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
-use uji_macros::methods;
+use serde::Deserialize;
+use uji_native::{Json, abi, native};
+
+use super::Tty;
+use crate::context;
 
 const MODIFIERS: [(&str, Modifier); 7] = [
     ("bold", Modifier::BOLD),
@@ -30,12 +36,12 @@ pub(crate) struct Cursor {
 
 pub(crate) trait Surface {
     fn buffer(&mut self) -> &mut Buffer;
-    fn size(&mut self) -> mlua::Result<(u16, u16)>;
-    fn present(&mut self, cursor: Option<Cursor>) -> mlua::Result<()>;
-    fn write(&mut self, bytes: &[u8]) -> mlua::Result<()>;
-    fn suspend(&mut self) -> mlua::Result<()>;
-    fn resume(&mut self) -> mlua::Result<()>;
-    fn close(&mut self) -> mlua::Result<()>;
+    fn size(&mut self) -> io::Result<(u16, u16)>;
+    fn present(&mut self, cursor: Option<Cursor>) -> io::Result<()>;
+    fn write(&mut self, bytes: &[u8]) -> io::Result<()>;
+    fn suspend(&mut self) -> io::Result<()>;
+    fn resume(&mut self) -> io::Result<()>;
+    fn close(&mut self) -> io::Result<()>;
 }
 
 pub(crate) struct Screen {
@@ -53,14 +59,14 @@ impl Screen {
         }
     }
 
-    fn resolve(&self, id: Option<usize>) -> mlua::Result<Style> {
+    fn resolve(&self, id: Option<usize>) -> io::Result<Style> {
         match id {
             None | Some(0) => Ok(Style::default()),
             Some(id) => self
                 .styles
                 .get(id.saturating_sub(1))
                 .copied()
-                .ok_or_else(|| mlua::Error::runtime(format!("unknown style {id}"))),
+                .ok_or_else(|| io::Error::other(format!("unknown style {id}"))),
         }
     }
 
@@ -91,173 +97,179 @@ impl Screen {
     }
 }
 
-fn color(text: &str) -> mlua::Result<Color> {
-    text.parse::<Color>()
-        .map_err(|_| mlua::Error::runtime(format!("invalid colour {text}")))
+fn screen<T>(run: impl FnOnce(&mut Screen) -> io::Result<T>) -> io::Result<T> {
+    context::with(|context| match &mut context.terminal {
+        Some(Tty::Opened(screen, _)) => run(screen),
+        _ => Err(io::Error::other("the terminal is not open")),
+    })
+    .unwrap_or_else(|| Err(io::Error::other("the kernel is not running")))
 }
 
-fn parse_style(spec: &Table) -> mlua::Result<Style> {
-    let mut style = Style::default();
-    if let Some(fg) = spec.get::<Option<String>>("fg")? {
-        style = style.fg(color(&fg)?);
-    }
-    if let Some(bg) = spec.get::<Option<String>>("bg")? {
-        style = style.bg(color(&bg)?);
-    }
-    for (key, modifier) in MODIFIERS {
-        if spec.get::<Option<bool>>(key)?.unwrap_or(false) {
-            style = style.add_modifier(modifier);
+fn color(text: Option<String>) -> io::Result<Option<Color>> {
+    text.map(|text| {
+        text.parse::<Color>()
+            .map_err(|_| io::Error::other(format!("invalid colour {text}")))
+    })
+    .transpose()
+}
+
+#[derive(Deserialize)]
+struct StyleSpec {
+    fg: Option<String>,
+    bg: Option<String>,
+    #[serde(flatten)]
+    flags: HashMap<String, bool>,
+}
+
+impl StyleSpec {
+    fn style(self) -> io::Result<Style> {
+        let mut style = Style::default();
+        if let Some(fg) = color(self.fg)? {
+            style = style.fg(fg);
         }
+        if let Some(bg) = color(self.bg)? {
+            style = style.bg(bg);
+        }
+        Ok(MODIFIERS
+            .into_iter()
+            .filter(|(name, _)| self.flags.get(*name) == Some(&true))
+            .fold(style, |style, (_, modifier)| style.add_modifier(modifier)))
     }
-    Ok(style)
 }
 
-fn shape(name: Option<&str>) -> mlua::Result<Shape> {
+fn shape(name: Option<&str>) -> io::Result<Shape> {
     match name {
         None | Some("block") => Ok(Shape::Block),
         Some("bar") => Ok(Shape::Bar),
         Some("underline") => Ok(Shape::Underline),
-        Some(other) => Err(mlua::Error::runtime(format!(
-            "unknown cursor shape {other}"
-        ))),
+        Some(other) => Err(io::Error::other(format!("unknown cursor shape {other}"))),
     }
 }
 
-#[methods]
-impl Screen {
-    fn size(&mut self) -> mlua::Result<(u16, u16)> {
-        self.surface.size()
-    }
+#[native(class = screen, raise)]
+fn size() -> io::Result<(u16, u16)> {
+    screen(|screen| screen.surface.size())
+}
 
-    fn style(&mut self, spec: &Table) -> mlua::Result<usize> {
-        self.styles.push(parse_style(spec)?);
-        Ok(self.styles.len())
-    }
+#[native(class = screen, raise)]
+fn style(spec: Json<StyleSpec>) -> io::Result<usize> {
+    let style = spec.0.style()?;
+    screen(|screen| {
+        screen.styles.push(style);
+        Ok(screen.styles.len())
+    })
+}
 
-    fn line(&mut self, row: u16, col: u16, spans: Value, width: Option<u16>) -> mlua::Result<u16> {
-        let area = self.surface.buffer().area;
+#[native(class = screen)]
+fn put(row: u16, col: u16, stop: u16, text: &str, style: usize) -> i32 {
+    let placed = screen(|screen| {
+        let style = screen.resolve(Some(style))?;
+        let area = screen.surface.buffer().area;
         if row >= area.height {
             return Ok(col);
         }
-        let right = width.map_or(area.width, |width| {
-            col.saturating_add(width).min(area.width)
-        });
-        let mut at = col;
-        match spans {
-            Value::String(text) => {
-                at = self.put((at, row), right, &text.to_string_lossy(), Style::default());
-            }
-            Value::Table(spans) => {
-                for span in spans.sequence_values::<Value>() {
-                    let (text, style) = match span? {
-                        Value::String(text) => (text, Style::default()),
-                        Value::Table(span) => {
-                            let style = self.resolve(span.raw_get::<Option<usize>>(2)?)?;
-                            (span.raw_get::<mlua::LuaString>(1)?, style)
-                        }
-                        other => {
-                            return Err(mlua::Error::runtime(format!(
-                                "a span is a string or a table, not a {}",
-                                other.type_name()
-                            )));
-                        }
-                    };
-                    at = self.put((at, row), right, &text.to_string_lossy(), style);
-                }
-            }
-            Value::Nil => {}
-            other => {
-                return Err(mlua::Error::runtime(format!(
-                    "a line is a string or a list of spans, not a {}",
-                    other.type_name()
-                )));
-            }
-        }
-        Ok(at)
-    }
+        Ok(screen.put((col, row), stop.min(area.width), text, style))
+    });
+    placed.map_or_else(
+        |err| {
+            abi::fail(&err);
+            -1
+        },
+        i32::from,
+    )
+}
 
-    fn fill(
-        &mut self,
-        row: u16,
-        col: u16,
-        width: u16,
-        height: u16,
-        style: Option<usize>,
-        symbol: Option<&str>,
-    ) -> mlua::Result<()> {
-        let style = self.resolve(style)?;
-        self.cover(
+#[native(class = screen, raise)]
+fn fill(
+    row: u16,
+    col: u16,
+    width: u16,
+    height: u16,
+    style: Option<usize>,
+    symbol: Option<&str>,
+) -> io::Result<()> {
+    screen(|screen| {
+        let style = screen.resolve(style)?;
+        screen.cover(
             Rect::new(col, row, width, height),
             style,
             symbol.unwrap_or(" "),
         );
         Ok(())
-    }
+    })
+}
 
-    fn paint(
-        &mut self,
-        row: u16,
-        col: u16,
-        width: u16,
-        height: u16,
-        style: usize,
-    ) -> mlua::Result<()> {
-        let style = self.resolve(Some(style))?;
-        let buffer = self.surface.buffer();
+#[native(class = screen, raise)]
+fn paint(row: u16, col: u16, width: u16, height: u16, style: usize) -> io::Result<()> {
+    screen(|screen| {
+        let style = screen.resolve(Some(style))?;
+        let buffer = screen.surface.buffer();
         let area = Rect::new(col, row, width, height).intersection(buffer.area);
         buffer.set_style(area, style);
         Ok(())
-    }
+    })
+}
 
-    fn text(&mut self, row: u16) -> Option<String> {
-        let buffer = self.surface.buffer();
+#[native(class = screen)]
+fn text(row: u16) -> Option<String> {
+    screen(|screen| {
+        let buffer = screen.surface.buffer();
         let area = buffer.area;
-        (row < area.height).then(|| {
+        Ok((row < area.height).then(|| {
             (area.left()..area.right())
                 .map(|col| buffer[(col, row)].symbol())
                 .collect()
-        })
-    }
+        }))
+    })
+    .ok()
+    .flatten()
+}
 
-    fn clear(&mut self) {
-        self.surface.buffer().reset();
-    }
-
-    fn cursor(
-        &mut self,
-        row: Option<u16>,
-        col: Option<u16>,
-        name: Option<&str>,
-    ) -> mlua::Result<()> {
-        self.cursor = match (row, col) {
-            (Some(row), Some(col)) => Some(Cursor {
-                row,
-                col,
-                shape: shape(name)?,
-            }),
-            _ => None,
-        };
+#[native(class = screen, raise)]
+fn clear() -> io::Result<()> {
+    screen(|screen| {
+        screen.surface.buffer().reset();
         Ok(())
-    }
+    })
+}
 
-    fn flush(&mut self) -> mlua::Result<()> {
-        let cursor = self.cursor;
-        self.surface.present(cursor)
-    }
+#[native(class = screen, raise)]
+fn cursor(row: Option<u16>, col: Option<u16>, name: Option<&str>) -> io::Result<()> {
+    let cursor = match (row, col) {
+        (Some(row), Some(col)) => Some(Cursor {
+            row,
+            col,
+            shape: shape(name)?,
+        }),
+        _ => None,
+    };
+    screen(|screen| {
+        screen.cursor = cursor;
+        Ok(())
+    })
+}
 
-    fn write(&mut self, bytes: &mlua::LuaString) -> mlua::Result<()> {
-        self.surface.write(&bytes.as_bytes())
-    }
+#[native(class = screen, raise)]
+fn flush() -> io::Result<()> {
+    screen(|screen| screen.surface.present(screen.cursor))
+}
 
-    fn suspend(&mut self) -> mlua::Result<()> {
-        self.surface.suspend()
-    }
+#[native(class = screen, raise)]
+fn write(bytes: &[u8]) -> io::Result<()> {
+    screen(|screen| screen.surface.write(bytes))
+}
 
-    fn resume(&mut self) -> mlua::Result<()> {
-        self.surface.resume()
-    }
+#[native(class = screen, raise)]
+fn suspend() -> io::Result<()> {
+    screen(|screen| screen.surface.suspend())
+}
 
-    fn close(&mut self) -> mlua::Result<()> {
-        self.surface.close()
-    }
+#[native(class = screen, raise)]
+fn resume() -> io::Result<()> {
+    screen(|screen| screen.surface.resume())
+}
+
+#[native(class = screen, raise)]
+fn close() -> io::Result<()> {
+    screen(|screen| screen.surface.close())
 }

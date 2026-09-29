@@ -16,12 +16,14 @@
 | `tool.lua`, `system/` | Registering tools, the tool policy, file access and processes. |
 | `commands/` | The built-in slash commands, one file each. |
 | `store/` | Sessions and messages in the database. |
-| `auth/` | API keys, the system keychain and subscription sign-in. |
+| `auth/` | API keys, `auth.toml`, the optional keychain and subscription sign-in. |
 | `ui/` | Draws the screen, with its layout, windows, input line, markdown, keys and theme. |
 | `ui/views/` | The transcript, the input line, pickers, prompts and the approval question. |
 | `images.lua` | Attaching images from files, pasted paths and the clipboard. |
 | `defaults.lua` | The default screen and bindings that `require("uji.defaults")` loads. |
 | `event.lua`, `task.lua`, `plugin.lua`, `registry.lua`, `class.lua` | Events, tasks, plugin ownership and the building blocks the rest is made of. |
+| `kernel/` | The Lua side of the [Runtime](../runtime/index.md): it runs the tasks, loads native modules, and turns the program's native functions into the `uji.*` functions, such as `uji.fs` and `uji.json`. |
 
-The functions in [Runtime](../runtime/index.md) are part of the uji program
-itself. Everything built on them can be replaced.
+The native functions behind [Runtime](../runtime/index.md) are part of the uji
+program itself. Everything built on them, `kernel/` included, can be
+replaced.

@@ -2,12 +2,23 @@ local class = require("uji.class")
 local sys = require("uji.sys")
 
 local SERVICE = "uji"
+local FILE = "auth.toml"
 local PRIVATE = tonumber("600", 8)
 
 local Credentials = class()
 
-function Credentials:init(path)
-    self.path = path
+function Credentials:init(directory)
+    self.directory = directory
+    self.keychain = false
+end
+
+local function entry(value)
+    if type(value) == "string" then
+        return { type = "api_key", key = value }
+    end
+    if type(value) == "table" and value.type then
+        return value
+    end
 end
 
 local function parse(raw)
@@ -18,24 +29,35 @@ local function parse(raw)
     return { type = "api_key", key = raw }
 end
 
+function Credentials:path()
+    return self.directory and self.directory .. "/" .. FILE
+end
+
 function Credentials:file()
-    if not self.path then
-        return {}
-    end
-    local text = sys.fs.read(self.path)
+    local path = self:path()
+    local text = path and sys.fs.read(path)
     if not text then
         return {}
     end
-    local ok, all = pcall(sys.json.decode, text, { nulls = false })
-    return ok and type(all) == "table" and all or {}
+    local ok, all = pcall(sys.toml.decode, text)
+    if not ok then
+        return nil, path .. " could not be read: " .. tostring(all)
+    end
+    return all
 end
 
 function Credentials:get(provider)
-    local raw = sys.keychain.get(SERVICE, provider)
-    if raw then
-        return parse(raw)
+    if self.keychain then
+        local raw = sys.keychain.get(SERVICE, provider)
+        if raw then
+            return parse(raw)
+        end
     end
-    return self:file()[provider]
+    local all, err = self:file()
+    if not all then
+        return nil, err
+    end
+    return entry(all[provider])
 end
 
 function Credentials:key(provider)
@@ -44,21 +66,22 @@ function Credentials:key(provider)
 end
 
 function Credentials:save(provider, credential)
-    if sys.keychain.set(SERVICE, provider, sys.json.encode(credential)) then
+    if self.keychain and sys.keychain.set(SERVICE, provider, sys.json.encode(credential)) then
         return credential
     end
-    if not self.path then
+    local path = self:path()
+    if not path then
         return nil, "no data directory to keep the credential in"
     end
-    local all = self:file()
-    all[provider] = credential
-    local parent = self.path:match("^(.*)/[^/]*$")
-    if parent then
-        sys.fs.mkdir(parent)
-    end
-    local written, err = sys.fs.write(self.path, sys.json.encode(all), { mode = PRIVATE })
-    if not written then
+    local all, err = self:file()
+    if not all then
         return nil, err
+    end
+    all[provider] = credential
+    sys.fs.mkdir(self.directory)
+    local written, failure = sys.fs.write(path, sys.toml.encode(all), { mode = PRIVATE })
+    if not written then
+        return nil, failure
     end
     return credential
 end

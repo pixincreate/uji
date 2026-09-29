@@ -3,12 +3,13 @@ mod real;
 mod screen;
 mod virtual_screen;
 
-use crossterm::event::Event;
-use mlua::{AnyUserData, IntoLuaMulti, Lua, MultiValue};
-use tokio::sync::{mpsc, watch};
-use uji_macros::function;
+use std::sync::Arc;
 
-use crate::kernel::State;
+use crossterm::event::Event;
+use tokio::sync::{mpsc, watch};
+use uji_native::{Held, native};
+
+use crate::context;
 
 pub enum Terminal {
     Real,
@@ -17,14 +18,7 @@ pub enum Terminal {
 
 pub(crate) enum Tty {
     Fresh(Terminal),
-    Opened(screen::Screen, input::Input),
-}
-
-pub(crate) fn reclaim(screen: &AnyUserData, input: &AnyUserData) -> Option<Tty> {
-    Some(Tty::Opened(
-        screen.take::<screen::Screen>().ok()?,
-        input.take::<input::Input>().ok()?,
-    ))
+    Opened(screen::Screen, Arc<input::Input>),
 }
 
 pub struct VirtualTerminal {
@@ -79,19 +73,21 @@ pub(crate) fn restore() {
     real::restore();
 }
 
-#[function(tty)]
-fn open(lua: &Lua) -> mlua::Result<MultiValue> {
-    let terminal = State::of_mut(lua)?
-        .terminal
-        .take()
-        .ok_or_else(|| mlua::Error::runtime("the terminal is already open"))?;
-    let (screen, input) = match terminal {
-        Tty::Fresh(Terminal::Real) => real::open()?,
-        Tty::Fresh(Terminal::Virtual(terminal)) => virtual_screen::open(terminal)?,
-        Tty::Opened(screen, input) => (screen, input),
-    };
-    let screen = lua.create_userdata(screen)?;
-    let input = lua.create_userdata(input)?;
-    State::of_mut(lua)?.opened = Some((screen.clone(), input.clone()));
-    (screen, input).into_lua_multi(lua)
+fn opened(terminal: Option<Tty>) -> std::io::Result<(screen::Screen, Arc<input::Input>)> {
+    match terminal {
+        Some(Tty::Fresh(Terminal::Real)) => real::open(),
+        Some(Tty::Fresh(Terminal::Virtual(terminal))) => Ok(virtual_screen::open(terminal)),
+        Some(Tty::Opened(screen, input)) => Ok((screen, input)),
+        None => Err(std::io::Error::other("this uji has no terminal")),
+    }
+}
+
+#[native(tty, raise)]
+fn open() -> std::io::Result<Held<Arc<input::Input>>> {
+    context::with(|context| {
+        let (screen, input) = opened(context.terminal.take())?;
+        context.terminal = Some(Tty::Opened(screen, Arc::clone(&input)));
+        Ok(Held::new(input))
+    })
+    .unwrap_or_else(|| Err(std::io::Error::other("the kernel is not running")))
 }

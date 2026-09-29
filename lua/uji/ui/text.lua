@@ -10,12 +10,7 @@ local function ascii(text)
     return not text:find("[\128-\255]")
 end
 
-function M.width(text)
-    if ascii(text) then
-        return #text
-    end
-    return sys.width(text)
-end
+M.width = sys.width
 
 function M.length(text)
     if ascii(text) then

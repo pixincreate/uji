@@ -42,6 +42,7 @@
   - [uji.session](api/session.md)
   - [uji.input](api/input.md)
   - [uji.provider](api/provider.md)
+  - [uji.auth](api/auth.md)
   - [uji.wire](api/wire.md)
   - [uji.job](api/job.md)
   - [uji.http](api/http.md)
@@ -58,3 +59,4 @@
   - [Text](runtime/text.md)
   - [Encoding](runtime/encoding.md)
   - [Images](runtime/images.md)
+  - [Native modules](runtime/native.md)

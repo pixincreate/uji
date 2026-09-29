@@ -1,7 +1,7 @@
 use globset::{GlobBuilder, GlobMatcher};
-use mlua::{IntoLuaMulti, Lua, MultiValue};
 use regex::Regex;
-use uji_macros::{FromLua, function, methods};
+use serde::Deserialize;
+use uji_native::{Held, Json, native};
 
 pub(crate) enum Matcher {
     Regex(Regex),
@@ -19,35 +19,34 @@ impl Matcher {
     }
 }
 
-#[methods]
-impl Matcher {
-    fn test(&self, subject: &mlua::LuaString) -> bool {
-        self.search(&subject.to_string_lossy()).is_some()
-    }
-
-    fn find(&self, lua: &Lua, subject: &mlua::LuaString) -> mlua::Result<MultiValue> {
-        match self.search(&subject.to_string_lossy()) {
-            Some((start, end)) => (start.saturating_add(1), end).into_lua_multi(lua),
-            None => Ok(MultiValue::new()),
-        }
-    }
-}
-
-#[derive(FromLua)]
+#[derive(Deserialize)]
 struct GlobOptions {
-    #[lua(default)]
+    #[serde(default)]
     separator: bool,
 }
 
-#[function]
-fn regex(pattern: &str) -> Result<Matcher, regex::Error> {
-    Regex::new(pattern).map(Matcher::Regex)
+#[native]
+fn regex(pattern: &str) -> Result<Held<Matcher>, regex::Error> {
+    Regex::new(pattern).map(|regex| Held::new(Matcher::Regex(regex)))
 }
 
-#[function]
-fn glob(pattern: &str, opts: &GlobOptions) -> Result<Matcher, globset::Error> {
+#[native]
+fn glob(pattern: &str, opts: Json<GlobOptions>) -> Result<Held<Matcher>, globset::Error> {
+    let Json(opts) = opts;
     GlobBuilder::new(pattern)
         .literal_separator(opts.separator)
         .build()
-        .map(|glob| Matcher::Glob(glob.compile_matcher()))
+        .map(|glob| Held::new(Matcher::Glob(glob.compile_matcher())))
+}
+
+#[native]
+fn test(matcher: &Matcher, subject: &str) -> bool {
+    matcher.search(subject).is_some()
+}
+
+#[native]
+fn find(matcher: &Matcher, subject: &str) -> Option<(usize, usize)> {
+    matcher
+        .search(subject)
+        .map(|(start, end)| (start.saturating_add(1), end))
 }

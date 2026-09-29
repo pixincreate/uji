@@ -4,14 +4,32 @@ local oauth = require("uji.auth.oauth")
 local paths = require("uji.paths")
 local task = require("uji.task")
 
-local M = {}
+local M = { options = { keychain = false } }
 
 function M.credentials()
     if not M.store then
-        local data = paths.data()
-        M.store = Credentials(data and data .. "/auth.json")
+        M.store = Credentials(paths.data())
+        M.store.keychain = M.options.keychain
     end
     return M.store
+end
+
+function M.configure(opts)
+    if type(opts) ~= "table" then
+        error("uji.auth.configure needs a table", 2)
+    end
+    for key, value in pairs(opts) do
+        if key ~= "keychain" then
+            error("unknown key " .. tostring(key), 2)
+        end
+        if type(value) ~= "boolean" then
+            error("keychain must be a boolean", 2)
+        end
+        M.options.keychain = value
+    end
+    if M.store then
+        M.store.keychain = M.options.keychain
+    end
 end
 
 function M.save_key(provider_id, key)

@@ -1,13 +1,15 @@
 use std::io::Cursor;
 
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
 use image::metadata::Orientation;
 use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, RgbaImage};
-use mlua::{BString, Lua};
-use uji_macros::function;
+use serde::Serialize;
+use uji_native::{Json, native};
 
-use crate::io;
+use crate::io::{self, Blocked};
 
 const QUALITIES: [u8; 3] = [85, 70, 55];
 const SMALLEST: u32 = 64;
@@ -28,7 +30,24 @@ pub(crate) enum ImageError {
     Empty,
 }
 
-pub(crate) type Fitted = (BString, &'static str, u32, u32);
+#[derive(Serialize)]
+pub(crate) struct Fitted {
+    data: String,
+    media_type: &'static str,
+    width: u32,
+    height: u32,
+}
+
+impl Fitted {
+    fn new(bytes: &[u8], media_type: &'static str, width: u32, height: u32) -> Self {
+        Self {
+            data: STANDARD.encode(bytes),
+            media_type,
+            width,
+            height,
+        }
+    }
+}
 
 fn media_type(format: ImageFormat) -> Option<&'static str> {
     match format {
@@ -89,7 +108,7 @@ pub(crate) fn fit_image(
     let mut image = scaled(image, edge);
     loop {
         if let Some((bytes, media)) = encode_within(&image, photo, limit)? {
-            return Ok((BString::from(bytes), media, image.width(), image.height()));
+            return Ok(Fitted::new(&bytes, media, image.width(), image.height()));
         }
         let (width, height) = (image.width() / 2, image.height() / 2);
         if width.max(height) < SMALLEST {
@@ -134,24 +153,20 @@ fn header(data: &[u8]) -> Result<Header, ImageError> {
     })
 }
 
-fn fit_data(data: BString, edge: u32, limit: usize) -> Result<Fitted, ImageError> {
-    let found = header(&data)?;
+fn fit_data(data: &[u8], edge: u32, limit: usize) -> Result<Fitted, ImageError> {
+    let found = header(data)?;
     let upright = found.orientation == Orientation::NoTransforms;
     if upright && found.width.max(found.height) <= edge && data.len() <= limit {
-        return Ok((data, found.media, found.width, found.height));
+        return Ok(Fitted::new(data, found.media, found.width, found.height));
     }
-    let mut image =
-        ImageReader::with_format(Cursor::new(data.as_slice()), found.format).decode()?;
+    let mut image = ImageReader::with_format(Cursor::new(data), found.format).decode()?;
     image.apply_orientation(found.orientation);
     fit_image(image, edge, limit, found.format == ImageFormat::Jpeg)
 }
 
-#[function(image)]
-async fn fit(
-    lua: Lua,
-    data: BString,
-    edge: u32,
-    limit: usize,
-) -> mlua::Result<Result<Fitted, ImageError>> {
-    io::blocking(&lua, move || fit_data(data, edge, limit)).await
+#[native(image)]
+async fn fit(data: Vec<u8>, edge: u32, limit: usize) -> Result<Json<Fitted>, Blocked<ImageError>> {
+    io::blocking(move || fit_data(&data, edge, limit))
+        .await
+        .map(Json)
 }

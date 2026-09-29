@@ -1,48 +1,29 @@
 use keyring::Entry;
-use mlua::Lua;
-use uji_macros::function;
+use uji_native::native;
 
-use crate::io;
+use crate::io::{self, Blocked};
 
-#[function(keychain)]
-async fn get(
-    lua: Lua,
-    service: String,
-    account: String,
-) -> mlua::Result<Result<Option<String>, keyring::Error>> {
-    let secret = io::blocking(&lua, move || {
-        Entry::new(&service, &account).and_then(|entry| entry.get_password())
+#[native(keychain)]
+async fn get(service: String, account: String) -> Result<Option<String>, Blocked<keyring::Error>> {
+    io::blocking(move || {
+        match Entry::new(&service, &account).and_then(|entry| entry.get_password()) {
+            Err(keyring::Error::NoEntry) => Ok(None),
+            secret => secret.map(Some),
+        }
     })
-    .await?;
-    Ok(match secret {
-        Err(keyring::Error::NoEntry) => Ok(None),
-        secret => secret.map(Some),
-    })
+    .await
 }
 
-#[function(keychain)]
+#[native(keychain)]
 async fn set(
-    lua: Lua,
     service: String,
     account: String,
     secret: String,
-) -> mlua::Result<Result<bool, keyring::Error>> {
-    let stored = io::blocking(&lua, move || {
-        Entry::new(&service, &account).and_then(|entry| entry.set_password(&secret))
-    })
-    .await?;
-    Ok(stored.map(|()| true))
+) -> Result<(), Blocked<keyring::Error>> {
+    io::blocking(move || Entry::new(&service, &account)?.set_password(&secret)).await
 }
 
-#[function(keychain)]
-async fn delete(
-    lua: Lua,
-    service: String,
-    account: String,
-) -> mlua::Result<Result<bool, keyring::Error>> {
-    let deleted = io::blocking(&lua, move || {
-        Entry::new(&service, &account).and_then(|entry| entry.delete_credential())
-    })
-    .await?;
-    Ok(deleted.map(|()| true))
+#[native(keychain)]
+async fn delete(service: String, account: String) -> Result<(), Blocked<keyring::Error>> {
+    io::blocking(move || Entry::new(&service, &account)?.delete_credential()).await
 }
