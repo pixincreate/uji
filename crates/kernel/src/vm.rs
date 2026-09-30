@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
@@ -15,20 +16,19 @@ pub enum Sources {
 }
 
 impl Sources {
-    fn find(&self, module: &str) -> Option<(String, Vec<u8>)> {
-        let relative = module.replace('.', "/");
-        [format!("{relative}.lua"), format!("{relative}/init.lua")]
-            .into_iter()
-            .find_map(|file| self.read(&file).map(|source| (self.name(&file), source)))
+    fn find(&self, files: &[String]) -> Option<(String, Cow<'_, [u8]>)> {
+        files
+            .iter()
+            .find_map(|file| self.read(file).map(|source| (self.name(file), source)))
     }
 
-    fn read(&self, file: &str) -> Option<Vec<u8>> {
+    fn read(&self, file: &str) -> Option<Cow<'_, [u8]>> {
         match self {
             Self::Embedded(files) => files
                 .iter()
                 .find(|(name, _)| *name == file)
-                .map(|(_, source)| source.as_bytes().to_vec()),
-            Self::Directory(root) => std::fs::read(root.join(file)).ok(),
+                .map(|(_, source)| Cow::Borrowed(source.as_bytes())),
+            Self::Directory(root) => std::fs::read(root.join(file)).ok().map(Cow::Owned),
         }
     }
 
@@ -62,6 +62,11 @@ impl Sources {
             Self::Directory(root) => root.join(file).display().to_string(),
         }
     }
+}
+
+fn candidates(module: &str) -> [String; 2] {
+    let relative = module.replace('.', "/");
+    [format!("{relative}.lua"), format!("{relative}/init.lua")]
 }
 
 fn child(rest: &str) -> Option<String> {
@@ -108,13 +113,14 @@ pub(crate) fn require<T: FromLua>(lua: &Lua, module: &str) -> mlua::Result<T> {
 
 fn install_searcher(lua: &Lua, layers: Vec<Sources>) -> mlua::Result<()> {
     let searcher = lua.create_function(move |lua, module: String| {
-        let Some((name, source)) = layers.iter().find_map(|layer| layer.find(&module)) else {
+        let files = candidates(&module);
+        let Some((name, source)) = layers.iter().find_map(|layer| layer.find(&files)) else {
             return Ok(MultiValue::from_vec(vec![Value::String(
                 lua.create_string(format!("\n\tno runtime module '{module}'"))?,
             )]));
         };
         let chunk = lua
-            .load(source)
+            .load(source.as_ref())
             .set_name(format!("@{name}"))
             .into_function()?;
         Ok(MultiValue::from_vec(vec![

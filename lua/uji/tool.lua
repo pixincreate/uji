@@ -2,6 +2,7 @@ local Policy = require("uji.system.policy")
 local Registry = require("uji.registry")
 local Roots = require("uji.system.roots")
 local app = require("uji.app")
+local check = require("uji.check")
 local notices = require("uji.notices")
 local paths = require("uji.paths")
 local plugin = require("uji.plugin")
@@ -19,9 +20,7 @@ local M = {
 }
 
 function M.add(name, spec)
-    if type(name) ~= "string" or name == "" then
-        error("uji.tool.add needs a name", 2)
-    end
+    check.name(name, "uji.tool.add")
     if type(spec) ~= "table" then
         error("uji.tool.add needs a spec table", 2)
     end
@@ -111,7 +110,7 @@ function M.files(cwd)
 end
 
 function M.workspace()
-    return M.files(app.session and app.session.directory or nil)
+    return M.files(app.directory())
 end
 
 function M.compiled()
@@ -152,17 +151,6 @@ function M.specs(only)
     return out
 end
 
-function M.subject(tool, name, args)
-    if tool == nil or tool.subject == nil then
-        return name
-    end
-    if type(tool.subject) == "string" then
-        return tool.subject
-    end
-    local value = tool.subject(args)
-    return value or ""
-end
-
 function M.detail(tool, args)
     if tool == nil or tool.subject == nil then
         return nil
@@ -171,6 +159,13 @@ function M.detail(tool, args)
         return tool.subject
     end
     return tool.subject(args)
+end
+
+function M.subject(tool, name, args)
+    if tool == nil or tool.subject == nil then
+        return name
+    end
+    return M.detail(tool, args) or ""
 end
 
 return M

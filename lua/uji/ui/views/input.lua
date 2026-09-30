@@ -24,7 +24,7 @@ end
 
 function Input:layout(ui, width)
     local line = ui.composer.line
-    local focused = ui.modal == nil
+    local focused = ui:composing()
     local key = table.concat({ line.revision, line.cursor, width, tostring(focused) }, ":")
     if self.key == key then
         return self.cached

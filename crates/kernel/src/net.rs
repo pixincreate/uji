@@ -171,7 +171,7 @@ async fn stream(
     let mut body = response.bytes_stream();
     loop {
         let next = match tokio::time::timeout(idle, body.next()).await {
-            Ok(Some(chunk)) => chunk.map(|chunk| chunk.to_vec()).map_err(NetError::from),
+            Ok(Some(chunk)) => chunk.map(Vec::from).map_err(NetError::from),
             Ok(None) => return,
             Err(_) => Err(NetError::Idle(idle.as_secs())),
         };
@@ -357,9 +357,8 @@ async fn read_line(reader: &mut BufReader<OwnedReadHalf>) -> std::io::Result<Opt
     if reader.read_line(&mut line).await? == 0 {
         return Ok(None);
     }
-    Ok(Some(
-        line.trim_end_matches(['\r', '\n']).as_bytes().to_vec(),
-    ))
+    line.truncate(line.trim_end_matches(['\r', '\n']).len());
+    Ok(Some(line.into_bytes()))
 }
 
 #[native]

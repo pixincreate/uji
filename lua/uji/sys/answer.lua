@@ -1,5 +1,5 @@
 local ffi = require("ffi")
-local natives = require("uji.sys.native")
+local natives = require("uji.sys.native").kernel
 local scheduler = require("uji.sys.scheduler")
 
 local VALUE, FAILED, END, LATE = 0, 1, 2, 3
@@ -32,6 +32,7 @@ function M.read(answer)
     if answer.handle ~= nil then
         handle = ffi.gc(answer.handle, answer.release)
         releases[handle] = answer.release
+        answer.handle = nil
     end
     answer.free(answer)
     return status, data, handle

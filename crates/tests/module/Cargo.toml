@@ -1,0 +1,21 @@
+[package]
+name = "uji-test-module"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "testmod"
+crate-type = ["cdylib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["time"] }
+uji-native = { path = "../../native" }
+
+[lints]
+workspace = true

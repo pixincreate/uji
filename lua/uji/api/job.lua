@@ -1,24 +1,8 @@
 local app = require("uji.app")
+local check = require("uji.check")
 local notices = require("uji.notices")
 local process = require("uji.system.process")
 local task = require("uji.task")
-
-local function argv(cmd)
-    if type(cmd) == "string" then
-        return { "sh", "-c", cmd }
-    end
-    if type(cmd) == "table" then
-        if #cmd == 0 then
-            error("cmd list must not be empty", 3)
-        end
-        local out = {}
-        for index, part in ipairs(cmd) do
-            out[index] = tostring(part)
-        end
-        return out
-    end
-    error("cmd must be a string or a list of strings", 3)
-end
 
 local function call(handler, ...)
     if handler then
@@ -30,8 +14,8 @@ local function call(handler, ...)
 end
 
 local function start(opts)
-    local command = argv(opts.cmd)
-    local cwd = opts.cwd or (app.session and app.session.directory)
+    local command = process.argv(opts.cmd)
+    local cwd = opts.cwd or app.directory()
     local job = { stopped = false }
     local proc, err = process.spawn({ argv = command, cwd = cwd, stdin = true })
     if not proc then
@@ -82,9 +66,6 @@ end
 
 uji.job = {
     start = function(opts)
-        if type(opts) ~= "table" then
-            error("uji.job.start needs a table", 2)
-        end
-        return start(opts)
+        return start(check.options(opts, "uji.job.start"))
     end,
 }

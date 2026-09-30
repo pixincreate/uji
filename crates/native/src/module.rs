@@ -1,4 +1,4 @@
-use std::ffi::{CStr, CString, c_void};
+use std::ffi::{CString, c_char};
 use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::{LazyLock, OnceLock};
 
@@ -6,7 +6,7 @@ use tokio::runtime::Runtime;
 
 use crate::Reply;
 use crate::abi::{self, Answer, Owned, Work};
-use crate::{CStruct, NATIVES, TYPES, WRAPPERS};
+use crate::{CStruct, NATIVES, Native, TYPES, Type, WRAPPERS, Wrapper};
 
 const CORE: &str = "uji_";
 
@@ -54,27 +54,12 @@ extern "C" fn complete<K: Kernel>(token: u64, status: i32, data: *const u8, leng
 
 #[repr(C)]
 #[derive(CStruct)]
-pub struct Symbol {
-    pub name: *const u8,
-    pub signature: *const u8,
-    pub address: *const c_void,
-}
-
-#[repr(C)]
-#[derive(CStruct)]
-pub struct Script {
-    pub place: *const u8,
-    pub source: *const u8,
-}
-
-#[repr(C)]
-#[derive(CStruct)]
 pub struct Manifest {
-    pub cdef: *const u8,
-    pub natives: *const Symbol,
+    pub cdef: *const c_char,
+    pub natives: *const Native,
     pub native_count: usize,
-    pub scripts: *const Script,
-    pub script_count: usize,
+    pub wrappers: *const Wrapper,
+    pub wrapper_count: usize,
 }
 
 struct Shared(Manifest);
@@ -92,6 +77,7 @@ static RUNTIME: LazyLock<Option<Runtime>> = LazyLock::new(|| {
         .build()
         .ok()
 });
+static LOCAL: OnceLock<CString> = OnceLock::new();
 static MANIFEST: OnceLock<Shared> = OnceLock::new();
 
 fn spawn(work: Work) -> u64 {
@@ -118,49 +104,32 @@ pub fn attach(host: *const Host) {
     abi::install(spawn);
 }
 
-fn lasting(value: &str) -> *const u8 {
-    let text: &'static CStr = Box::leak(CString::new(value).unwrap_or_default().into_boxed_c_str());
-    text.as_ptr().cast()
-}
-
-fn cdef() -> String {
-    let local = || TYPES.iter().filter(|kind| !kind.name.starts_with(CORE));
-    local()
+fn declare<'a>(types: impl Iterator<Item = &'a Type> + Clone) -> String {
+    types
+        .clone()
         .map(|kind| format!("typedef struct {0} {0};", kind.name))
-        .chain(local().map(|kind| format!("struct {} {{ {} }};", kind.name, kind.fields)))
+        .chain(types.map(|kind| format!("struct {} {{ {} }};", kind.name, kind.fields)))
         .collect::<Vec<_>>()
         .join("\n")
 }
 
-fn build() -> Shared {
-    let natives: &'static [Symbol] = Box::leak(
-        NATIVES
-            .iter()
-            .map(|native| Symbol {
-                name: lasting(native.name),
-                signature: lasting(native.signature),
-                address: (native.address)().cast(),
-            })
-            .collect(),
-    );
-    let scripts: &'static [Script] = Box::leak(
-        WRAPPERS
-            .iter()
-            .map(|wrapper| Script {
-                place: lasting(wrapper.place),
-                source: lasting(wrapper.source),
-            })
-            .collect(),
-    );
-    Shared(Manifest {
-        cdef: lasting(&cdef()),
-        natives: natives.as_ptr(),
-        native_count: natives.len(),
-        scripts: scripts.as_ptr(),
-        script_count: scripts.len(),
-    })
+pub fn declarations() -> String {
+    declare(TYPES.iter())
 }
 
 pub fn manifest() -> *const Manifest {
-    std::ptr::from_ref(&MANIFEST.get_or_init(build).0)
+    let shared = MANIFEST.get_or_init(|| {
+        let local = LOCAL.get_or_init(|| {
+            let types = TYPES.iter().filter(|kind| !kind.name.starts_with(CORE));
+            CString::new(declare(types)).unwrap_or_default()
+        });
+        Shared(Manifest {
+            cdef: local.as_ptr(),
+            natives: NATIVES.as_ptr(),
+            native_count: NATIVES.len(),
+            wrappers: WRAPPERS.as_ptr(),
+            wrapper_count: WRAPPERS.len(),
+        })
+    });
+    std::ptr::from_ref(&shared.0)
 }

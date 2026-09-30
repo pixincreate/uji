@@ -1,4 +1,6 @@
-use proc_macro2::TokenStream;
+use std::ffi::CString;
+
+use proc_macro2::{Literal, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::punctuated::Punctuated;
 use syn::{
@@ -366,17 +368,21 @@ fn signature(returned: &str, arguments: &[Argument]) -> String {
     format!("{returned} (*)({c})")
 }
 
-fn registration((place, source): (String, String)) -> TokenStream {
-    quote! {
+fn c_string(value: &str) -> syn::Result<Literal> {
+    CString::new(value)
+        .map(|text| Literal::c_string(&text))
+        .map_err(|_| syn::Error::new(Span::call_site(), "a native string cannot hold a NUL byte"))
+}
+
+fn registration((place, source): (String, String)) -> syn::Result<TokenStream> {
+    let (place, source) = (c_string(&place)?, c_string(&source)?);
+    Ok(quote! {
         const _: () = {
             #[::uji_native::linkme::distributed_slice(::uji_native::WRAPPERS)]
             #[linkme(crate = ::uji_native::linkme)]
-            static WRAPPER: ::uji_native::Wrapper = ::uji_native::Wrapper {
-                place: #place,
-                source: #source,
-            };
+            static WRAPPER: ::uji_native::Wrapper = ::uji_native::Wrapper::new(#place, #source);
         };
-    }
+    })
 }
 
 pub(crate) fn native(attribute: TokenStream, item: TokenStream) -> syn::Result<TokenStream> {
@@ -398,9 +404,11 @@ pub(crate) fn native(attribute: TokenStream, item: TokenStream) -> syn::Result<T
         iterate: options.iterate.as_ref().map(key),
     })
     .into_iter()
-    .map(registration);
+    .map(registration)
+    .collect::<syn::Result<Vec<_>>>()?;
     let name = &naming.name;
     let external = format_ident!("{name}");
+    let (name_c, signature_c) = (c_string(name)?, c_string(&signature)?);
     let parameters = arguments.iter().flat_map(|argument| &argument.parameters);
     let conversions = arguments.iter().map(|argument| &argument.convert);
     let Returned {
@@ -422,11 +430,11 @@ pub(crate) fn native(attribute: TokenStream, item: TokenStream) -> syn::Result<T
         const _: () = {
             #[::uji_native::linkme::distributed_slice(::uji_native::NATIVES)]
             #[linkme(crate = ::uji_native::linkme)]
-            static NATIVE: ::uji_native::Native = ::uji_native::Native {
-                name: #name,
-                signature: #signature,
-                address: || #external as *const (),
-            };
+            static NATIVE: ::uji_native::Native = ::uji_native::Native::new(
+                #name_c,
+                #signature_c,
+                #external as *const ::std::ffi::c_void,
+            );
 
             #(#wrappers)*
         };

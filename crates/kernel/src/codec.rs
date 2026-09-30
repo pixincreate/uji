@@ -20,7 +20,7 @@ fn padded() -> bool {
 }
 
 impl Base64Options {
-    fn engine(&self) -> &'static GeneralPurpose {
+    fn engine(&self) -> &GeneralPurpose {
         match (self.url, self.pad) {
             (false, true) => &STANDARD,
             (false, false) => &STANDARD_NO_PAD,

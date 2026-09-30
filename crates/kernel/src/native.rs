@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use mlua::{LightUserData, Lua, Table};
+use mlua::{LightUserData, Lua};
 use uji_native::abi::{self, Answer, Owned};
 use uji_native::{Host, native};
 
@@ -23,37 +23,11 @@ static HOST: Host = Host::of::<Kernel>();
 
 pub(crate) fn install(lua: &Lua) -> mlua::Result<()> {
     abi::install(context::start);
-    let names = uji_native::TYPES
-        .iter()
-        .map(|kind| format!("typedef struct {0} {0};", kind.name));
-    let bodies = uji_native::TYPES
-        .iter()
-        .map(|kind| format!("struct {} {{ {} }};", kind.name, kind.fields));
-    let cdef = names.chain(bodies).collect::<Vec<_>>().join("\n");
-    let natives = uji_native::NATIVES
-        .iter()
-        .map(|native| {
-            let entry = lua.create_table()?;
-            entry.set("name", native.name)?;
-            entry.set("signature", native.signature)?;
-            entry.set(
-                "address",
-                LightUserData((native.address)().cast_mut().cast()),
-            )?;
-            Ok(entry)
-        })
-        .collect::<mlua::Result<Vec<Table>>>()?;
-    let wrappers = uji_native::WRAPPERS
-        .iter()
-        .map(|wrapper| {
-            lua.create_table_from([("place", wrapper.place), ("source", wrapper.source)])
-        })
-        .collect::<mlua::Result<Vec<_>>>()?;
-    let table = lua.create_table()?;
-    table.set("cdef", cdef)?;
-    table.set("natives", natives)?;
-    table.set("wrappers", wrappers)?;
-    lua.globals().set("UJI_NATIVE", table)
+    let native = lua.create_table()?;
+    native.set("cdef", uji_native::declarations())?;
+    let manifest = uji_native::manifest().cast_mut().cast();
+    native.set("manifest", LightUserData(manifest))?;
+    lua.globals().set("UJI_NATIVE", native)
 }
 
 fn seconds(value: f64) -> Duration {

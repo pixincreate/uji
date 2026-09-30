@@ -104,8 +104,7 @@ function Pick:fetch(item)
     if not path then
         return {}
     end
-    local directory = app.session and app.session.directory or sys.os.cwd()
-    local lines, err = tool.files(directory):around(path, line, CONTEXT_LINES)
+    local lines, err = tool.files(app.directory()):around(path, line, CONTEXT_LINES)
     return lines or { tostring(err) }
 end
 

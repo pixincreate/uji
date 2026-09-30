@@ -53,6 +53,10 @@ impl Tape {
         });
     }
 
+    fn whole(&mut self, number: &serde_json::Number) {
+        self.number(number.as_f64().unwrap_or_default());
+    }
+
     fn string(&mut self, text: &str) {
         let offset = self.strings.len();
         self.strings.extend_from_slice(text.as_bytes());
@@ -93,14 +97,12 @@ impl<'de> Visitor<'de> for Seed<'_> {
     }
 
     fn visit_i64<E>(self, value: i64) -> Result<(), E> {
-        self.0
-            .number(serde_json::Number::from(value).as_f64().unwrap_or_default());
+        self.0.whole(&value.into());
         Ok(())
     }
 
     fn visit_u64<E>(self, value: u64) -> Result<(), E> {
-        self.0
-            .number(serde_json::Number::from(value).as_f64().unwrap_or_default());
+        self.0.whole(&value.into());
         Ok(())
     }
 

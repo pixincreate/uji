@@ -44,6 +44,13 @@ pub(crate) trait Surface {
     fn close(&mut self) -> io::Result<()>;
 }
 
+pub(crate) fn row_text(buffer: &Buffer, row: u16) -> String {
+    let area = buffer.area;
+    (area.left()..area.right())
+        .map(|col| buffer[(col, row)].symbol())
+        .collect()
+}
+
 pub(crate) struct Screen {
     surface: Box<dyn Surface>,
     styles: Vec<Style>,
@@ -214,12 +221,7 @@ fn paint(row: u16, col: u16, width: u16, height: u16, style: usize) -> io::Resul
 fn text(row: u16) -> Option<String> {
     screen(|screen| {
         let buffer = screen.surface.buffer();
-        let area = buffer.area;
-        Ok((row < area.height).then(|| {
-            (area.left()..area.right())
-                .map(|col| buffer[(col, row)].symbol())
-                .collect()
-        }))
+        Ok((row < buffer.area.height).then(|| row_text(buffer, row)))
     })
     .ok()
     .flatten()

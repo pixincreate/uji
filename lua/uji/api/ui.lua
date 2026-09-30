@@ -1,5 +1,6 @@
 local actions = require("uji.ui.actions")
 local app = require("uji.app")
+local check = require("uji.check")
 local images = require("uji.images")
 local keys = require("uji.ui.keys")
 local Keymap = require("uji.ui.keymap")
@@ -7,6 +8,7 @@ local model = require("uji.model")
 local notices = require("uji.notices")
 local Pick = require("uji.ui.views.pick")
 local plugin = require("uji.plugin")
+local process = require("uji.system.process")
 local Prompt = require("uji.ui.views.prompt")
 local Registry = require("uji.registry")
 local Select = require("uji.ui.views.select")
@@ -21,13 +23,6 @@ local function raise(ok, ...)
         error(..., 3)
     end
     return ...
-end
-
-local function options(opts, name)
-    if type(opts) ~= "table" then
-        error("uji.ui." .. name .. " needs a table of options", 3)
-    end
-    return opts
 end
 
 local function strings(list, what)
@@ -90,32 +85,21 @@ M.ui = {
         end
     end,
     select = task.callback(function(opts)
-        options(opts, "select")
+        check.options(opts, "uji.ui.select")
         strings(opts.items, "items")
         return ui:ask(Select(opts))
     end),
     pick = task.callback(function(opts)
-        options(opts, "pick")
+        check.options(opts, "uji.ui.pick")
         strings(opts.items, "items")
         return ui:ask(Pick(opts))
     end),
     prompt = task.callback(function(opts)
-        options(opts, "prompt")
+        check.options(opts, "uji.ui.prompt")
         return ui:ask(Prompt(opts))
     end),
     exec = function(cmd)
-        local argv
-        if type(cmd) == "string" then
-            argv = { "sh", "-c", cmd }
-        elseif type(cmd) == "table" then
-            argv = strings(cmd, "cmd")
-        else
-            error("cmd must be a string or a list", 2)
-        end
-        if #argv == 0 then
-            error("cmd must not be empty", 2)
-        end
-        ui:exec(argv)
+        ui:exec(process.argv(cmd))
     end,
     configure = function(opts)
         raise(pcall(ui.theme.configure, ui.theme, opts))
@@ -199,7 +183,7 @@ M.input = {
         if type(file) ~= "string" then
             error("uji.input.attach needs a path", 3)
         end
-        local image, err = images.file(file, ui:directory())
+        local image, err = images.file(file, app.directory())
         if not image then
             return nil, err
         end

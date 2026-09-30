@@ -1,7 +1,8 @@
 use rusqlite::types::{ToSqlOutput, Value as SqlValue, ValueRef};
 use rusqlite::{Connection, ToSql, params_from_iter};
-use serde::Deserialize;
-use serde_json::{Map, Number, Value};
+use serde::ser::{SerializeMap, SerializeSeq};
+use serde::{Deserialize, Serialize, Serializer};
+use serde_json::{Number, Value};
 use uji_native::{Held, Json, List, native};
 
 pub(crate) struct Db(Connection);
@@ -25,6 +26,39 @@ impl ToSql for Param {
                 ));
             }
         })
+    }
+}
+
+struct Rows {
+    columns: Vec<String>,
+    rows: Vec<Vec<Value>>,
+}
+
+struct Row<'a> {
+    columns: &'a [String],
+    values: &'a [Value],
+}
+
+impl Serialize for Row<'_> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(Some(self.columns.len()))?;
+        for (name, value) in self.columns.iter().zip(self.values) {
+            map.serialize_entry(name, value)?;
+        }
+        map.end()
+    }
+}
+
+impl Serialize for Rows {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut rows = serializer.serialize_seq(Some(self.rows.len()))?;
+        for values in &self.rows {
+            rows.serialize_element(&Row {
+                columns: &self.columns,
+                values,
+            })?;
+        }
+        rows.end()
     }
 }
 
@@ -54,25 +88,20 @@ fn exec(db: &Db, sql: &str, params: Json<List<Param>>) -> Result<usize, rusqlite
 }
 
 #[native]
-fn query(
-    db: &Db,
-    sql: &str,
-    params: Json<List<Param>>,
-) -> Result<Json<Vec<Map<String, Value>>>, rusqlite::Error> {
+fn query(db: &Db, sql: &str, params: Json<List<Param>>) -> Result<Json<Rows>, rusqlite::Error> {
     let mut statement = db.0.prepare_cached(sql)?;
     let columns: Vec<String> = statement
         .column_names()
         .into_iter()
         .map(str::to_string)
         .collect();
-    let mut rows = statement.query(params_from_iter(params.0.0))?;
-    let mut out = Vec::new();
-    while let Some(row) = rows.next()? {
-        let mut fields = Map::new();
-        for (index, name) in columns.iter().enumerate() {
-            fields.insert(name.clone(), column(row.get_ref(index)?));
-        }
-        out.push(fields);
-    }
-    Ok(Json(out))
+    let width = columns.len();
+    let rows = statement
+        .query_map(params_from_iter(params.0.0), |row| {
+            (0..width)
+                .map(|index| row.get_ref(index).map(column))
+                .collect()
+        })?
+        .collect::<Result<_, _>>()?;
+    Ok(Json(Rows { columns, rows }))
 }

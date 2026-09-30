@@ -1,5 +1,6 @@
 local Line = require("uji.ui.line")
 local Registry = require("uji.registry")
+local check = require("uji.check")
 local plugin = require("uji.plugin")
 local tables = require("uji.tables")
 
@@ -17,9 +18,8 @@ end
 
 local function confirm(apply)
     return function(ui)
-        local modal = ui.modal
-        if modal and modal.mode == "confirm" then
-            apply(modal)
+        if ui:mode() == "confirm" then
+            apply(ui.modal)
         end
     end
 end
@@ -112,7 +112,7 @@ local RUN = {
         end
     end,
     suggest_complete = function(ui)
-        if ui.modal and ui.modal.mode == "suggest" then
+        if ui:mode() == "suggest" then
             ui.modal:complete()
         end
     end,
@@ -137,9 +137,7 @@ function M.builtin(name)
 end
 
 function M.add(name, handler)
-    if type(name) ~= "string" or name == "" then
-        error("uji.action.add needs a name", 2)
-    end
+    check.name(name, "uji.action.add")
     if type(handler) ~= "function" then
         error("uji.action.add needs a function", 2)
     end

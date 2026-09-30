@@ -62,6 +62,23 @@ end
 
 M.Capture = Capture
 
+function M.argv(cmd)
+    if type(cmd) == "string" then
+        return { "sh", "-c", cmd }
+    end
+    if type(cmd) ~= "table" then
+        error("cmd must be a string or a list of strings", 3)
+    end
+    if #cmd == 0 then
+        error("cmd must not be empty", 3)
+    end
+    local out = {}
+    for index, part in ipairs(cmd) do
+        out[index] = tostring(part)
+    end
+    return out
+end
+
 function M.spawn(spec)
     local argv = spec.shell and { "sh", "-c", spec.shell } or spec.argv
     if not argv or #argv == 0 then

@@ -1,8 +1,6 @@
 local answer = require("uji.sys.answer")
 local json = require("uji.sys.json").json
-local natives = require("uji.sys.native")
-
-local EMPTY = {}
+local native = require("uji.sys.native")
 
 local Exports = {}
 Exports.__index = Exports
@@ -64,7 +62,6 @@ local function build(found, scripts)
         numeric = numeric,
         unpacked = unpacked,
         encode = json.encode,
-        EMPTY = EMPTY,
         tonumber = tonumber,
         object = function(name)
             return exports:object(name)
@@ -77,7 +74,7 @@ local function build(found, scripts)
     return exports
 end
 
-local kernel = build(natives, UJI_NATIVE.wrappers)
+local kernel = build(native.kernel, native.wrappers)
 kernel.build = build
 
 return kernel

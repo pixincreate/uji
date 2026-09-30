@@ -1,4 +1,5 @@
 local Registry = require("uji.registry")
+local check = require("uji.check")
 local notices = require("uji.notices")
 local plugin = require("uji.plugin")
 
@@ -27,9 +28,7 @@ function M.list()
 end
 
 function M.configure(opts)
-    if type(opts) ~= "table" then
-        error("uji.context.configure needs a table", 2)
-    end
+    check.options(opts, "uji.context.configure")
     for key, value in pairs(opts) do
         if key == "compaction" then
             if type(value) ~= "table" then

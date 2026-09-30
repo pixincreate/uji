@@ -1,6 +1,6 @@
 local answer = require("uji.sys.answer")
 local ffi = require("ffi")
-local natives = require("uji.sys.native")
+local natives = require("uji.sys.native").kernel
 
 local parse, free = natives.markdown, natives.uji_release
 
@@ -50,20 +50,28 @@ end
 
 local M = {}
 
+local function events(tape)
+    local marks, strings = tape.items, tape.strings
+    local list = {}
+    for index = 0, tonumber(tape.count) - 1 do
+        local mark = marks[index]
+        local first, second = details(mark, strings)
+        list[index + 1] = { KINDS[mark.kind], first, second, tonumber(mark.start), tonumber(mark["end"]) }
+    end
+    return list
+end
+
 function M.markdown(source)
     local handle = parse(source, #source, out)
     if handle == nil then
         error(answer.error(), 0)
     end
-    local marks, strings = out[0].items, out[0].strings
-    local events = {}
-    for index = 0, tonumber(out[0].count) - 1 do
-        local mark = marks[index]
-        local first, second = details(mark, strings)
-        events[index + 1] = { KINDS[mark.kind], first, second, tonumber(mark.start), tonumber(mark["end"]) }
-    end
+    local ok, result = pcall(events, out[0])
     free(handle)
-    return events
+    if not ok then
+        error(result, 0)
+    end
+    return result
 end
 
 return M

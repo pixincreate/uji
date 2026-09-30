@@ -14,8 +14,15 @@ use crate::context;
 const NEWLINE: u8 = b'\n';
 const RETURN: u8 = b'\r';
 
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum Stream {
+    Stdout,
+    Stderr,
+}
+
 struct Line {
-    stream: &'static str,
+    stream: Stream,
     text: String,
 }
 
@@ -67,10 +74,10 @@ impl Proc {
     fn start(io: &Handle, mut child: Child) -> Self {
         let (lines, output) = mpsc::unbounded_channel();
         if let Some(stdout) = child.stdout.take() {
-            io.spawn(pipe(stdout, "stdout", lines.clone()));
+            io.spawn(pipe(stdout, Stream::Stdout, lines.clone()));
         }
         if let Some(stderr) = child.stderr.take() {
-            io.spawn(pipe(stderr, "stderr", lines));
+            io.spawn(pipe(stderr, Stream::Stderr, lines));
         }
         let (report, status) = watch::channel(None);
         let (kill, killed) = mpsc::unbounded_channel();
@@ -85,11 +92,7 @@ impl Proc {
     }
 }
 
-async fn pipe(
-    reader: impl AsyncRead + Unpin,
-    stream: &'static str,
-    lines: mpsc::UnboundedSender<Line>,
-) {
+async fn pipe(reader: impl AsyncRead + Unpin, stream: Stream, lines: mpsc::UnboundedSender<Line>) {
     let mut reader = BufReader::new(reader);
     let mut buffer = Vec::new();
     loop {
@@ -128,7 +131,7 @@ async fn supervise(
 }
 
 #[native(iterate = lines)]
-async fn line(process: Arc<Proc>) -> Option<(String, &'static str)> {
+async fn line(process: Arc<Proc>) -> Option<(String, Stream)> {
     let line = process.output.lock().await.recv().await?;
     Some((line.text, line.stream))
 }

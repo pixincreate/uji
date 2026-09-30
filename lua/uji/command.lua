@@ -1,4 +1,5 @@
 local Registry = require("uji.registry")
+local check = require("uji.check")
 local notices = require("uji.notices")
 local plugin = require("uji.plugin")
 
@@ -22,9 +23,7 @@ function M.builtin(name, desc, handler)
 end
 
 function M.add(name, spec)
-    if type(name) ~= "string" or name == "" then
-        error("uji.command.add needs a name", 2)
-    end
+    check.name(name, "uji.command.add")
     return M.commands:add(name, parse(spec))
 end
 

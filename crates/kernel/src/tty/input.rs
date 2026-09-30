@@ -23,8 +23,8 @@ enum Incoming {
         repeat: bool,
     },
     Mouse {
-        kind: &'static str,
-        button: Option<&'static str>,
+        kind: Motion,
+        button: Option<Button>,
         row: u16,
         col: u16,
         ctrl: bool,
@@ -83,24 +83,45 @@ fn key(key: KeyEvent) -> Option<Incoming> {
     })
 }
 
-fn button(button: MouseButton) -> &'static str {
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+enum Motion {
+    Down,
+    Up,
+    Drag,
+    Move,
+    ScrollUp,
+    ScrollDown,
+    ScrollLeft,
+    ScrollRight,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
+enum Button {
+    Left,
+    Right,
+    Middle,
+}
+
+fn button(button: MouseButton) -> Button {
     match button {
-        MouseButton::Left => "left",
-        MouseButton::Right => "right",
-        MouseButton::Middle => "middle",
+        MouseButton::Left => Button::Left,
+        MouseButton::Right => Button::Right,
+        MouseButton::Middle => Button::Middle,
     }
 }
 
 fn mouse(mouse: MouseEvent) -> Incoming {
     let (kind, pressed) = match mouse.kind {
-        MouseEventKind::Down(pressed) => ("down", Some(button(pressed))),
-        MouseEventKind::Up(pressed) => ("up", Some(button(pressed))),
-        MouseEventKind::Drag(pressed) => ("drag", Some(button(pressed))),
-        MouseEventKind::Moved => ("move", None),
-        MouseEventKind::ScrollUp => ("scroll_up", None),
-        MouseEventKind::ScrollDown => ("scroll_down", None),
-        MouseEventKind::ScrollLeft => ("scroll_left", None),
-        MouseEventKind::ScrollRight => ("scroll_right", None),
+        MouseEventKind::Down(pressed) => (Motion::Down, Some(button(pressed))),
+        MouseEventKind::Up(pressed) => (Motion::Up, Some(button(pressed))),
+        MouseEventKind::Drag(pressed) => (Motion::Drag, Some(button(pressed))),
+        MouseEventKind::Moved => (Motion::Move, None),
+        MouseEventKind::ScrollUp => (Motion::ScrollUp, None),
+        MouseEventKind::ScrollDown => (Motion::ScrollDown, None),
+        MouseEventKind::ScrollLeft => (Motion::ScrollLeft, None),
+        MouseEventKind::ScrollRight => (Motion::ScrollRight, None),
     };
     Incoming::Mouse {
         kind,

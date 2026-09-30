@@ -8,30 +8,39 @@ use uji_native::{Json, native};
 
 use crate::io::{self, Blocked};
 
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum Kind {
+    Dir,
+    File,
+    Link,
+    Other,
+}
+
 #[derive(Serialize)]
 struct Entry {
     name: String,
     #[serde(rename = "type")]
-    kind: &'static str,
+    kind: Kind,
 }
 
 #[derive(Serialize)]
 struct Stat {
     #[serde(rename = "type")]
-    kind: &'static str,
+    kind: Kind,
     size: u64,
     modified: Option<i64>,
 }
 
-fn kind(file_type: std::fs::FileType) -> &'static str {
+fn kind(file_type: std::fs::FileType) -> Kind {
     if file_type.is_dir() {
-        "dir"
+        Kind::Dir
     } else if file_type.is_file() {
-        "file"
+        Kind::File
     } else if file_type.is_symlink() {
-        "link"
+        Kind::Link
     } else {
-        "other"
+        Kind::Other
     }
 }
 

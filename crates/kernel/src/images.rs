@@ -30,32 +30,46 @@ pub(crate) enum ImageError {
     Empty,
 }
 
+#[derive(Clone, Copy, Serialize)]
+enum Media {
+    #[serde(rename = "image/png")]
+    Png,
+    #[serde(rename = "image/jpeg")]
+    Jpeg,
+    #[serde(rename = "image/gif")]
+    Gif,
+    #[serde(rename = "image/webp")]
+    Webp,
+}
+
+impl Media {
+    fn of(format: ImageFormat) -> Option<Self> {
+        match format {
+            ImageFormat::Png => Some(Self::Png),
+            ImageFormat::Jpeg => Some(Self::Jpeg),
+            ImageFormat::Gif => Some(Self::Gif),
+            ImageFormat::WebP => Some(Self::Webp),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Serialize)]
 pub(crate) struct Fitted {
     data: String,
-    media_type: &'static str,
+    media_type: Media,
     width: u32,
     height: u32,
 }
 
 impl Fitted {
-    fn new(bytes: &[u8], media_type: &'static str, width: u32, height: u32) -> Self {
+    fn new(bytes: &[u8], media_type: Media, width: u32, height: u32) -> Self {
         Self {
             data: STANDARD.encode(bytes),
             media_type,
             width,
             height,
         }
-    }
-}
-
-fn media_type(format: ImageFormat) -> Option<&'static str> {
-    match format {
-        ImageFormat::Png => Some("image/png"),
-        ImageFormat::Jpeg => Some("image/jpeg"),
-        ImageFormat::Gif => Some("image/gif"),
-        ImageFormat::WebP => Some("image/webp"),
-        _ => None,
     }
 }
 
@@ -83,17 +97,17 @@ fn encode_within(
     image: &DynamicImage,
     photo: bool,
     limit: usize,
-) -> Result<Option<(Vec<u8>, &'static str)>, ImageError> {
+) -> Result<Option<(Vec<u8>, Media)>, ImageError> {
     if !photo {
         let bytes = png(image)?;
         if bytes.len() <= limit {
-            return Ok(Some((bytes, "image/png")));
+            return Ok(Some((bytes, Media::Png)));
         }
     }
     for quality in QUALITIES {
         let bytes = jpeg(image, quality)?;
         if bytes.len() <= limit {
-            return Ok(Some((bytes, "image/jpeg")));
+            return Ok(Some((bytes, Media::Jpeg)));
         }
     }
     Ok(None)
@@ -131,7 +145,7 @@ pub(crate) fn rgba(
 
 struct Header {
     format: ImageFormat,
-    media: &'static str,
+    media: Media,
     width: u32,
     height: u32,
     orientation: Orientation,
@@ -140,7 +154,7 @@ struct Header {
 fn header(data: &[u8]) -> Result<Header, ImageError> {
     let reader = ImageReader::new(Cursor::new(data)).with_guessed_format()?;
     let format = reader.format().ok_or(ImageError::Unsupported)?;
-    let media = media_type(format).ok_or(ImageError::Unsupported)?;
+    let media = Media::of(format).ok_or(ImageError::Unsupported)?;
     let mut decoder = reader.into_decoder()?;
     let orientation = decoder.orientation()?;
     let (width, height) = decoder.dimensions();

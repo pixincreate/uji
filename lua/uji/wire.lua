@@ -1,12 +1,11 @@
 local Registry = require("uji.registry")
+local check = require("uji.check")
 local plugin = require("uji.plugin")
 
 local M = { registry = plugin.track(Registry(plugin.current)) }
 
 function M.add(name, spec)
-    if type(name) ~= "string" or name == "" then
-        error("uji.wire.add needs a name", 2)
-    end
+    check.name(name, "uji.wire.add")
     if type(spec) ~= "table" or type(spec.stream) ~= "function" then
         error("wire " .. name .. " needs a stream function", 2)
     end

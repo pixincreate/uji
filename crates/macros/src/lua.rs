@@ -99,7 +99,7 @@ fn function(native: &Native<'_>) -> String {
             Passing::MaybeSized => values.push(format!("{name}, {name} and #{name} or 0")),
             Passing::Encoded => {
                 prepared.push(format!(
-                    "    local _{name} = _encode({name} == nil and _empty or {name})\n"
+                    "    local _{name} = {name} == nil and \"{{}}\" or _encode({name})\n"
                 ));
                 values.push(format!("_{name}, #_{name}"));
             }
@@ -126,7 +126,7 @@ fn function(native: &Native<'_>) -> String {
         _ => "value",
     };
     format!(
-        "local _native, _encode, _empty = natives.{}, encode, EMPTY\nlocal _finish, _wait, _shape = {finish}, wait, {}\nreturn function({})\n{}    {result}\nend\n",
+        "local _native, _encode = natives.{}, encode\nlocal _finish, _wait, _shape = {finish}, wait, {}\nreturn function({})\n{}    {result}\nend\n",
         native.name,
         shape(native.output),
         parameters.join(", "),

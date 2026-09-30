@@ -1,7 +1,7 @@
 local answer = require("uji.sys.answer")
 local buffer = require("string.buffer")
 local ffi = require("ffi")
-local natives = require("uji.sys.native")
+local natives = require("uji.sys.native").kernel
 
 local tokenize, free = natives.json_tokens, natives.uji_release
 local find, gsub, format = string.find, string.gsub, string.format
@@ -74,7 +74,7 @@ value = function()
 end
 
 local encoded = buffer.new()
-local visiting
+local visiting = {}
 local write
 
 local function number(value)
@@ -165,9 +165,9 @@ local M = { json = { array = mark, null = NULL } }
 
 function M.json.encode(value)
     encoded:reset()
-    visiting = {}
     local ok, err = pcall(write, value)
     if not ok then
+        visiting = {}
         error(err, 2)
     end
     return encoded:tostring()

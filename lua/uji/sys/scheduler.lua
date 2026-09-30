@@ -1,4 +1,4 @@
-local natives = require("uji.sys.native")
+local natives = require("uji.sys.native").kernel
 
 local poll, take, forget = natives.kernel_poll, natives.kernel_take, natives.kernel_cancel
 local stopping, report, timer = natives.kernel_stopping, natives.kernel_report, natives.kernel_sleep
@@ -10,7 +10,7 @@ local STRAY = "a task yielded without waiting on anything"
 
 local M = {}
 
-local queue, first, last = {}, 1, 0
+local tasks, values, first, last = {}, {}, 1, 0
 local waiting = {}
 local alive = 0
 local current
@@ -21,9 +21,9 @@ local function pack(...)
     return { n = select("#", ...), ... }
 end
 
-local function schedule(task, values)
+local function schedule(task, resumed)
     last = last + 1
-    queue[last] = { task = task, values = values }
+    tasks[last], values[last] = task, resumed
 end
 
 local function running(level)
@@ -74,13 +74,13 @@ function Task:cancel()
     released = true
 end
 
-local function step(task, values)
+local function step(task, resumed)
     if task.done then
         return
     end
     local thread = task.thread
     current = task
-    local ok, err = coroutine.resume(thread, unpack(values, 1, values.n))
+    local ok, err = coroutine.resume(thread, unpack(resumed, 1, resumed.n))
     current = nil
     if task.done then
         if task.token then
@@ -238,13 +238,13 @@ end
 local function drain()
     local stop = last
     while first <= stop do
-        local entry = queue[first]
-        queue[first] = nil
+        local task, resumed = tasks[first], values[first]
+        tasks[first], values[first] = nil, nil
         first = first + 1
-        step(entry.task, entry.values)
+        step(task, resumed)
     end
     if first > last then
-        queue, first, last = {}, 1, 0
+        first, last = 1, 0
     end
 end
 

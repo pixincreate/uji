@@ -165,9 +165,8 @@ function Ui:mode()
 end
 
 function Ui:scroller()
-    local modal = self.modal
-    if modal and modal.mode == "confirm" then
-        return modal.scroll
+    if self:mode() == "confirm" then
+        return self.modal.scroll
     end
     return self.scroll
 end
@@ -213,16 +212,21 @@ function Ui:suggestions()
     return items
 end
 
+function Ui:composing()
+    local mode = self:mode()
+    return mode == "normal" or mode == "suggest"
+end
+
 function Ui:input_changed()
     local value = self.composer:text()
     local modal = self.modal
     if value:sub(1, 1) == "/" and not value:find(" ", 1, true) and self.theme.suggest_enabled then
-        if modal and modal.mode == "suggest" then
+        if self:mode() == "suggest" then
             modal:set(self:suggestions())
         elseif not modal then
             self:present(Suggest(self:suggestions()))
         end
-    elseif modal and modal.mode == "suggest" then
+    elseif self:mode() == "suggest" then
         modal:close()
     end
     self:invalidate()
@@ -239,7 +243,7 @@ function Ui:edit(change)
         end
         return
     end
-    if modal and modal.mode ~= "suggest" then
+    if not self:composing() then
         return
     end
     local before = self.composer.line.revision
@@ -256,8 +260,7 @@ function Ui:insert(value)
 end
 
 function Ui:backspace()
-    local modal = self.modal
-    if modal and modal.mode ~= "suggest" then
+    if not self:composing() then
         self:edit(function(line)
             line:backspace()
         end)
@@ -307,12 +310,8 @@ function Ui:history(direction)
     self:input_changed()
 end
 
-function Ui:directory()
-    return app.session and app.session.directory or sys.os.cwd()
-end
-
 function Ui:send(value, attached)
-    local directory = self:directory()
+    local directory = app.directory()
     self.sends(function()
         for _, image in ipairs(images.mentioned(value, directory)) do
             attached[#attached + 1] = image
@@ -348,7 +347,7 @@ function Ui:drop(value, files)
     task.spawn(function()
         local loaded = {}
         for index, file in ipairs(files) do
-            local image = images.file(file, self:directory())
+            local image = images.file(file, app.directory())
             if not image then
                 self.composer:paste(value)
                 self:input_changed()
@@ -400,7 +399,7 @@ function Ui:paste(value)
     if line then
         line:insert(Pastes.single_line(value))
         modal:edited()
-    elseif not modal or modal.mode == "suggest" then
+    elseif self:composing() then
         local files = images.paths(value)
         if files then
             return self:drop(value, files)

@@ -76,9 +76,13 @@ function M.max_output()
     return entry and entry.output or DEFAULT_MAX_OUTPUT
 end
 
-function M.budget()
+local function measured()
     local current = M.current
-    local budget = current.provider and current.provider:budget(current.model)
+    return current.provider and current.provider:budget(current.model)
+end
+
+function M.budget()
+    local budget = measured()
     if not budget then
         return nil
     end
@@ -93,8 +97,7 @@ function M.usable(budget)
 end
 
 function M.window()
-    local current = M.current
-    local budget = current.provider and current.provider:budget(current.model)
+    local budget = measured()
     return budget and budget.window
 end
 

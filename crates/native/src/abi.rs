@@ -215,7 +215,8 @@ struct Sent {
 
 extern "C" fn free(answer: *mut Answer) {
     if !answer.is_null() {
-        drop(unsafe { Box::from_raw(answer.cast::<Sent>()) });
+        let sent = unsafe { Box::from_raw(answer.cast::<Sent>()) };
+        uji_release(sent.answer.handle);
     }
 }
 

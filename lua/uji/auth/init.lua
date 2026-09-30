@@ -1,4 +1,5 @@
 local Credentials = require("uji.auth.credentials")
+local check = require("uji.check")
 local notices = require("uji.notices")
 local oauth = require("uji.auth.oauth")
 local paths = require("uji.paths")
@@ -15,9 +16,7 @@ function M.credentials()
 end
 
 function M.configure(opts)
-    if type(opts) ~= "table" then
-        error("uji.auth.configure needs a table", 2)
-    end
+    check.options(opts, "uji.auth.configure")
     for key, value in pairs(opts) do
         if key ~= "keychain" then
             error("unknown key " .. tostring(key), 2)

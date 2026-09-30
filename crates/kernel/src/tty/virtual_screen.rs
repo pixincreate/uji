@@ -10,7 +10,7 @@ use tokio::sync::watch;
 
 use super::VirtualTerminal;
 use super::input::Input;
-use super::screen::{Cursor, Screen, Surface};
+use super::screen::{Cursor, Screen, Surface, row_text};
 
 struct Virtual {
     terminal: Terminal<TestBackend>,
@@ -21,13 +21,8 @@ struct Virtual {
 impl Virtual {
     fn snapshot(&self) -> Vec<String> {
         let buffer = self.terminal.backend().buffer();
-        let area = buffer.area;
-        (area.top()..area.bottom())
-            .map(|row| {
-                (area.left()..area.right())
-                    .map(|col| buffer[(col, row)].symbol())
-                    .collect()
-            })
+        (buffer.area.top()..buffer.area.bottom())
+            .map(|row| row_text(buffer, row))
             .collect()
     }
 }

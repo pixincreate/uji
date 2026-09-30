@@ -1,6 +1,6 @@
 local exports = require("uji.sys.exports")
 local ffi = require("ffi")
-local natives = require("uji.sys.native")
+local native = require("uji.sys.native")
 
 local EXTENSION = ffi.os == "OSX" and ".dylib" or ffi.os == "Windows" and ".dll" or ".so"
 
@@ -42,17 +42,7 @@ local function mount(manifest)
     if cdef ~= "" then
         ffi.cdef(cdef)
     end
-    local found = {}
-    for index = 0, tonumber(manifest.native_count) - 1 do
-        local native = manifest.natives[index]
-        found[ffi.string(native.name)] = ffi.cast(ffi.string(native.signature), native.address)
-    end
-    local scripts = {}
-    for index = 0, tonumber(manifest.script_count) - 1 do
-        local script = manifest.scripts[index]
-        scripts[index + 1] = { place = ffi.string(script.place), source = ffi.string(script.source) }
-    end
-    return exports.build(found, scripts).functions
+    return exports.build(native.read(manifest)).functions
 end
 
 local function handwritten(library, name)
@@ -71,7 +61,7 @@ function M.load(file, name)
     local library = ffi.load(file)
     local init = symbol(library, "uji_module_init")
     if init then
-        init(natives.kernel_host())
+        init(native.kernel.kernel_host())
     end
     local manifest = symbol(library, "uji_module_manifest")
     local module = manifest and mount(manifest()) or handwritten(library, name)
