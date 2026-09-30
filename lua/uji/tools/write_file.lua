@@ -41,7 +41,7 @@ tool.add("write_file", {
         end
         local path = field.text(args, "path")
         local content = field.text(args, "content")
-        local written, err = uji.fs.write(path, content)
+        local written, err = tool.workspace():write(path, content)
         if not written then
             return "error: " .. err
         end

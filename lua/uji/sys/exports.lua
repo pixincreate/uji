@@ -1,6 +1,6 @@
-local answer = require("uji.kernel.answer")
-local json = require("uji.kernel.json").json
-local natives = require("uji.kernel.native")
+local answer = require("uji.sys.answer")
+local json = require("uji.sys.json").json
+local natives = require("uji.sys.native")
 
 local EMPTY = {}
 

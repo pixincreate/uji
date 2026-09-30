@@ -1,5 +1,6 @@
 local common = require("uji.wires.common")
 local stream = require("uji.wires.stream")
+local sys = require("uji.sys")
 local wire = require("uji.wire")
 
 local VERSION = "2023-06-01"
@@ -73,7 +74,7 @@ local function body(request)
         model = request.model,
         max_tokens = max_tokens,
         thinking = budget > 0 and { type = "enabled", budget_tokens = budget } or nil,
-        system = system ~= "" and { text(system) } or uji.json.array({}),
+        system = system ~= "" and { text(system) } or sys.json.array({}),
         messages = common.translate(request.messages, SHAPES),
         stream = true,
         tools = common.nonempty(common.map(request.tools, tool)),

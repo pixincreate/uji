@@ -1,5 +1,5 @@
-local answer = require("uji.kernel.answer")
-local exports = require("uji.kernel.exports")
+local answer = require("uji.sys.answer")
+local exports = require("uji.sys.exports")
 
 local EDGE = 65535
 

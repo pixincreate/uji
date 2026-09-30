@@ -1,8 +1,10 @@
+local sys = require("uji.sys")
+
 local M = {}
 
 local MIN_ANSWER = 1024
 local BUDGET = { off = 0, minimal = 1024, low = 2048, medium = 8192, high = 16384 }
-local ARRAY = getmetatable(uji.json.array({}))
+local ARRAY = getmetatable(sys.json.array({}))
 
 function M.fit_thinking(effort, max_output)
     local max_tokens = math.max(max_output, MIN_ANSWER)
@@ -14,7 +16,7 @@ function M.fit_thinking(effort, max_output)
 end
 
 function M.arguments(raw)
-    local ok, value = pcall(uji.json.decode, raw)
+    local ok, value = pcall(sys.json.decode, raw)
     if ok and type(value) == "table" and getmetatable(value) ~= ARRAY then
         return value
     end
@@ -22,7 +24,7 @@ function M.arguments(raw)
 end
 
 function M.map(list, shape)
-    local out = uji.json.array({})
+    local out = sys.json.array({})
     for _, item in ipairs(list or {}) do
         out[#out + 1] = shape(item)
     end
@@ -36,7 +38,7 @@ function M.nonempty(list)
 end
 
 function M.translate(messages, shapes, show)
-    local out = uji.json.array({})
+    local out = sys.json.array({})
     local pending = {}
     local function flush()
         if #pending > 0 then

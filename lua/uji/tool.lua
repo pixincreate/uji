@@ -1,6 +1,7 @@
 local Policy = require("uji.system.policy")
 local Registry = require("uji.registry")
 local Roots = require("uji.system.roots")
+local app = require("uji.app")
 local notices = require("uji.notices")
 local paths = require("uji.paths")
 local plugin = require("uji.plugin")
@@ -107,6 +108,10 @@ end
 
 function M.files(cwd)
     return Roots(cwd or sys.os.cwd(), M.extra, M.confined)
+end
+
+function M.workspace()
+    return M.files(app.session and app.session.directory or nil)
 end
 
 function M.compiled()

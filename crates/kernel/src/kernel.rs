@@ -10,7 +10,8 @@ use crate::tty::{self, Terminal, Tty};
 use crate::vm::{self, Sources};
 
 const MODULE_DIR: &str = "lua";
-const SCHEDULER: &str = "uji.kernel.scheduler";
+const RUNTIME: &str = "uji.sys";
+const SCHEDULER: &str = "uji.sys.scheduler";
 
 pub struct Options {
     pub sources: Sources,
@@ -99,11 +100,10 @@ fn layers(sources: &Sources, roots: &[PathBuf]) -> Vec<Sources> {
 }
 
 fn publish(lua: &Lua, boot: &Restart) -> mlua::Result<()> {
-    let os = lua.create_table()?;
     let roots = boot.roots.iter().map(|root| root.display().to_string());
-    os.set("roots", lua.create_sequence_from(roots)?)?;
-    os.set("carry", boot.carry.clone())?;
-    lua.globals().get::<Table>("uji")?.set("os", os)
+    let native: Table = lua.globals().get("UJI_NATIVE")?;
+    native.set("roots", lua.create_sequence_from(roots)?)?;
+    native.set("carry", boot.carry.clone())
 }
 
 fn live(
@@ -135,6 +135,7 @@ fn live(
 fn start(layers: Vec<Sources>, entry: &str, boot: Restart) -> Result<(), Error> {
     let lua = vm::create(layers)?;
     publish(&lua, &boot)?;
+    vm::require::<Table>(&lua, RUNTIME)?;
     let main: Function = vm::require(&lua, entry)?;
     let scheduler: Table = vm::require(&lua, SCHEDULER)?;
     let args = lua.create_sequence_from(boot.args)?;

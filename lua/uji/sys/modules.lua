@@ -1,6 +1,6 @@
-local exports = require("uji.kernel.exports")
+local exports = require("uji.sys.exports")
 local ffi = require("ffi")
-local natives = require("uji.kernel.native")
+local natives = require("uji.sys.native")
 
 local EXTENSION = ffi.os == "OSX" and ".dylib" or ffi.os == "Windows" and ".dll" or ".so"
 
@@ -64,7 +64,7 @@ local function handwritten(library, name)
     if not wrapper then
         return library
     end
-    return assert(load(ffi.string(wrapper()), "=" .. name))(library, require("uji.kernel"))
+    return assert(load(ffi.string(wrapper()), "=" .. name))(library, require("uji.sys"))
 end
 
 function M.load(file, name)

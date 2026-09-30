@@ -34,7 +34,7 @@ local function page(path, offset, read)
 end
 
 local function picture(path)
-    local bytes, err = uji.fs.read(path)
+    local bytes, err = tool.workspace():read(path)
     if not bytes then
         return "error: " .. err
     end
@@ -95,7 +95,7 @@ tool.add("read_file", {
         end
         local offset = math.max(field.count(args, "offset") or 1, 1)
         local limit = math.max(field.count(args, "limit") or MAX_LINES, 1)
-        local read, err = uji.fs.lines(path, { offset = offset, limit = limit, max_line = MAX_LINE })
+        local read, err = tool.workspace():lines(path, { offset = offset, limit = limit, max_line = MAX_LINE })
         return read and page(path, offset, read) or "error: " .. err
     end,
 })

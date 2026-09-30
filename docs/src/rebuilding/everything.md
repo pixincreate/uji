@@ -9,6 +9,6 @@ that contains its `uji` folder. uji then uses none of its built-in files, and
 replacements in your config and packs still apply on top.
 
 Such a tree needs two modules. `uji.boot` returns the function that uji runs
-with the command line. `uji.kernel.scheduler` has `run(main, args)`, which runs
+with the command line. `uji.sys.scheduler` has `run(main, args)`, which runs
 that function as the first task, keeps running tasks, and returns when no task
 is left or after `uji.os.exit` or `uji.os.restart`.

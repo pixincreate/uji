@@ -1,5 +1,6 @@
 local common = require("uji.wires.common")
 local stream = require("uji.wires.stream")
+local sys = require("uji.sys")
 local wire = require("uji.wire")
 
 local KNOB = {
@@ -65,7 +66,7 @@ local function call(tool_call)
         type = "function",
         ["function"] = {
             name = tool_call.name,
-            arguments = uji.json.encode(common.arguments(tool_call.arguments)),
+            arguments = sys.json.encode(common.arguments(tool_call.arguments)),
         },
     }
 end
@@ -112,7 +113,7 @@ local function shapes(resolved)
         assistant = function(item)
             return {
                 role = "assistant",
-                content = item.text ~= "" and item.text or uji.json.null,
+                content = item.text ~= "" and item.text or sys.json.null,
                 tool_calls = common.nonempty(common.map(item.tool_calls, call)),
             }
         end,

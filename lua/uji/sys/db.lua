@@ -1,6 +1,6 @@
-local answer = require("uji.kernel.answer")
-local exports = require("uji.kernel.exports")
-local json = require("uji.kernel.json").json
+local answer = require("uji.sys.answer")
+local exports = require("uji.sys.exports")
+local json = require("uji.sys.json").json
 
 local Db = exports:class("db")
 

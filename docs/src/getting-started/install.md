@@ -1,5 +1,17 @@
 # Installation
 
+On macOS and Linux, install uji with Homebrew:
+
+```sh
+brew install uji-labs/uji/uji
+```
+
+`brew upgrade uji` moves to a newer release. Macs with Apple silicon and
+64-bit Intel Linux get a ready-made build. On other machines Homebrew builds
+uji from source, which takes a few minutes.
+
+## With Cargo
+
 ```sh
 cargo install --git https://github.com/uji-labs/uji --locked uji
 ```

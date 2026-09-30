@@ -80,7 +80,7 @@ tool.add("edit_file", {
         if old == new then
             return "error: old_string and new_string are identical"
         end
-        local text, err = uji.fs.read(path)
+        local text, err = tool.workspace():read(path)
         if not text then
             return "error: " .. err
         end
@@ -94,7 +94,7 @@ tool.add("edit_file", {
             return string.format("error: old_string matches %d places in %s. ", count, path)
                 .. "Add surrounding lines to make it unique, or pass replace_all: true."
         end
-        local written, failure = uji.fs.write(path, replace(text, old, new, all))
+        local written, failure = tool.workspace():write(path, replace(text, old, new, all))
         if not written then
             return "error: " .. failure
         elseif all then

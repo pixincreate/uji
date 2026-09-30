@@ -1,6 +1,6 @@
 local ffi = require("ffi")
-local natives = require("uji.kernel.native")
-local scheduler = require("uji.kernel.scheduler")
+local natives = require("uji.sys.native")
+local scheduler = require("uji.sys.scheduler")
 
 local VALUE, FAILED, END, LATE = 0, 1, 2, 3
 local QUIET = { nulls = false }
@@ -86,7 +86,7 @@ end
 local decode
 
 function M.decoded(data)
-    decode = decode or require("uji.kernel.json").json.decode
+    decode = decode or require("uji.sys.json").json.decode
     return decode(data, QUIET)
 end
 

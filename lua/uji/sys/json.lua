@@ -1,7 +1,7 @@
-local answer = require("uji.kernel.answer")
+local answer = require("uji.sys.answer")
 local buffer = require("string.buffer")
 local ffi = require("ffi")
-local natives = require("uji.kernel.native")
+local natives = require("uji.sys.native")
 
 local tokenize, free = natives.json_tokens, natives.uji_release
 local find, gsub, format = string.find, string.gsub, string.format

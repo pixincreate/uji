@@ -1,4 +1,4 @@
-local natives = require("uji.kernel.native")
+local natives = require("uji.sys.native")
 
 local poll, take, forget = natives.kernel_poll, natives.kernel_take, natives.kernel_cancel
 local stopping, report, timer = natives.kernel_stopping, natives.kernel_report, natives.kernel_sleep

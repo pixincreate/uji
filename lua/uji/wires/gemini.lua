@@ -1,5 +1,6 @@
 local common = require("uji.wires.common")
 local stream = require("uji.wires.stream")
+local sys = require("uji.sys")
 local wire = require("uji.wire")
 
 local MAX_TOKENS = "MAX_TOKENS"
@@ -98,7 +99,7 @@ local function read(event, parts)
             local entry = parts:call(index - 1)
             entry.name = part.functionCall.name
             entry.id = entry.name
-            entry.arguments = uji.json.encode(part.functionCall.args or {})
+            entry.arguments = sys.json.encode(part.functionCall.args or {})
         end
     end
 end

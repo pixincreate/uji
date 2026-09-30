@@ -1,3 +1,5 @@
+local sys = require("uji.sys")
+
 local M = {}
 
 local MAX_ERROR_BODY = 2000
@@ -64,7 +66,7 @@ local function incomplete(arguments)
     if arguments:match("^%s*$") then
         return false
     end
-    return not pcall(uji.json.decode, arguments)
+    return not pcall(sys.json.decode, arguments)
 end
 
 local Parts = {}
@@ -171,7 +173,7 @@ local function progressed(line, state, read)
     if data == "[DONE]" then
         state:finish()
     else
-        local ok, event = pcall(uji.json.decode, data, EVENTS)
+        local ok, event = pcall(sys.json.decode, data, EVENTS)
         if ok and type(event) == "table" then
             pcall(read, event, state)
         end
@@ -181,9 +183,9 @@ end
 
 local function drain(body, state, read)
     local idle = M.idle
-    local deadline = uji.os.clock() + idle
+    local deadline = sys.os.clock() + idle
     while true do
-        local line, err = body:line(math.max(deadline - uji.os.clock(), 0))
+        local line, err = body:line(math.max(deadline - sys.os.clock(), 0))
         if line == false then
             return { kind = "http", message = "no data arrived for " .. idle .. " seconds" }
         end
@@ -191,7 +193,7 @@ local function drain(body, state, read)
             return err and { kind = "http", message = err }
         end
         if progressed(line, state, read) then
-            deadline = uji.os.clock() + idle
+            deadline = sys.os.clock() + idle
         end
     end
 end
@@ -202,11 +204,11 @@ local function run(spec, reply)
     for name, value in pairs(spec.headers) do
         headers[name] = value
     end
-    local body, err = uji.net.open({
+    local body, err = sys.net.open({
         url = spec.url,
         method = "POST",
         headers = headers,
-        body = uji.json.encode(spec.body),
+        body = sys.json.encode(spec.body),
         idle = M.idle,
     })
     if not body then

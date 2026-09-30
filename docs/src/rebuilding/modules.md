@@ -22,8 +22,7 @@
 | `images.lua` | Attaching images from files, pasted paths and the clipboard. |
 | `defaults.lua` | The default screen and bindings that `require("uji.defaults")` loads. |
 | `event.lua`, `task.lua`, `plugin.lua`, `registry.lua`, `class.lua` | Events, tasks, plugin ownership and the building blocks the rest is made of. |
-| `kernel/` | The Lua side of the [Runtime](../runtime/index.md): it runs the tasks, loads native modules, and turns the program's native functions into the `uji.*` functions, such as `uji.fs` and `uji.json`. |
+| `sys/` | The Lua side of the [Runtime](../runtime/index.md): it runs the tasks, loads native modules, and turns the program's native functions into the `uji.*` functions, such as `uji.fs` and `uji.json`. `require("uji.sys")` gives the raw versions that `api/` has not changed. |
 
 The native functions behind [Runtime](../runtime/index.md) are part of the uji
-program itself. Everything built on them, `kernel/` included, can be
-replaced.
+program itself. Everything built on them, `sys/` included, can be replaced.

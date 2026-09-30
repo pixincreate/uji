@@ -1,6 +1,6 @@
-local answer = require("uji.kernel.answer")
+local answer = require("uji.sys.answer")
 local ffi = require("ffi")
-local natives = require("uji.kernel.native")
+local natives = require("uji.sys.native")
 
 local parse, free = natives.markdown, natives.uji_release
 
