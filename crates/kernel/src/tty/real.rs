@@ -148,7 +148,7 @@ impl Drop for Real {
     }
 }
 
-pub(crate) fn open() -> io::Result<(Screen, Arc<Input>)> {
+pub(crate) fn open() -> io::Result<(Screen, Input)> {
     GUARDED.call_once(guard_against_panic);
     let mut stdout = io::stdout();
     enter(&mut stdout)?;
@@ -158,6 +158,6 @@ pub(crate) fn open() -> io::Result<(Screen, Arc<Input>)> {
     let reader = Reader::spawn(sender, Arc::clone(&paused));
     Ok((
         Screen::new(Box::new(Real { terminal, paused })),
-        Arc::new(Input::new(events, Some(reader))),
+        Input::new(events, Some(reader)),
     ))
 }

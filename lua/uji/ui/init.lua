@@ -425,7 +425,7 @@ function Ui:act(name)
     task.spawn(function()
         local ok, err = pcall(handler)
         if not ok then
-            notices.push("action " .. name .. ": " .. tostring(err))
+            notices.push("action " .. name .. ": " .. sys.message(err))
         end
         self:invalidate()
     end)
@@ -434,7 +434,7 @@ end
 function Ui:captured(chord)
     local ok, err = pcall(self.capture, keys.capture(chord))
     if not ok then
-        notices.push("capture handler: " .. tostring(err))
+        notices.push("capture handler: " .. sys.message(err))
         self.capture = nil
     end
 end
@@ -595,7 +595,7 @@ function Ui:frames()
         if not self.suspended then
             self.stream:reveal_step()
             local ok, err = pcall(self.render, self)
-            local problem = not ok and tostring(err) or nil
+            local problem = not ok and sys.message(err) or nil
             if problem and problem ~= self.failure then
                 notices.push("render: " .. problem)
             end

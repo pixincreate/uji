@@ -10,7 +10,9 @@ Only one task runs at a time. It keeps running until it waits in a runtime
 function that finishes later, in `uji.sleep`, in `promise:await()`, or in
 `uji.task.race` and `uji.task.timeout`, and then another task gets its turn.
 So a loop that never waits holds up everything. Waiting outside a task raises
-an error, and so does waiting inside a coroutine you created yourself.
+an error. A coroutine you create yourself cannot wait either. A wait inside one
+does not finish, and the coroutine hands an internal value back to whoever
+resumed it.
 
 ## uji.task.spawn(fn, ...)
 
@@ -28,19 +30,21 @@ task that cancels itself stops at its next wait.
 
 Pauses the task for `seconds`. Fractions work. With `0` the task pauses only
 long enough for every other task that is ready to run first, which is how a
-long loop can give the screen and the rest of uji their turn. Anything other
-than a number of seconds raises an error.
+long loop can give the screen and the rest of uji their turn. With `math.huge`
+it waits until it is cancelled. Anything other than a number of seconds raises
+an error.
 
 ## uji.task.race(fn, ...)
 
-Runs every function at once as a task that belongs to the current task, and
-waits for the first to finish. The result is its position followed by what it
+Runs every function at once inside the current task, and waits for the first
+to finish. The result is its position followed by what it
 returned, and the others stop there. An error in the first to finish is raised
 again, and cancelling the current task stops all of them.
 
 ## uji.task.timeout(seconds, fn)
 
-Runs `fn` as a task that belongs to the current task, for at most `seconds`.
+Runs `fn` inside the current task for at most `seconds`, where `math.huge`
+means no limit.
 When `fn` finishes in time the result is `true` followed by what it returned.
 Otherwise `fn` stops and the result is `false`.
 

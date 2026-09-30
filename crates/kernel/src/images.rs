@@ -6,8 +6,8 @@ use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;
 use image::metadata::Orientation;
 use image::{DynamicImage, ImageDecoder, ImageFormat, ImageReader, RgbaImage};
-use serde::Serialize;
-use uji_native::{Json, native};
+use mlua::BString;
+use uji_macros::{function, value};
 
 use crate::io::{self, Blocked};
 
@@ -30,7 +30,8 @@ pub(crate) enum ImageError {
     Empty,
 }
 
-#[derive(Clone, Copy, Serialize)]
+#[value]
+#[derive(Clone, Copy)]
 enum Media {
     #[serde(rename = "image/png")]
     Png,
@@ -54,7 +55,7 @@ impl Media {
     }
 }
 
-#[derive(Serialize)]
+#[value]
 pub(crate) struct Fitted {
     data: String,
     media_type: Media,
@@ -178,9 +179,7 @@ fn fit_data(data: &[u8], edge: u32, limit: usize) -> Result<Fitted, ImageError> 
     fit_image(image, edge, limit, found.format == ImageFormat::Jpeg)
 }
 
-#[native(image)]
-async fn fit(data: Vec<u8>, edge: u32, limit: usize) -> Result<Json<Fitted>, Blocked<ImageError>> {
-    io::blocking(move || fit_data(&data, edge, limit))
-        .await
-        .map(Json)
+#[function(image)]
+async fn fit(data: BString, edge: u32, limit: usize) -> Result<Fitted, Blocked<ImageError>> {
+    io::blocking(move || fit_data(&data, edge, limit)).await
 }

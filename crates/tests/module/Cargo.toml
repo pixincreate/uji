@@ -1,21 +1,14 @@
 [package]
 name = "uji-test-module"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-authors.workspace = true
-repository.workspace = true
+version = "0.1.0"
+edition = "2024"
 publish = false
+
+[workspace]
 
 [lib]
 name = "testmod"
 crate-type = ["cdylib"]
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
-tokio = { version = "1", features = ["time"] }
-uji-native = { path = "../../native" }
-
-[lints]
-workspace = true
+mlua = { version = "0.12", features = ["luajit52", "module"] }

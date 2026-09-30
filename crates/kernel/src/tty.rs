@@ -3,13 +3,12 @@ mod real;
 mod screen;
 mod virtual_screen;
 
-use std::sync::Arc;
-
 use crossterm::event::Event;
+use mlua::{AnyUserData, Lua};
 use tokio::sync::{mpsc, watch};
-use uji_native::{Held, native};
+use uji_macros::function;
 
-use crate::context;
+use crate::kernel::State;
 
 pub enum Terminal {
     Real,
@@ -18,7 +17,7 @@ pub enum Terminal {
 
 pub(crate) enum Tty {
     Fresh(Terminal),
-    Opened(screen::Screen, Arc<input::Input>),
+    Opened(screen::Screen, input::Input),
 }
 
 pub struct VirtualTerminal {
@@ -73,7 +72,14 @@ pub(crate) fn restore() {
     real::restore();
 }
 
-fn opened(terminal: Option<Tty>) -> std::io::Result<(screen::Screen, Arc<input::Input>)> {
+pub(crate) fn reclaim(screen: &AnyUserData, input: &AnyUserData) -> Option<Tty> {
+    Some(Tty::Opened(
+        screen.take::<screen::Screen>().ok()?,
+        input.take::<input::Input>().ok()?,
+    ))
+}
+
+fn opened(terminal: Option<Tty>) -> std::io::Result<(screen::Screen, input::Input)> {
     match terminal {
         Some(Tty::Fresh(Terminal::Real)) => real::open(),
         Some(Tty::Fresh(Terminal::Virtual(terminal))) => Ok(virtual_screen::open(terminal)),
@@ -82,12 +88,13 @@ fn opened(terminal: Option<Tty>) -> std::io::Result<(screen::Screen, Arc<input::
     }
 }
 
-#[native(tty, raise)]
-fn open() -> std::io::Result<Held<Arc<input::Input>>> {
-    context::with(|context| {
-        let (screen, input) = opened(context.terminal.take())?;
-        context.terminal = Some(Tty::Opened(screen, Arc::clone(&input)));
-        Ok(Held::new(input))
-    })
-    .unwrap_or_else(|| Err(std::io::Error::other("the kernel is not running")))
+#[function(tty)]
+fn open(state: &mut State, lua: &Lua) -> mlua::Result<(AnyUserData, AnyUserData)> {
+    if let Some(handles) = &state.opened {
+        return Ok(handles.clone());
+    }
+    let (screen, input) = opened(state.terminal.take())?;
+    let handles = (lua.create_userdata(screen)?, lua.create_userdata(input)?);
+    state.opened = Some(handles.clone());
+    Ok(handles)
 }

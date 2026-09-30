@@ -206,6 +206,8 @@ function M.add_root(dir)
         end
     end
     M.roots[#M.roots + 1] = dir
+    local natives = dir .. "/" .. paths.NATIVE_DIR .. "/?." .. sys.os.library
+    package.cpath = package.cpath == "" and natives or package.cpath .. ";" .. natives
 end
 
 function M.add(specs)
@@ -310,7 +312,8 @@ end
 function M.overriding(roots)
     local out = {}
     for _, root in ipairs(roots) do
-        if is_dir(root .. "/" .. paths.MODULE_DIR .. "/uji") then
+        if is_dir(root .. "/" .. paths.MODULE_DIR .. "/uji") or is_dir(root .. "/" .. paths.NATIVE_DIR .. "/uji")
+        then
             out[#out + 1] = root
         end
     end

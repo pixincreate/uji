@@ -1,5 +1,6 @@
 local Registry = require("uji.registry")
 local plugin = require("uji.plugin")
+local sys = require("uji.sys")
 
 local M = {
     events = {},
@@ -17,7 +18,7 @@ local function registry(event)
 end
 
 local function failed(event, err)
-    M.report(event .. " handler error: " .. tostring(err))
+    M.report(event .. " handler error: " .. sys.message(err))
 end
 
 function M.on(event, handler, opts)

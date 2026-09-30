@@ -2,6 +2,7 @@ local Registry = require("uji.registry")
 local check = require("uji.check")
 local notices = require("uji.notices")
 local plugin = require("uji.plugin")
+local sys = require("uji.sys")
 
 local RETENTIONS = { off = true, short = true, long = true }
 local COMPACTION = { enabled = "boolean", reserve = "number", keep_recent = "number" }
@@ -62,7 +63,7 @@ function M.gather(system)
     for name, provide in M.functions:each() do
         local ok, value = pcall(provide)
         if not ok then
-            notices.push("context " .. name .. ": " .. tostring(value))
+            notices.push("context " .. name .. ": " .. sys.message(value))
         else
             local text, at_turn
             if type(value) == "string" then

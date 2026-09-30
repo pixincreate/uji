@@ -2,6 +2,7 @@ local Registry = require("uji.registry")
 local check = require("uji.check")
 local notices = require("uji.notices")
 local plugin = require("uji.plugin")
+local sys = require("uji.sys")
 
 local M = {
     builtins = Registry(),
@@ -54,7 +55,7 @@ function M.run(line)
     end
     local ok, err = pcall(found.handler, rest or "")
     if not ok then
-        notices.push(name .. ": " .. tostring(err))
+        notices.push(name .. ": " .. sys.message(err))
     end
 end
 

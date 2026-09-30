@@ -3,6 +3,7 @@ local sys = require("uji.sys")
 local M = {
     INIT_FILE = "init.lua",
     MODULE_DIR = "lua",
+    NATIVE_DIR = "native",
     PLUGIN_DIR = "plugin",
     overrides = {},
 }

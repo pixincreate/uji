@@ -2,13 +2,14 @@ use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::time::UNIX_EPOCH;
 
-use serde::{Deserialize, Serialize};
+use mlua::BString;
 use tokio::io::AsyncWriteExt;
-use uji_native::{Json, native};
+use uji_macros::{function, options, value};
 
 use crate::io::{self, Blocked};
 
-#[derive(Clone, Copy, Serialize)]
+#[value]
+#[derive(Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 enum Kind {
     Dir,
@@ -17,14 +18,14 @@ enum Kind {
     Other,
 }
 
-#[derive(Serialize)]
+#[value]
 struct Entry {
     name: String,
     #[serde(rename = "type")]
     kind: Kind,
 }
 
-#[derive(Serialize)]
+#[value]
 struct Stat {
     #[serde(rename = "type")]
     kind: Kind,
@@ -59,7 +60,8 @@ fn stat_of(metadata: &std::fs::Metadata) -> Stat {
 const NEWLINE: u8 = b'\n';
 const BUFFER: usize = 64 * 1024;
 
-#[derive(Serialize, Default)]
+#[value]
+#[derive(Default)]
 struct Excerpt {
     lines: Vec<String>,
     cut: Vec<usize>,
@@ -67,7 +69,7 @@ struct Excerpt {
     binary: bool,
 }
 
-#[derive(Deserialize)]
+#[options]
 struct Window {
     #[serde(default = "first")]
     from: usize,
@@ -89,14 +91,14 @@ fn unlimited() -> usize {
     usize::MAX
 }
 
-#[derive(Deserialize)]
+#[options]
 struct WriteOptions {
     mode: Option<u32>,
     #[serde(default)]
     append: bool,
 }
 
-#[derive(Deserialize)]
+#[options]
 struct RemoveOptions {
     #[serde(default)]
     recursive: bool,
@@ -169,22 +171,18 @@ fn next_line(
     }
 }
 
-#[native(fs)]
-async fn read(path: String) -> std::io::Result<Vec<u8>> {
-    tokio::fs::read(path).await
+#[function(fs)]
+async fn read(path: String) -> std::io::Result<BString> {
+    tokio::fs::read(path).await.map(BString::from)
 }
 
-#[native(fs)]
-async fn lines(
-    path: String,
-    window: Json<Window>,
-) -> Result<Json<Excerpt>, Blocked<std::io::Error>> {
-    io::blocking(move || window.0.read(&path)).await.map(Json)
+#[function(fs)]
+async fn lines(path: String, window: Window) -> Result<Excerpt, Blocked<std::io::Error>> {
+    io::blocking(move || window.read(&path)).await
 }
 
-#[native(fs)]
-async fn write(path: String, data: Vec<u8>, opts: Json<WriteOptions>) -> std::io::Result<()> {
-    let Json(opts) = opts;
+#[function(fs)]
+async fn write(path: String, data: &[u8], opts: WriteOptions) -> std::io::Result<()> {
     let mut options = tokio::fs::OpenOptions::new();
     options.write(true).create(true);
     if opts.append {
@@ -197,12 +195,12 @@ async fn write(path: String, data: Vec<u8>, opts: Json<WriteOptions>) -> std::io
         options.mode(mode);
     }
     let mut file = options.open(PathBuf::from(path)).await?;
-    file.write_all(&data).await?;
+    file.write_all(data).await?;
     file.flush().await
 }
 
-#[native(fs)]
-async fn list(path: String) -> std::io::Result<Json<Vec<Entry>>> {
+#[function(fs)]
+async fn list(path: String) -> std::io::Result<Vec<Entry>> {
     let mut reader = tokio::fs::read_dir(path).await?;
     let mut entries = Vec::new();
     while let Some(entry) = reader.next_entry().await? {
@@ -212,30 +210,30 @@ async fn list(path: String) -> std::io::Result<Json<Vec<Entry>>> {
         });
     }
     entries.sort_by(|left, right| left.name.cmp(&right.name));
-    Ok(Json(entries))
+    Ok(entries)
 }
 
-#[native(fs)]
-async fn stat(path: String) -> std::io::Result<Json<Stat>> {
-    Ok(Json(stat_of(&tokio::fs::metadata(path).await?)))
+#[function(fs)]
+async fn stat(path: String) -> std::io::Result<Stat> {
+    Ok(stat_of(&tokio::fs::metadata(path).await?))
 }
 
-#[native(fs)]
+#[function(fs)]
 async fn mkdir(path: String) -> std::io::Result<()> {
     tokio::fs::create_dir_all(path).await
 }
 
-#[native(fs)]
-async fn remove(path: String, opts: Json<RemoveOptions>) -> std::io::Result<()> {
-    delete(path, opts.0.recursive).await
+#[function(fs)]
+async fn remove(path: String, opts: RemoveOptions) -> std::io::Result<()> {
+    delete(path, opts.recursive).await
 }
 
-#[native(fs)]
+#[function(fs)]
 async fn rename(from: String, to: String) -> std::io::Result<()> {
     tokio::fs::rename(from, to).await
 }
 
-#[native(fs)]
+#[function(fs)]
 async fn realpath(path: String) -> std::io::Result<String> {
     Ok(tokio::fs::canonicalize(path).await?.display().to_string())
 }

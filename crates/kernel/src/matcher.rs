@@ -1,7 +1,7 @@
 use globset::{GlobBuilder, GlobMatcher};
-use regex::Regex;
-use serde::Deserialize;
-use uji_native::{Held, Json, native};
+use mlua::LuaString;
+use regex::bytes::Regex;
+use uji_macros::{function, methods, options};
 
 pub(crate) enum Matcher {
     Regex(Regex),
@@ -9,44 +9,46 @@ pub(crate) enum Matcher {
 }
 
 impl Matcher {
-    fn search(&self, subject: &str) -> Option<(usize, usize)> {
+    fn search(&self, subject: &[u8]) -> Option<(usize, usize)> {
         match self {
             Self::Regex(regex) => regex
                 .find(subject)
                 .map(|found| (found.start(), found.end())),
-            Self::Glob(glob) => glob.is_match(subject).then_some((0, subject.len())),
+            Self::Glob(glob) => glob
+                .is_match(&*String::from_utf8_lossy(subject))
+                .then_some((0, subject.len())),
         }
     }
 }
 
-#[derive(Deserialize)]
+#[methods]
+impl Matcher {
+    fn test(&self, subject: &LuaString) -> bool {
+        self.search(&subject.as_bytes()).is_some()
+    }
+
+    fn find(&self, subject: &LuaString) -> (Option<usize>, Option<usize>) {
+        self.search(&subject.as_bytes())
+            .map(|(start, end)| (start.saturating_add(1), end))
+            .unzip()
+    }
+}
+
+#[options]
 struct GlobOptions {
     #[serde(default)]
     separator: bool,
 }
 
-#[native]
-fn regex(pattern: &str) -> Result<Held<Matcher>, regex::Error> {
-    Regex::new(pattern).map(|regex| Held::new(Matcher::Regex(regex)))
+#[function]
+fn regex(pattern: &str) -> Result<Matcher, regex::Error> {
+    Regex::new(pattern).map(Matcher::Regex)
 }
 
-#[native]
-fn glob(pattern: &str, opts: Json<GlobOptions>) -> Result<Held<Matcher>, globset::Error> {
-    let Json(opts) = opts;
+#[function]
+fn glob(pattern: &str, opts: &GlobOptions) -> Result<Matcher, globset::Error> {
     GlobBuilder::new(pattern)
         .literal_separator(opts.separator)
         .build()
-        .map(|glob| Held::new(Matcher::Glob(glob.compile_matcher())))
-}
-
-#[native]
-fn test(matcher: &Matcher, subject: &str) -> bool {
-    matcher.search(subject).is_some()
-}
-
-#[native]
-fn find(matcher: &Matcher, subject: &str) -> Option<(usize, usize)> {
-    matcher
-        .search(subject)
-        .map(|(start, end)| (start.saturating_add(1), end))
+        .map(|glob| Matcher::Glob(glob.compile_matcher()))
 }

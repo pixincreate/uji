@@ -1,50 +1,12 @@
-use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
-use uji_native::{Held, Json, native};
+use mlua::prelude::*;
 
 static DROPPED: AtomicI64 = AtomicI64::new(0);
 
-#[native]
-fn add(a: i64, b: i64) -> i64 {
-    a + b
-}
-
-#[native]
-fn greet(name: &str) -> String {
-    format!("hello {name}")
-}
-
-#[native]
-fn refuse(reason: &str) -> Result<(), String> {
-    Err(reason.to_string())
-}
-
-#[native(raise)]
-fn insist(reason: &str) -> Result<(), String> {
-    Err(reason.to_string())
-}
-
-#[native]
-async fn later(ms: u64) -> String {
-    tokio::time::sleep(Duration::from_millis(ms)).await;
-    format!("after {ms} ms")
-}
-
-#[derive(Deserialize)]
-struct Options {
-    #[serde(default = "one")]
-    step: i64,
-}
-
-fn one() -> i64 {
-    1
-}
-
-pub struct Counter {
-    value: AtomicI64,
+struct Counter {
+    start: i64,
+    value: i64,
     step: i64,
 }
 
@@ -54,49 +16,52 @@ impl Drop for Counter {
     }
 }
 
-#[derive(Serialize)]
-struct Made {
-    start: i64,
-}
-
-#[native]
-fn counter(start: i64, opts: Json<Options>) -> Held<Arc<Counter>, Made> {
-    let Json(opts) = opts;
-    let counter = Counter {
-        value: AtomicI64::new(start),
-        step: opts.step,
-    };
-    Held(Arc::new(counter), Made { start })
-}
-
-#[native]
-async fn eventually(start: i64, ms: u64) -> Held<Arc<Counter>, Made> {
-    tokio::time::sleep(Duration::from_millis(ms)).await;
-    let counter = Counter {
-        value: AtomicI64::new(start),
-        step: 1,
-    };
-    Held(Arc::new(counter), Made { start })
-}
-
-#[native]
-fn bump(counter: &Arc<Counter>) -> i64 {
-    counter.value.fetch_add(counter.step, Ordering::SeqCst) + counter.step
-}
-
-#[native]
-async fn settle(counter: Arc<Counter>, ms: u64) -> Result<i64, String> {
-    tokio::time::sleep(Duration::from_millis(ms)).await;
-    let value = counter.value.load(Ordering::SeqCst);
-    if value < 0 {
-        return Err("the counter went below zero".to_string());
+impl LuaUserData for Counter {
+    fn add_fields<F: LuaUserDataFields<Self>>(fields: &mut F) {
+        fields.add_field_method_get("start", |_, this| Ok(this.start));
     }
-    Ok(value)
+
+    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method_mut("bump", |_, this, ()| {
+            this.value += this.step;
+            Ok(this.value)
+        });
+    }
 }
 
-#[native]
-fn dropped() -> i64 {
-    DROPPED.load(Ordering::SeqCst)
+#[mlua::lua_module]
+fn testmod(lua: &Lua) -> LuaResult<LuaTable> {
+    let module = lua.create_table()?;
+    module.set(
+        "add",
+        lua.create_function(|_, (a, b): (i64, i64)| Ok(a + b))?,
+    )?;
+    module.set(
+        "greet",
+        lua.create_function(|_, name: String| Ok(format!("hello {name}")))?,
+    )?;
+    module.set(
+        "insist",
+        lua.create_function(|_, reason: String| Err::<(), _>(LuaError::runtime(reason)))?,
+    )?;
+    module.set(
+        "counter",
+        lua.create_function(|_, (start, step): (i64, Option<i64>)| {
+            Ok(Counter {
+                start,
+                value: start,
+                step: step.unwrap_or(1),
+            })
+        })?,
+    )?;
+    module.set(
+        "dropped",
+        lua.create_function(|_, ()| Ok(DROPPED.load(Ordering::SeqCst)))?,
+    )?;
+    Ok(module)
 }
 
-uji_native::module!();
+#[mlua::lua_module(name = "uji_sys_sha256")]
+fn sha256(lua: &Lua) -> LuaResult<LuaFunction> {
+    lua.create_function(|_, text: String| Ok(format!("replaced {text}")))
+}

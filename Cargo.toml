@@ -3,9 +3,7 @@ resolver = "3"
 members = [
     "crates/kernel",
     "crates/macros",
-    "crates/native",
     "crates/tests",
-    "crates/tests/module",
     "crates/uji",
     "lua",
 ]

@@ -37,7 +37,7 @@ local function streamed(opts)
         lines[#lines + 1] = line
         local ok, progressed = pcall(opts.on_line, line)
         if not ok then
-            return nil, tostring(progressed)
+            return nil, sys.message(progressed)
         end
         if progressed ~= false then
             deadline = sys.os.clock() + idle

@@ -3,15 +3,15 @@ use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use futures_util::StreamExt;
+use mlua::{BString, Lua, Table};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::{Client, Method, Url};
-use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::TcpListener;
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::{Mutex, mpsc, oneshot};
-use uji_native::{Held, Json, native};
+use uji_macros::{function, methods, options, value};
 
 use crate::io::{Abort, Line};
 
@@ -60,7 +60,7 @@ fn seconds(value: Option<f64>, key: &str) -> Result<Option<Duration>, NetError> 
         .transpose()
 }
 
-#[derive(Deserialize)]
+#[options]
 struct RequestOptions {
     url: String,
     method: Option<String>,
@@ -121,7 +121,7 @@ impl Request {
     }
 }
 
-#[derive(Serialize)]
+#[value]
 struct Head {
     status: u16,
     headers: HashMap<String, String>,
@@ -145,7 +145,7 @@ impl Head {
     }
 }
 
-#[derive(Serialize)]
+#[value]
 struct Response {
     #[serde(flatten)]
     head: Head,
@@ -254,102 +254,110 @@ impl Chunks {
 }
 
 pub(crate) struct Body {
+    head: Head,
     chunks: Mutex<Chunks>,
     _task: Abort,
 }
 
-#[native(net)]
-async fn request(opts: Json<RequestOptions>) -> Result<Json<Response>, NetError> {
-    let response = Request::new(opts.0)?.build().send().await?;
-    let head = Head::of(&response);
-    let body = response.text().await?;
-    Ok(Json(Response { head, body }))
+#[methods]
+impl Body {
+    #[get]
+    fn status(&self) -> u16 {
+        self.head.status
+    }
+
+    #[get]
+    fn headers(&self, lua: &Lua) -> mlua::Result<Table> {
+        lua.create_table_from(
+            self.head
+                .headers
+                .iter()
+                .map(|(name, value)| (name.as_str(), value.as_str())),
+        )
+    }
+
+    #[iterate(lines)]
+    async fn line(&self, wait: Option<f64>) -> Result<Line, NetError> {
+        let limit = seconds(wait, "wait")?;
+        let mut chunks = self.chunks.lock().await;
+        match chunks.ready()? {
+            Ready::Line(line) => Ok(Line::Text(line.into())),
+            Ready::End => Ok(Line::End),
+            Ready::Wait => Line::within(limit, chunks.line()).await,
+        }
+    }
+
+    async fn read(&self) -> Result<BString, NetError> {
+        self.chunks.lock().await.rest().await.map(BString::from)
+    }
 }
 
-#[native(net)]
-async fn open(opts: Json<RequestOptions>) -> Result<Held<Arc<Body>, Head>, NetError> {
-    let request = Request::new(opts.0)?;
+#[function(net)]
+async fn request(opts: RequestOptions) -> Result<Response, NetError> {
+    let response = Request::new(opts)?.build().send().await?;
+    let head = Head::of(&response);
+    let body = response.text().await?;
+    Ok(Response { head, body })
+}
+
+#[function(net)]
+async fn open(opts: RequestOptions) -> Result<Body, NetError> {
+    let request = Request::new(opts)?;
     let (head, answered) = oneshot::channel();
     let (chunks, receiver) = mpsc::channel(CHUNKS);
     let task = tokio::spawn(stream(request, head, chunks));
     let guard = Abort(task.abort_handle());
     let head = answered.await.unwrap_or(Err(NetError::Stopped))?;
-    let body = Body {
+    Ok(Body {
+        head,
         chunks: Mutex::new(Chunks {
             receiver,
             buffer: Vec::new(),
             done: false,
         }),
         _task: guard,
-    };
-    Ok(Held(Arc::new(body), head))
-}
-
-#[native(iterate = lines)]
-async fn line(body: Arc<Body>, wait: Option<f64>) -> Result<Line, NetError> {
-    let limit = seconds(wait, "wait")?;
-    let mut chunks = body.chunks.lock().await;
-    match chunks.ready()? {
-        Ready::Line(line) => Ok(Line::Text(line)),
-        Ready::End => Ok(Line::End),
-        Ready::Wait => match limit {
-            None => Ok(chunks.line().await?.into()),
-            Some(limit) => match tokio::time::timeout(limit, chunks.line()).await {
-                Ok(read) => Ok(read?.into()),
-                Err(_) => Ok(Line::Late),
-            },
-        },
-    }
-}
-
-#[native]
-async fn read(body: Arc<Body>) -> Result<Vec<u8>, NetError> {
-    body.chunks.lock().await.rest().await
+    })
 }
 
 pub(crate) struct Server {
+    port: u16,
     listener: Mutex<Option<Arc<TcpListener>>>,
 }
 
-#[derive(Serialize)]
-struct Bound {
-    port: u16,
+#[methods]
+impl Server {
+    #[get]
+    fn port(&self) -> u16 {
+        self.port
+    }
+
+    async fn accept(&self) -> Result<Conn, NetError> {
+        let listener = self.listener.lock().await.clone().ok_or(NetError::Closed)?;
+        let (stream, _) = listener.accept().await?;
+        let (reader, writer) = stream.into_split();
+        Ok(Conn {
+            reader: Mutex::new(BufReader::new(reader)),
+            writer: Mutex::new(writer),
+        })
+    }
+
+    async fn close(&self) {
+        self.listener.lock().await.take();
+    }
+}
+
+#[function(net)]
+async fn listen(port: Option<u16>) -> Result<Server, NetError> {
+    let listener = TcpListener::bind((LOOPBACK, port.unwrap_or(0))).await?;
+    Ok(Server {
+        port: listener.local_addr()?.port(),
+        listener: Mutex::new(Some(Arc::new(listener))),
+    })
 }
 
 pub(crate) struct Conn {
     reader: Mutex<BufReader<OwnedReadHalf>>,
     writer: Mutex<OwnedWriteHalf>,
-}
-
-#[native(net)]
-async fn listen(port: Option<u16>) -> Result<Held<Arc<Server>, Bound>, NetError> {
-    let listener = TcpListener::bind((LOOPBACK, port.unwrap_or(0))).await?;
-    let port = listener.local_addr()?.port();
-    let server = Server {
-        listener: Mutex::new(Some(Arc::new(listener))),
-    };
-    Ok(Held(Arc::new(server), Bound { port }))
-}
-
-#[native]
-async fn accept(server: Arc<Server>) -> Result<Held<Arc<Conn>>, NetError> {
-    let listener = server
-        .listener
-        .lock()
-        .await
-        .clone()
-        .ok_or(NetError::Closed)?;
-    let (stream, _) = listener.accept().await?;
-    let (reader, writer) = stream.into_split();
-    Ok(Held::new(Arc::new(Conn {
-        reader: Mutex::new(BufReader::new(reader)),
-        writer: Mutex::new(writer),
-    })))
-}
-
-#[native]
-async fn close(server: Arc<Server>) {
-    server.listener.lock().await.take();
 }
 
 async fn read_line(reader: &mut BufReader<OwnedReadHalf>) -> std::io::Result<Option<Vec<u8>>> {
@@ -361,36 +369,29 @@ async fn read_line(reader: &mut BufReader<OwnedReadHalf>) -> std::io::Result<Opt
     Ok(Some(line.into_bytes()))
 }
 
-#[native]
-async fn line(conn: Arc<Conn>, wait: Option<f64>) -> Result<Line, NetError> {
-    let limit = seconds(wait, "wait")?;
-    let mut reader = conn.reader.lock().await;
-    match limit {
-        None => Ok(read_line(&mut reader).await?.into()),
-        Some(limit) => match tokio::time::timeout(limit, read_line(&mut reader)).await {
-            Ok(read) => Ok(read?.into()),
-            Err(_) => Ok(Line::Late),
-        },
+#[methods]
+impl Conn {
+    async fn line(&self, wait: Option<f64>) -> Result<Line, NetError> {
+        let limit = seconds(wait, "wait")?;
+        let mut reader = self.reader.lock().await;
+        Ok(Line::within(limit, read_line(&mut reader)).await?)
     }
-}
 
-#[native]
-async fn read(conn: Arc<Conn>, count: usize) -> Result<Vec<u8>, NetError> {
-    let mut buffer = vec![0; count];
-    conn.reader.lock().await.read_exact(&mut buffer).await?;
-    Ok(buffer)
-}
+    async fn read(&self, count: usize) -> Result<BString, NetError> {
+        let mut buffer = vec![0; count];
+        self.reader.lock().await.read_exact(&mut buffer).await?;
+        Ok(buffer.into())
+    }
 
-#[native]
-async fn write(conn: Arc<Conn>, data: Vec<u8>) -> Result<(), NetError> {
-    let mut writer = conn.writer.lock().await;
-    writer.write_all(&data).await?;
-    writer.flush().await?;
-    Ok(())
-}
+    async fn write(&self, data: &[u8]) -> Result<(), NetError> {
+        let mut writer = self.writer.lock().await;
+        writer.write_all(data).await?;
+        writer.flush().await?;
+        Ok(())
+    }
 
-#[native]
-async fn close(conn: Arc<Conn>) -> Result<(), NetError> {
-    conn.writer.lock().await.shutdown().await?;
-    Ok(())
+    async fn close(&self) -> Result<(), NetError> {
+        self.writer.lock().await.shutdown().await?;
+        Ok(())
+    }
 }

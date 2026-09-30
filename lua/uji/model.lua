@@ -135,7 +135,7 @@ function M.call(stream, request, reply)
     }
     local ok, first, second = pcall(stream, request, handler)
     if not ok then
-        return nil, { kind = "provider", message = tostring(first) }
+        return nil, { kind = "provider", message = sys.message(first) }
     end
     if type(first) == "table" then
         return first

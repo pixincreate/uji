@@ -1,6 +1,5 @@
 use std::convert::Infallible;
 use std::io;
-use std::sync::Arc;
 
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -72,7 +71,7 @@ fn never<T>(impossible: Infallible) -> T {
     match impossible {}
 }
 
-pub(crate) fn open(terminal: VirtualTerminal) -> (Screen, Arc<Input>) {
+pub(crate) fn open(terminal: VirtualTerminal) -> (Screen, Input) {
     let (width, height) = *terminal.size.borrow();
     let surface = Terminal::new(TestBackend::new(width, height)).unwrap_or_else(never);
     (
@@ -81,6 +80,6 @@ pub(crate) fn open(terminal: VirtualTerminal) -> (Screen, Arc<Input>) {
             frames: terminal.frames,
             size: terminal.size,
         })),
-        Arc::new(Input::new(terminal.events, None)),
+        Input::new(terminal.events, None),
     )
 }

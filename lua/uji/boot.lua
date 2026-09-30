@@ -54,10 +54,6 @@ local function run(args)
     paths.overrides.config = parsed.flags["config-dir"]
     paths.overrides.data = parsed.flags["data-dir"]
     paths.overrides.db = parsed.flags.db
-    local config = paths.config()
-    if config then
-        table.insert(sys.native.paths, config .. "/native")
-    end
     if parsed.command == "help" then
         io.stdout:write(cli.USAGE, "\n")
         return
@@ -79,7 +75,7 @@ local function run(args)
     local Store = require("uji.store")
     local ok, store = pcall(Store, db)
     if not ok then
-        return fail(tostring(store))
+        return fail(sys.message(store))
     end
     if parsed.command == "delete" then
         local id = parsed.positional and parsed.positional[1]
@@ -124,6 +120,6 @@ return function(args)
     end)
     local ok, err = pcall(run, args)
     if not ok then
-        fail(tostring(err))
+        fail(sys.message(err))
     end
 end

@@ -54,7 +54,7 @@ function Blocks:describe(call)
     end
     local fine, detail = pcall(tool.detail, entry, args)
     if not fine then
-        notices.push(call.name .. " subject: " .. tostring(detail))
+        notices.push(call.name .. " subject: " .. sys.message(detail))
         detail = nil
     end
     local verb = entry.display and entry.display.verb
@@ -191,7 +191,7 @@ function Blocks:custom(out, block, width)
     end
     local ok, lines = pcall(Window.lines, value)
     if not ok then
-        notices.push("render_message: " .. tostring(lines))
+        notices.push("render_message: " .. sys.message(lines))
         return false
     end
     spans.lines(lines, width, true, self.styles, out)

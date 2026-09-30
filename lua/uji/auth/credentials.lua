@@ -41,7 +41,7 @@ function Credentials:file()
     end
     local ok, all = pcall(sys.toml.decode, text)
     if not ok then
-        return nil, path .. " could not be read: " .. tostring(all)
+        return nil, path .. " could not be read: " .. sys.message(all)
     end
     return all
 end

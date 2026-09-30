@@ -1,9 +1,9 @@
 use keyring::Entry;
-use uji_native::native;
+use uji_macros::function;
 
 use crate::io::{self, Blocked};
 
-#[native(keychain)]
+#[function(keychain)]
 async fn get(service: String, account: String) -> Result<Option<String>, Blocked<keyring::Error>> {
     io::blocking(move || {
         match Entry::new(&service, &account).and_then(|entry| entry.get_password()) {
@@ -14,7 +14,7 @@ async fn get(service: String, account: String) -> Result<Option<String>, Blocked
     .await
 }
 
-#[native(keychain)]
+#[function(keychain)]
 async fn set(
     service: String,
     account: String,
@@ -23,7 +23,7 @@ async fn set(
     io::blocking(move || Entry::new(&service, &account)?.set_password(&secret)).await
 }
 
-#[native(keychain)]
+#[function(keychain)]
 async fn delete(service: String, account: String) -> Result<(), Blocked<keyring::Error>> {
     io::blocking(move || Entry::new(&service, &account)?.delete_credential()).await
 }

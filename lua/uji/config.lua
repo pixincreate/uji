@@ -17,7 +17,7 @@ local M = { searching = false }
 local function source(path, name)
     local ok, err = pcall(plugin.source, path, name)
     if not ok then
-        notices.push(path .. ": " .. tostring(err))
+        notices.push(path .. ": " .. sys.message(err))
     end
 end
 
@@ -40,7 +40,7 @@ function M.load()
     else
         local ok, err = pcall(plugin.run, "defaults", nil, require, DEFAULTS)
         if not ok then
-            notices.push(DEFAULTS .. ": " .. tostring(err))
+            notices.push(DEFAULTS .. ": " .. sys.message(err))
         end
     end
     for _, root in ipairs(packs.list()) do

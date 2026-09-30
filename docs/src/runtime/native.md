@@ -1,65 +1,212 @@
 # Native modules
 
-A native module is a shared library written in Rust that Lua loads with
-`require`. uji looks for it in `native/` in the
-[config directory](../configuration/files.md), where `require("name")` finds
-`name.dylib` on macOS, `name.so` on Linux and `name.dll` on Windows.
+A native module is a shared library that Lua loads with `require`. uji looks
+for it in `native/` in the [config directory](../configuration/files.md) and
+in every [pack](../configuration/packs.md). `require("name")` finds
+`name.dylib` on macOS and `name.so` on Linux. A dotted name looks in folders,
+so `require("tools.fast")` finds `native/tools/fast.dylib`. Native modules
+work on macOS and Linux only.
 
-## The crate
+The library is a Lua C module for LuaJIT. It exports a function named
+`luaopen_` followed by the module name, with each dot written as an
+underscore, and whatever that function returns is the module. A module can be
+written in any language that can export such a function, such as C, Zig or
+Rust.
 
-The library is a Rust crate with `crate-type = ["cdylib"]` that depends on
-`uji-native`. It calls `uji_native::module!()` once at the top level, which
-exports what uji reads when it loads the library.
+The library does not link LuaJIT itself. It uses the LuaJIT inside uji, which
+on macOS needs the linker flag `-undefined dynamic_lookup`.
+
+A native function runs while every task waits, so a slow one holds up the
+screen until it returns.
+
+## Loading
+
+uji loads a library the first time `require` asks for it, and keeps it until
+uji's Lua starts again. After you rebuild a library, `/reload` loads the new
+one.
+
+## Errors
+
+An error raised inside a native function, such as an argument of the wrong
+type, reaches Lua like any other error. `pcall` catches it, and
+`uji.message(err)` gives its text without a stack trace.
+
+```lua
+local ok, err = pcall(require("hello").greet)
+if not ok then
+    uji.notify(uji.message(err))
+end
+```
+
+## Writing one in C
+
+The module needs LuaJIT's headers, for example from `brew install luajit` or a
+`libluajit-5.1-dev` package.
+
+```c
+#include <lua.h>
+#include <lauxlib.h>
+
+static int greet(lua_State *L) {
+    const char *name = luaL_checkstring(L, 1);
+    lua_pushfstring(L, "hello %s", name);
+    return 1;
+}
+
+int luaopen_hello(lua_State *L) {
+    lua_newtable(L);
+    lua_pushcfunction(L, greet);
+    lua_setfield(L, -2, "greet");
+    return 1;
+}
+```
+
+On macOS:
+
+```sh
+cc -shared -undefined dynamic_lookup -I"$(brew --prefix luajit)/include/luajit-2.1" -o hello.dylib hello.c
+mkdir -p ~/.config/uji/native && cp hello.dylib ~/.config/uji/native/
+```
+
+On Linux:
+
+```sh
+cc -shared -fPIC -I/usr/include/luajit-2.1 -o hello.so hello.c
+mkdir -p ~/.config/uji/native && cp hello.so ~/.config/uji/native/
+```
+
+```lua
+uji.notify(require("hello").greet("uji"))
+```
+
+The notice reads `hello uji`.
+
+## Writing one in Rust
+
+A Rust module is a crate with `crate-type = ["cdylib"]` that depends on mlua
+with the `luajit52` and `module` features. `#[mlua::lua_module]` on a function
+that takes `&Lua` and returns the module exports it as `luaopen_` followed by
+the function's name, and `#[mlua::lua_module(name = "tools_fast")]` exports it
+under the name you give instead. Functions, objects and conversions follow
+mlua's own documentation. An object that Lua no longer holds is dropped in
+Rust once Lua collects it.
+
+`Cargo.toml`:
 
 ```toml
+[package]
+name = "counter"
+version = "0.1.0"
+edition = "2024"
+
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
-uji-native = { git = "https://github.com/uji-labs/uji" }
+mlua = { version = "0.12", features = ["luajit52", "module"] }
 ```
 
-## #[native]
+`build.rs`, which passes the macOS linker flag:
 
-Every function marked `#[native]` becomes a Lua function on the table that
-`require` returns. `#[native(name)]` puts it in a nested table instead, so
-`#[native(text)] fn trim` becomes `module.text.trim`.
+```rust
+fn main() {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        println!("cargo::rustc-cdylib-link-arg=-undefined");
+        println!("cargo::rustc-cdylib-link-arg=dynamic_lookup");
+    }
+}
+```
 
-| Parameter | Lua passes |
+`src/lib.rs`:
+
+```rust
+use mlua::prelude::*;
+
+struct Counter {
+    value: i64,
+}
+
+impl LuaUserData for Counter {
+    fn add_methods<M: LuaUserDataMethods<Self>>(methods: &mut M) {
+        methods.add_method_mut("bump", |_, this, ()| {
+            this.value += 1;
+            Ok(this.value)
+        });
+    }
+}
+
+#[mlua::lua_module]
+fn counter(lua: &Lua) -> LuaResult<LuaTable> {
+    let module = lua.create_table()?;
+    module.set("new", lua.create_function(|_, start: i64| Ok(Counter { value: start }))?)?;
+    Ok(module)
+}
+```
+
+Build it and copy the library under the module's name, `counter.dylib` on
+macOS or `counter.so` on Linux:
+
+```sh
+cargo build --release
+cp target/release/libcounter.dylib ~/.config/uji/native/counter.dylib
+```
+
+```lua
+local counter = require("counter").new(10)
+uji.notify(tostring(counter:bump()))
+```
+
+The notice reads `11`.
+
+## Replacing a built-in module
+
+Every part of the [Runtime](index.md) is a module named `uji.sys.` followed by
+its name. `require` looks in these places, in order, and uses the first module
+it finds:
+
+1. Lua in your config and packs, such as `~/.config/uji/lua/uji/sys/fs.lua`.
+2. The Lua that comes with uji.
+3. Native modules in `native/` in your config and packs, such as
+   `native/uji/sys/fs.dylib`, which exports `luaopen_uji_sys_fs`.
+4. The modules built into uji.
+
+A module you provide under one of these names replaces the built-in one, and
+everything in uji that uses it uses yours. The other modules stay built in.
+
+| Module | What it is |
 |---|---|
-| `&str`, `String` | a string |
-| `&[u8]`, `Vec<u8>` | a string of bytes |
-| `Json<T>` | a table, read into any `T` that implements `Deserialize`. `nil` reads as an empty table. |
-| `bool` | any value, where only `true` counts as true |
-| integers and floats | a number |
-| `Option<number>` | a number or `nil` |
-| `Option<&str>` | a string or `nil` |
-| `&T` or `Arc<T>` as the first parameter | the object itself, which makes the function a method of `T` |
+| `uji.sys.task` | `spawn`, `race`, `timeout` and `on_error`, in [Tasks](tasks.md). |
+| `uji.sys.sleep` | The `sleep` function, in [Tasks](tasks.md). |
+| `uji.sys.promise` | The `promise` function, in [Tasks](tasks.md). |
+| `uji.sys.fs` | Files and folders, in [uji.fs](../api/fs.md). |
+| `uji.sys.net` | Requests and the local server, in [Network](network.md). |
+| `uji.sys.proc` | Processes, in [Processes](processes.md). |
+| `uji.sys.db` | SQLite databases, in [Storage](storage.md). |
+| `uji.sys.os` | The system and restarting, in [System](system.md). |
+| `uji.sys.keychain` | The keychain, in [System](system.md). |
+| `uji.sys.clipboard` | The clipboard, in [System](system.md). |
+| `uji.sys.modules` | The `modules` function, in [System](system.md). |
+| `uji.sys.message` | The `message` function, in [System](system.md). |
+| `uji.sys.json` | JSON, in [uji.json](../api/json.md). |
+| `uji.sys.toml` | TOML, in [Encoding](encoding.md). |
+| `uji.sys.base64` | Base64, in [Encoding](encoding.md). |
+| `uji.sys.sha256` | The `sha256` function, in [Encoding](encoding.md). |
+| `uji.sys.random` | The `random` function, in [Encoding](encoding.md). |
+| `uji.sys.regex` | The `regex` function, in [Text](text.md). |
+| `uji.sys.glob` | The `glob` function, in [Text](text.md). |
+| `uji.sys.fuzzy` | The `fuzzy` function, in [Text](text.md). |
+| `uji.sys.width` | The `width` function, in [Text](text.md). |
+| `uji.sys.lossy` | The `lossy` function, in [Text](text.md). |
+| `uji.sys.markdown` | The `markdown` function, in [Text](text.md). |
+| `uji.sys.image` | Image fitting, in [Images](images.md). |
+| `uji.sys.tty` | The screen and its input, in [Terminal](terminal.md). |
 
-| Return | Lua receives |
-|---|---|
-| `bool`, integers and floats | the value |
-| `String`, `Vec<u8>` | a string |
-| `Json<T>` | a table, for any `T` that implements `Serialize` |
-| `()` | `true` |
-| `Option<T>` | `nil` for `None` |
-| `Result<T, E>` | the value, or `nil` and the error's message |
-| `(A, B)` | two values |
-| `Held<T, F>` | an object that holds `T`, with the fields of `F` |
+This file at `~/.config/uji/lua/uji/sys/width.lua` counts every character as
+one column. `/reload` puts it to use.
 
-A function marked `async` runs on a runtime the library owns. The Lua task
-that calls it waits for the result, and other tasks run meanwhile. When that
-task is cancelled, the function still runs to its end, and uji drops the
-result.
-`#[native(raise)]` turns an error from a `Result` into a Lua error instead of
-`nil` and a message. An argument of the wrong type always raises an error.
-
-## Objects
-
-`Held::new(value)` returns `value` as an object, and `Held(value, fields)`
-also sets the fields that `fields` serializes to on it. A function whose first
-parameter is `&T` or `Arc<T>` becomes a method of every object that holds a
-`T`. It takes `Arc<T>` when it is `async`, since the object may be released
-before the work ends. `#[native(iterate = lines)]` on a method named `line`
-also adds `lines()`, which returns an iterator that calls `line` until it
-returns `nil`. uji releases the value when Lua no longer holds the object.
+```lua
+return function(text)
+    local _, count = text:gsub("[^\128-\191]", "")
+    return count
+end
+```

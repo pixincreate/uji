@@ -1,34 +1,25 @@
 use arboard::Clipboard;
-use uji_native::{Json, native};
+use uji_macros::function;
 
-use crate::context;
 use crate::images::{self, Fitted, ImageError};
 use crate::io::{self, Blocked};
+use crate::kernel::State;
 
-fn using<T>(
-    run: impl FnOnce(&mut Clipboard) -> Result<T, arboard::Error>,
-) -> Result<T, arboard::Error> {
-    context::with(|context| {
-        if context.clipboard.is_none() {
-            context.clipboard = Some(Clipboard::new()?);
-        }
-        context
-            .clipboard
-            .as_mut()
-            .ok_or(arboard::Error::ClipboardNotSupported)
-            .and_then(run)
-    })
-    .unwrap_or(Err(arboard::Error::ClipboardNotSupported))
+fn open(slot: &mut Option<Clipboard>) -> Result<&mut Clipboard, arboard::Error> {
+    if slot.is_none() {
+        *slot = Some(Clipboard::new()?);
+    }
+    slot.as_mut().ok_or(arboard::Error::ClipboardNotSupported)
 }
 
-#[native(clipboard)]
-fn get() -> Result<String, arboard::Error> {
-    using(Clipboard::get_text)
+#[function(clipboard)]
+fn get(state: &mut State) -> Result<String, arboard::Error> {
+    open(&mut state.clipboard).and_then(Clipboard::get_text)
 }
 
-#[native(clipboard)]
-fn set(text: &str) -> Result<(), arboard::Error> {
-    using(|clipboard| clipboard.set_text(text))
+#[function(clipboard)]
+fn set(state: &mut State, text: &str) -> Result<(), arboard::Error> {
+    open(&mut state.clipboard).and_then(|clipboard| clipboard.set_text(text))
 }
 
 fn copied(edge: u32, limit: usize) -> Result<Fitted, ImageError> {
@@ -41,7 +32,7 @@ fn copied(edge: u32, limit: usize) -> Result<Fitted, ImageError> {
     images::fit_image(image, edge, limit, false)
 }
 
-#[native(clipboard)]
-async fn image(edge: u32, limit: usize) -> Result<Json<Fitted>, Blocked<ImageError>> {
-    io::blocking(move || copied(edge, limit)).await.map(Json)
+#[function(clipboard)]
+async fn image(edge: u32, limit: usize) -> Result<Fitted, Blocked<ImageError>> {
+    io::blocking(move || copied(edge, limit)).await
 }

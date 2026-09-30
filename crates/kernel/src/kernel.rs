@@ -1,17 +1,15 @@
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Instant;
 
-use mlua::{Function, Lua, Table};
+use mlua::{AnyUserData, AppDataRef, AppDataRefMut, Function, Lua};
 use tokio::runtime::Runtime;
+use tokio::sync::Notify;
+use tokio::task::LocalSet;
 
-use crate::context::{self, Context};
-use crate::net;
-use crate::queue::Channel;
 use crate::tty::{self, Terminal, Tty};
 use crate::vm::{self, Sources};
-
-const MODULE_DIR: &str = "lua";
-const RUNTIME: &str = "uji.sys";
-const SCHEDULER: &str = "uji.sys.scheduler";
+use crate::{net, task};
 
 pub struct Options {
     pub sources: Sources,
@@ -41,12 +39,70 @@ pub(crate) struct Restart {
     pub(crate) carry: Option<String>,
 }
 
+pub(crate) struct State {
+    pub(crate) layers: Vec<Sources>,
+    pub(crate) roots: Vec<String>,
+    pub(crate) carry: Option<String>,
+    pub(crate) terminal: Option<Tty>,
+    pub(crate) opened: Option<(AnyUserData, AnyUserData)>,
+    pub(crate) clipboard: Option<arboard::Clipboard>,
+    pub(crate) started: Instant,
+    pub(crate) pending: usize,
+    pub(crate) collect: bool,
+    pub(crate) exit: Option<u8>,
+    pub(crate) restart: Option<Restart>,
+    pub(crate) errors: Vec<String>,
+    pub(crate) on_error: Option<Function>,
+    wake: Arc<Notify>,
+}
+
+impl State {
+    pub(crate) fn of(lua: &Lua) -> mlua::Result<AppDataRef<'_, Self>> {
+        lua.app_data_ref::<Self>()
+            .ok_or_else(|| mlua::Error::runtime("the kernel is not running"))
+    }
+
+    pub(crate) fn of_mut(lua: &Lua) -> mlua::Result<AppDataRefMut<'_, Self>> {
+        lua.app_data_mut::<Self>()
+            .ok_or_else(|| mlua::Error::runtime("the kernel is not running"))
+    }
+
+    pub(crate) fn report(lua: &Lua, message: &str) {
+        let handler = Self::of(lua).ok().and_then(|state| state.on_error.clone());
+        let delivered = handler.is_some_and(|handler| handler.call::<()>(message).is_ok());
+        if !delivered && let Ok(mut state) = Self::of_mut(lua) {
+            state.errors.push(message.to_string());
+        }
+    }
+
+    pub(crate) fn wake(&self) {
+        self.wake.notify_one();
+    }
+
+    pub(crate) fn stopping(&self) -> bool {
+        self.exit.is_some() || self.restart.is_some()
+    }
+
+    fn stopped(&self) -> Option<u8> {
+        if self.exit.is_some() {
+            return self.exit;
+        }
+        (self.restart.is_some() || self.pending == 0).then_some(0)
+    }
+
+    fn reclaim(&mut self) -> Option<Tty> {
+        match self.opened.take() {
+            Some((screen, input)) => tty::reclaim(&screen, &input),
+            None => self.terminal.take(),
+        }
+    }
+}
+
 struct Life {
     code: u8,
     errors: Vec<String>,
     restart: Option<Restart>,
     terminal: Option<Tty>,
-    channel: Channel,
 }
 
 pub fn run(options: Options) -> Outcome {
@@ -73,13 +129,11 @@ fn drive(options: Options) -> Result<Outcome, Error> {
         carry: None,
     };
     let mut terminal = Some(Tty::Fresh(terminal));
-    let mut channel = Channel::open();
     let mut errors = Vec::new();
     let code = loop {
-        let life = live(&runtime, (&sources, &entry), next, terminal.take(), channel)?;
+        let life = live(&runtime, (&sources, &entry), next, terminal.take())?;
         errors.extend(life.errors);
         terminal = life.terminal;
-        channel = life.channel;
         match life.restart {
             Some(restart) => next = restart,
             None => break life.code,
@@ -91,54 +145,60 @@ fn drive(options: Options) -> Result<Outcome, Error> {
     Ok(Outcome { code, errors })
 }
 
-fn layers(sources: &Sources, roots: &[PathBuf]) -> Vec<Sources> {
-    roots
-        .iter()
-        .map(|root| Sources::Directory(root.join(MODULE_DIR)))
-        .chain(std::iter::once(sources.clone()))
-        .collect()
-}
-
-fn publish(lua: &Lua, boot: &Restart) -> mlua::Result<()> {
-    let roots = boot.roots.iter().map(|root| root.display().to_string());
-    let native: Table = lua.globals().get("UJI_NATIVE")?;
-    native.set("roots", lua.create_sequence_from(roots)?)?;
-    native.set("carry", boot.carry.clone())
-}
-
 fn live(
     runtime: &Runtime,
     (sources, entry): (&Sources, &str),
     boot: Restart,
     terminal: Option<Tty>,
-    channel: Channel,
 ) -> Result<Life, Error> {
-    let layers = layers(sources, &boot.roots);
-    context::enter(Context::new(
-        runtime.handle().clone(),
-        layers.clone(),
+    let layers = vm::layers(sources, &boot.roots);
+    let lua = vm::create(layers.clone(), &boot.roots)?;
+    let wake = Arc::new(Notify::new());
+    lua.set_app_data(State {
+        layers,
+        roots: boot
+            .roots
+            .iter()
+            .map(|root| root.display().to_string())
+            .collect(),
+        carry: boot.carry,
         terminal,
-        channel,
-    ));
-    let ran = start(layers, entry, boot);
-    let context = context::leave().ok_or(Error::Lost)?;
-    ran?;
+        opened: None,
+        clipboard: None,
+        started: Instant::now(),
+        pending: 0,
+        collect: false,
+        exit: None,
+        restart: None,
+        errors: Vec::new(),
+        on_error: None,
+        wake: Arc::clone(&wake),
+    });
+    let local = LocalSet::new();
+    let ran = local.block_on(runtime, start(&lua, entry, boot.args, &wake));
+    drop(local);
+    lua.gc_collect()?;
+    let mut state = lua.remove_app_data::<State>().ok_or(Error::Lost)?;
+    let code = ran?;
     Ok(Life {
-        code: context.exit.unwrap_or(0),
-        errors: context.errors,
-        restart: context.restart,
-        terminal: context.terminal,
-        channel: context.queue.close(),
+        code,
+        terminal: state.reclaim(),
+        errors: state.errors,
+        restart: state.restart,
     })
 }
 
-fn start(layers: Vec<Sources>, entry: &str, boot: Restart) -> Result<(), Error> {
-    let lua = vm::create(layers)?;
-    publish(&lua, &boot)?;
-    vm::require::<Table>(&lua, RUNTIME)?;
-    let main: Function = vm::require(&lua, entry)?;
-    let scheduler: Table = vm::require(&lua, SCHEDULER)?;
-    let args = lua.create_sequence_from(boot.args)?;
-    scheduler.get::<Function>("run")?.call::<()>((main, args))?;
-    Ok(())
+async fn start(lua: &Lua, entry: &str, args: Vec<String>, wake: &Notify) -> Result<u8, Error> {
+    let main: Function = vm::require(lua, entry)?;
+    task::start(lua, &main, lua.create_sequence_from(args)?)?;
+    loop {
+        wake.notified().await;
+        if let Some(code) = State::of(lua)?.stopped() {
+            return Ok(code);
+        }
+        let collect = std::mem::take(&mut State::of_mut(lua)?.collect);
+        if collect {
+            lua.gc_collect()?;
+        }
+    }
 }

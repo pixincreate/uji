@@ -99,7 +99,7 @@ function Session:append(message)
     stored[#stored + 1] = entry
     event.emit("message_appended", { type = message.type, text = tokens.text(message) })
     if not ok then
-        return entry, "failed to persist " .. message.type .. " message: " .. tostring(err)
+        return entry, "failed to persist " .. message.type .. " message: " .. sys.message(err)
     end
     return entry
 end

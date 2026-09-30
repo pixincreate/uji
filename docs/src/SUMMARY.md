@@ -59,4 +59,5 @@
   - [Text](runtime/text.md)
   - [Encoding](runtime/encoding.md)
   - [Images](runtime/images.md)
+  - [Terminal](runtime/terminal.md)
   - [Native modules](runtime/native.md)

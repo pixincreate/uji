@@ -1,13 +1,27 @@
 use std::borrow::Cow;
 use std::collections::BTreeSet;
+use std::env::consts::DLL_EXTENSION;
 use std::path::PathBuf;
 
-use mlua::{FromLua, Lua, LuaOptions, MultiValue, StdLib, Table, Value};
-use uji_native::{Json, native};
+use mlua::{FromLua, IntoLuaMulti, Lua, LuaOptions, MultiValue, StdLib, Table, Value};
+use uji_macros::function;
 
-use crate::context;
+use crate::kernel::State;
 
 const AFTER_PRELOAD: i64 = 2;
+const LUA_DIR: &str = "lua";
+const NATIVE_DIR: &str = "native";
+const NAMESPACE: &str = "uji.sys.";
+
+pub(crate) struct Export {
+    pub(crate) module: &'static str,
+    pub(crate) name: Option<&'static str>,
+    pub(crate) build: fn(&Lua) -> mlua::Result<Value>,
+}
+
+#[allow(unsafe_code)]
+#[linkme::distributed_slice]
+pub(crate) static EXPORTS: [Export];
 
 #[derive(Clone)]
 pub enum Sources {
@@ -78,57 +92,99 @@ fn child(rest: &str) -> Option<String> {
 
 #[allow(unsafe_code)]
 fn lua() -> Lua {
-    unsafe { Lua::unsafe_new_with(StdLib::ALL_SAFE | StdLib::FFI, LuaOptions::new()) }
+    unsafe { Lua::unsafe_new_with(StdLib::ALL_SAFE, LuaOptions::new()) }
 }
 
-pub(crate) fn create(layers: Vec<Sources>) -> mlua::Result<Lua> {
+pub(crate) fn layers(sources: &Sources, roots: &[PathBuf]) -> Vec<Sources> {
+    roots
+        .iter()
+        .map(|root| Sources::Directory(root.join(LUA_DIR)))
+        .chain(std::iter::once(sources.clone()))
+        .collect()
+}
+
+fn natives(roots: &[PathBuf]) -> String {
+    roots
+        .iter()
+        .map(|root| {
+            root.join(NATIVE_DIR)
+                .join(format!("?.{DLL_EXTENSION}"))
+                .display()
+                .to_string()
+        })
+        .collect::<Vec<_>>()
+        .join(";")
+}
+
+pub(crate) fn create(layers: Vec<Sources>, roots: &[PathBuf]) -> mlua::Result<Lua> {
     let lua = lua();
-    install_searcher(&lua, layers)?;
-    lua.globals().set("uji", lua.create_table()?)?;
-    crate::native::install(&lua)?;
+    let package: Table = lua.globals().get("package")?;
+    package.set("path", "")?;
+    package.set("cpath", natives(roots))?;
+    let searchers: Table = package.get("searchers")?;
+    searchers.raw_insert(
+        AFTER_PRELOAD,
+        lua.create_function(move |lua, module: String| written(lua, &layers, &module))?,
+    )?;
+    searchers.raw_push(lua.create_function(|lua, module: String| built_in(lua, &module))?)?;
     Ok(lua)
-}
-
-#[native]
-fn modules(namespace: &str) -> Json<Vec<String>> {
-    let names: BTreeSet<String> = context::with(|context| {
-        context
-            .layers
-            .iter()
-            .flat_map(|layer| layer.children(namespace))
-            .collect()
-    })
-    .unwrap_or_default();
-    Json(
-        names
-            .into_iter()
-            .map(|name| format!("{namespace}.{name}"))
-            .collect(),
-    )
 }
 
 pub(crate) fn require<T: FromLua>(lua: &Lua, module: &str) -> mlua::Result<T> {
     lua.globals().get::<mlua::Function>("require")?.call(module)
 }
 
-fn install_searcher(lua: &Lua, layers: Vec<Sources>) -> mlua::Result<()> {
-    let searcher = lua.create_function(move |lua, module: String| {
-        let files = candidates(&module);
-        let Some((name, source)) = layers.iter().find_map(|layer| layer.find(&files)) else {
-            return Ok(MultiValue::from_vec(vec![Value::String(
-                lua.create_string(format!("\n\tno runtime module '{module}'"))?,
-            )]));
-        };
-        let chunk = lua
-            .load(source.as_ref())
-            .set_name(format!("@{name}"))
-            .into_function()?;
-        Ok(MultiValue::from_vec(vec![
-            Value::Function(chunk),
-            Value::String(lua.create_string(&name)?),
-        ]))
-    })?;
-    let package: Table = lua.globals().get("package")?;
-    let searchers: Table = package.get("searchers")?;
-    searchers.raw_insert(AFTER_PRELOAD, searcher)
+fn written(lua: &Lua, layers: &[Sources], module: &str) -> mlua::Result<MultiValue> {
+    let files = candidates(module);
+    let Some((name, source)) = layers.iter().find_map(|layer| layer.find(&files)) else {
+        return format!("\n\tno runtime module '{module}'").into_lua_multi(lua);
+    };
+    let chunk = lua
+        .load(source.as_ref())
+        .set_name(format!("@{name}"))
+        .into_function()?;
+    (chunk, name).into_lua_multi(lua)
+}
+
+fn built_in(lua: &Lua, module: &str) -> mlua::Result<MultiValue> {
+    let exports: Vec<&Export> = module
+        .strip_prefix(NAMESPACE)
+        .map(|name| {
+            EXPORTS
+                .iter()
+                .filter(|export| export.module == name)
+                .collect()
+        })
+        .unwrap_or_default();
+    if exports.is_empty() {
+        return format!("\n\tno built-in module '{module}'").into_lua_multi(lua);
+    }
+    lua.create_function(move |lua, ()| open(lua, &exports))?
+        .into_lua_multi(lua)
+}
+
+fn open(lua: &Lua, exports: &[&Export]) -> mlua::Result<Value> {
+    if let [only] = exports
+        && only.name.is_none()
+    {
+        return (only.build)(lua);
+    }
+    let table = lua.create_table()?;
+    for export in exports {
+        table.raw_set(export.name.unwrap_or(export.module), (export.build)(lua)?)?;
+    }
+    Ok(Value::Table(table))
+}
+
+#[function]
+fn modules(state: &State, namespace: &str) -> Vec<String> {
+    let names: BTreeSet<String> = state
+        .layers
+        .iter()
+        .flat_map(|layer| layer.children(namespace))
+        .collect();
+    names
+        .into_iter()
+        .map(|name| format!("{namespace}.{name}"))
+        .collect()
 }

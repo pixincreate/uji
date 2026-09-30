@@ -70,7 +70,7 @@ function Pick:query_later()
             end
         end)
         if not ok then
-            notices.push("pick query: " .. tostring(err))
+            notices.push("pick query: " .. sys.message(err))
         end
     end)
 end

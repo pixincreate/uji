@@ -198,7 +198,7 @@ function Agent:start(system)
     self.task = task.spawn(function()
         local ok, err = pcall(loop.run, loop)
         if not ok then
-            self:failed("uji.loop: " .. tostring(err))
+            self:failed("uji.loop: " .. sys.message(err))
         end
     end)
 end
@@ -354,7 +354,7 @@ function Agent:run_tool(call, args)
     }
     local ok, result = pcall(entry.run, args, ctx)
     if not ok then
-        return "error: " .. tostring(result)
+        return "error: " .. sys.message(result)
     end
     local text, attached = outcome(result)
     if text then
@@ -498,7 +498,7 @@ function Agent:interrupt()
     if turn and turn.cancel_tool then
         local ok, err = pcall(turn.cancel_tool)
         if not ok then
-            notices.push(tostring(err))
+            notices.push(sys.message(err))
         end
     end
     self:clear_stream()

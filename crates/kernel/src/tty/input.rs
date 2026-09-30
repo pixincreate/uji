@@ -5,13 +5,12 @@ use std::time::Duration;
 use crossterm::event::{
     Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
-use serde::Serialize;
 use tokio::sync::{Mutex, mpsc};
-use uji_native::{Json, native};
+use uji_macros::{methods, value};
 
 const POLL: Duration = Duration::from_millis(100);
 
-#[derive(Serialize)]
+#[value]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum Incoming {
     Key {
@@ -83,7 +82,7 @@ fn key(key: KeyEvent) -> Option<Incoming> {
     })
 }
 
-#[derive(Serialize)]
+#[value]
 #[serde(rename_all = "snake_case")]
 enum Motion {
     Down,
@@ -96,7 +95,7 @@ enum Motion {
     ScrollRight,
 }
 
-#[derive(Serialize)]
+#[value]
 #[serde(rename_all = "lowercase")]
 enum Button {
     Left,
@@ -199,12 +198,15 @@ impl Input {
     }
 }
 
-#[native(iterate = events)]
-async fn event(input: Arc<Input>) -> Option<Json<Incoming>> {
-    let mut events = input.events.lock().await;
-    loop {
-        if let Some(found) = incoming(events.recv().await?) {
-            return Some(Json(found));
+#[methods]
+impl Input {
+    #[iterate(events)]
+    async fn event(&self) -> Option<Incoming> {
+        let mut events = self.events.lock().await;
+        loop {
+            if let Some(found) = incoming(events.recv().await?) {
+                return Some(found);
+            }
         }
     }
 }

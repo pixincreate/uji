@@ -1,13 +1,11 @@
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde::Deserialize;
-use uji_native::{Json, List, native};
+use uji_macros::{constant, function, options};
 
-use crate::context;
-use crate::kernel::Restart;
+use crate::kernel::{Restart, State};
 
-#[native(os)]
+#[function(os)]
 fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -16,47 +14,72 @@ fn now() -> i64 {
         .unwrap_or_default()
 }
 
-#[native(os)]
+#[function(os)]
 fn env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|value| !value.is_empty())
 }
 
-#[native(os, raise)]
-fn cwd() -> std::io::Result<String> {
-    std::env::current_dir().map(|dir| dir.display().to_string())
+#[function(os)]
+fn cwd() -> mlua::Result<String> {
+    Ok(std::env::current_dir()?.display().to_string())
 }
 
-#[native(os)]
+#[function(os)]
 fn home() -> Option<String> {
     std::env::home_dir().map(|dir| dir.display().to_string())
 }
 
-#[native(os)]
-fn clock() -> f64 {
-    context::with(|context| context.started.elapsed().as_secs_f64()).unwrap_or_default()
+#[function(os)]
+fn clock(state: &State) -> f64 {
+    state.started.elapsed().as_secs_f64()
 }
 
-#[derive(Deserialize)]
+#[options]
 struct RestartOptions {
     #[serde(default)]
-    args: List<String>,
+    args: Vec<String>,
     #[serde(default)]
-    roots: List<String>,
+    roots: Vec<String>,
     carry: Option<String>,
 }
 
-#[native(os)]
-fn restart(opts: Json<RestartOptions>) {
-    let Json(opts) = opts;
-    let restart = Restart {
-        args: opts.args.0,
-        roots: opts.roots.0.into_iter().map(PathBuf::from).collect(),
+#[function(os)]
+fn restart(state: &mut State, opts: RestartOptions) {
+    state.restart = Some(Restart {
+        args: opts.args,
+        roots: opts.roots.into_iter().map(PathBuf::from).collect(),
         carry: opts.carry,
-    };
-    context::with(|context| context.restart = Some(restart));
+    });
+    state.wake();
 }
 
-#[native(os)]
-fn exit(code: u8) {
-    context::with(|context| context.exit = Some(code));
+#[function(os)]
+fn exit(state: &mut State, code: Option<u8>) {
+    state.exit = Some(code.unwrap_or(0));
+    state.wake();
+}
+
+#[constant(os)]
+fn platform() -> &'static str {
+    let os = std::env::consts::OS;
+    if matches!(os, "macos" | "linux" | "windows") {
+        os
+    } else {
+        "other"
+    }
+}
+
+#[constant(os)]
+fn library() -> &'static str {
+    std::env::consts::DLL_EXTENSION
+}
+
+#[constant(os)]
+fn roots(state: &State) -> Vec<String> {
+    state.roots.clone()
+}
+
+#[constant(os)]
+fn carry(state: &State) -> Option<String> {
+    state.carry.clone()
 }

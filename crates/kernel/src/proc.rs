@@ -1,20 +1,16 @@
 use std::collections::HashMap;
 use std::process::{ExitStatus, Stdio};
-use std::sync::Arc;
 
-use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, Command};
-use tokio::runtime::Handle;
 use tokio::sync::{Mutex, mpsc, watch};
-use uji_native::{Held, Json, List, native};
-
-use crate::context;
+use uji_macros::{function, methods, options, value};
 
 const NEWLINE: u8 = b'\n';
 const RETURN: u8 = b'\r';
 
-#[derive(Clone, Copy, Serialize)]
+#[value]
+#[derive(Clone, Copy)]
 #[serde(rename_all = "lowercase")]
 enum Stream {
     Stdout,
@@ -26,7 +22,8 @@ struct Line {
     text: String,
 }
 
-#[derive(Clone, Copy, Serialize)]
+#[value]
+#[derive(Clone, Copy)]
 struct Exit {
     code: Option<i32>,
     signal: Option<i32>,
@@ -64,6 +61,7 @@ fn signal(_: ExitStatus) -> Option<i32> {
 }
 
 pub(crate) struct Proc {
+    pid: Option<u32>,
     stdin: Mutex<Option<ChildStdin>>,
     output: Mutex<mpsc::UnboundedReceiver<Line>>,
     status: watch::Receiver<Option<Exit>>,
@@ -71,19 +69,21 @@ pub(crate) struct Proc {
 }
 
 impl Proc {
-    fn start(io: &Handle, mut child: Child) -> Self {
+    fn start(mut child: Child) -> Self {
         let (lines, output) = mpsc::unbounded_channel();
         if let Some(stdout) = child.stdout.take() {
-            io.spawn(pipe(stdout, Stream::Stdout, lines.clone()));
+            tokio::spawn(pipe(stdout, Stream::Stdout, lines.clone()));
         }
         if let Some(stderr) = child.stderr.take() {
-            io.spawn(pipe(stderr, Stream::Stderr, lines));
+            tokio::spawn(pipe(stderr, Stream::Stderr, lines));
         }
         let (report, status) = watch::channel(None);
         let (kill, killed) = mpsc::unbounded_channel();
+        let pid = child.id();
         let stdin = child.stdin.take();
-        io.spawn(supervise(child, killed, report));
+        tokio::spawn(supervise(child, killed, report));
         Self {
+            pid,
             stdin: Mutex::new(stdin),
             output: Mutex::new(output),
             status,
@@ -130,53 +130,57 @@ async fn supervise(
     report.send_replace(Some(Exit::of(&status)));
 }
 
-#[native(iterate = lines)]
-async fn line(process: Arc<Proc>) -> Option<(String, Stream)> {
-    let line = process.output.lock().await.recv().await?;
-    Some((line.text, line.stream))
+#[methods]
+impl Proc {
+    #[get]
+    fn pid(&self) -> Option<u32> {
+        self.pid
+    }
+
+    #[iterate(lines)]
+    async fn line(&self) -> (Option<String>, Option<Stream>) {
+        self.output
+            .lock()
+            .await
+            .recv()
+            .await
+            .map(|line| (line.text, line.stream))
+            .unzip()
+    }
+
+    async fn write(&self, data: &[u8]) -> std::io::Result<()> {
+        let mut stdin = self.stdin.lock().await;
+        let pipe = stdin
+            .as_mut()
+            .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::BrokenPipe))?;
+        pipe.write_all(data).await?;
+        pipe.flush().await
+    }
+
+    async fn close(&self) {
+        self.stdin.lock().await.take();
+    }
+
+    fn kill(&self) -> bool {
+        self.kill.send(()).is_ok()
+    }
+
+    async fn wait(&self) -> Exit {
+        let mut status = self.status.clone();
+        let exit = status
+            .wait_for(Option::is_some)
+            .await
+            .ok()
+            .and_then(|exit| *exit);
+        exit.unwrap_or(Exit::LOST)
+    }
 }
 
-#[native]
-async fn write(process: Arc<Proc>, data: Vec<u8>) -> std::io::Result<()> {
-    let mut stdin = process.stdin.lock().await;
-    let pipe = stdin
-        .as_mut()
-        .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::BrokenPipe))?;
-    pipe.write_all(&data).await?;
-    pipe.flush().await
-}
-
-#[native]
-async fn close(process: Arc<Proc>) {
-    process.stdin.lock().await.take();
-}
-
-#[native]
-fn kill(process: &Arc<Proc>) -> bool {
-    process.kill.send(()).is_ok()
-}
-
-#[native]
-async fn wait(process: Arc<Proc>) -> Json<Exit> {
-    let mut status = process.status.clone();
-    let exit = status
-        .wait_for(Option::is_some)
-        .await
-        .ok()
-        .and_then(|exit| *exit);
-    Json(exit.unwrap_or(Exit::LOST))
-}
-
-#[derive(Deserialize)]
+#[options]
 struct SpawnOptions {
     cwd: Option<String>,
     env: Option<HashMap<String, String>>,
     stdio: Option<String>,
-}
-
-#[derive(Serialize)]
-struct Spawned {
-    pid: Option<u32>,
 }
 
 fn command(line: &[String], opts: SpawnOptions) -> std::io::Result<Command> {
@@ -213,19 +217,7 @@ fn command(line: &[String], opts: SpawnOptions) -> std::io::Result<Command> {
     Ok(command)
 }
 
-#[native(proc)]
-fn spawn(
-    argv: Json<List<String>>,
-    opts: Json<SpawnOptions>,
-) -> std::io::Result<Held<Arc<Proc>, Spawned>> {
-    let Json(List(argv)) = argv;
-    let mut command = command(&argv, opts.0)?;
-    let io = context::with(|context| context.io.clone())
-        .ok_or_else(|| std::io::Error::other("the kernel is not running"))?;
-    let entered = io.enter();
-    let spawned = command.spawn();
-    drop(entered);
-    let child = spawned?;
-    let pid = child.id();
-    Ok(Held(Arc::new(Proc::start(&io, child)), Spawned { pid }))
+#[function(proc)]
+fn spawn(argv: &[String], opts: SpawnOptions) -> std::io::Result<Proc> {
+    Ok(Proc::start(command(argv, opts)?.spawn()?))
 }

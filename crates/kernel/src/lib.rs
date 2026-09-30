@@ -1,6 +1,5 @@
 mod clipboard;
 mod codec;
-mod context;
 mod db;
 mod fs;
 mod fuzzy;
@@ -11,11 +10,11 @@ mod kernel;
 mod keychain;
 mod markdown;
 mod matcher;
-mod native;
 mod net;
 mod os;
 mod proc;
-mod queue;
+mod promise;
+mod task;
 mod tty;
 mod vm;
 

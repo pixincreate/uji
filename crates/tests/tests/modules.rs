@@ -6,17 +6,13 @@ use std::process::Command;
 use serde_json::{Value, json};
 use uji_tests::Sandbox;
 
-const MODULE: &str = "testmod";
+const MANIFEST: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/module/Cargo.toml");
+const TARGET: &str = concat!(env!("CARGO_TARGET_TMPDIR"), "/module");
 
 fn library() -> Result<PathBuf, Box<dyn Error>> {
     let output = Command::new(env!("CARGO"))
-        .args([
-            "build",
-            "--package",
-            "uji-test-module",
-            "--message-format",
-            "json",
-        ])
+        .args(["build", "--manifest-path", MANIFEST, "--target-dir", TARGET])
+        .args(["--message-format", "json"])
         .output()?;
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).into_owned().into());
@@ -35,127 +31,134 @@ fn library() -> Result<PathBuf, Box<dyn Error>> {
         .ok_or_else(|| "cargo built no test module".into())
 }
 
-fn run(lua: &str) -> Result<Vec<Value>, Box<dyn Error>> {
-    let sandbox = Sandbox::new("modules")?;
-    let native = sandbox.root().join("cfg/native");
-    std::fs::create_dir_all(&native)?;
-    std::fs::copy(library()?, native.join(format!("{MODULE}.{DLL_EXTENSION}")))?;
-    sandbox.probe(&format!("local module = require(\"{MODULE}\")\n{lua}"))
+fn prepare(sandbox: &Sandbox, relative: &str) -> Result<PathBuf, Box<dyn Error>> {
+    let target = sandbox.root().join("cfg").join(relative);
+    std::fs::create_dir_all(target.parent().ok_or("a file needs a folder")?)?;
+    Ok(target)
+}
+
+fn install(sandbox: &Sandbox, name: &str) -> Result<(), Box<dyn Error>> {
+    let target = prepare(sandbox, &format!("native/{name}.{DLL_EXTENSION}"))?;
+    std::fs::copy(library()?, target)?;
+    Ok(())
 }
 
 #[test]
-fn a_native_module_is_called_like_a_lua_module() {
-    let seen = run(r#"
-        emit(module.add(40, 2))
-        emit(module.greet("uji"))
-        emit({ module.refuse("not today") })
-        emit({ pcall(module.insist, "no") })
-        emit((pcall(module.add, "forty", 2)))
-    "#)
-    .unwrap();
+fn a_native_module_is_required_like_a_lua_module() {
+    let sandbox = Sandbox::new("modules").unwrap();
+    install(&sandbox, "testmod").unwrap();
+    let seen = sandbox
+        .probe(
+            r#"
+            local module = require("testmod")
+            emit(module.add(40, 2))
+            emit(module.greet("uji"))
+            local ok, err = pcall(module.insist, "not today")
+            emit({ ok, tostring(err) })
+            emit((pcall(module.add, "forty", 2)))
+            "#,
+        )
+        .unwrap();
     assert_eq!(seen[0], 42);
     assert_eq!(seen[1], "hello uji");
-    assert_eq!(
-        seen[2],
-        json!([null, "not today"]),
-        "a Result error comes back as nil and the message"
+    assert_eq!(seen[2][0], false, "a Rust error becomes a Lua error");
+    assert!(
+        seen[2][1]
+            .as_str()
+            .unwrap_or_default()
+            .contains("not today")
     );
     assert_eq!(
-        seen[3][0], false,
-        "raise turns a Result error into a Lua error"
-    );
-    assert!(seen[3][1].as_str().unwrap_or_default().ends_with("no"));
-    assert_eq!(
-        seen[4], false,
+        seen[3], false,
         "an argument of the wrong type raises an error"
     );
 }
 
 #[test]
-fn a_held_value_becomes_an_object_with_fields_and_methods() {
-    let seen = run(r"
-        local counter = module.counter(10, { step = 5 })
-        emit(counter.start)
-        emit(counter:bump())
-        emit(counter:bump())
-        emit(counter:settle(10))
-        local plain = module.counter(0)
-        emit(plain:bump())
-        emit({ module.counter(-100):settle(1) })
-    ")
-    .unwrap();
-    assert_eq!(seen[0], 10, "fields come from the second value of Held");
+fn a_native_object_has_fields_and_methods_and_is_freed_by_lua() {
+    let sandbox = Sandbox::new("modules").unwrap();
+    install(&sandbox, "testmod").unwrap();
+    let seen = sandbox
+        .probe(
+            r#"
+            local module = require("testmod")
+            local before = module.dropped()
+            local counter = module.counter(10, 5)
+            emit(counter.start)
+            emit(counter:bump())
+            emit(counter:bump())
+            emit(module.dropped() - before)
+            counter = nil
+            collectgarbage()
+            collectgarbage()
+            emit(module.dropped() - before)
+            "#,
+        )
+        .unwrap();
+    assert_eq!(seen[0], 10);
     assert_eq!(seen[1], 15);
     assert_eq!(seen[2], 20);
-    assert_eq!(seen[3], 20, "an async method sees the same object");
-    assert_eq!(seen[4], 1, "options left out take their defaults");
-    assert_eq!(seen[5], json!([null, "the counter went below zero"]));
-}
-
-#[test]
-fn async_calls_run_side_by_side_and_a_cancelled_one_is_dropped() {
-    let seen = run(r"
-        local started = uji.os.clock()
-        local results = {}
-        for index = 1, 3 do
-            uji.task.spawn(function()
-                results[index] = module.later(60 * index)
-            end)
-        end
-        local dropped = uji.task.spawn(function()
-            results[4] = module.later(2000)
-        end)
-        uji.sleep(0.4)
-        dropped:cancel()
-        emit({ results[1], results[2], results[3], results[4] == nil })
-        emit(uji.os.clock() - started < 1)
-    ")
-    .unwrap();
+    assert_eq!(seen[3], 0, "the object lives while Lua holds it");
     assert_eq!(
-        seen[0],
-        json!(["after 60 ms", "after 120 ms", "after 180 ms", true])
-    );
-    assert_eq!(
-        seen[1], true,
-        "the three calls overlapped instead of running one after another"
-    );
-}
-
-#[test]
-fn an_object_is_freed_once_lua_lets_go_of_it() {
-    let seen = run(r"
-        local before = module.dropped()
-        local counter = module.counter(1)
-        counter:bump()
-        emit(module.dropped() - before)
-        counter = nil
-        collectgarbage()
-        collectgarbage()
-        emit(module.dropped() - before)
-    ")
-    .unwrap();
-    assert_eq!(seen[0], 0, "the object lives while Lua holds it");
-    assert_eq!(
-        seen[1], 1,
+        seen[4], 1,
         "the object is dropped in Rust after Lua collects it"
     );
 }
 
 #[test]
-fn an_object_whose_task_was_cancelled_is_freed_too() {
-    let seen = run(r"
-        local before = module.dropped()
-        local waiting = uji.task.spawn(function()
-            module.eventually(1, 50)
-        end)
-        uji.sleep(0.01)
-        waiting:cancel()
-        uji.sleep(0.3)
-        emit(module.dropped() - before)
-    ")
+fn a_built_in_module_is_replaced_by_one_found_first() {
+    let sandbox = Sandbox::new("modules").unwrap();
+    install(&sandbox, "uji/sys/sha256").unwrap();
+    std::fs::write(
+        prepare(&sandbox, "lua/uji/sys/lossy.lua").unwrap(),
+        "return function(data) return 'lua ' .. data end",
+    )
     .unwrap();
+    let seen = sandbox
+        .probe(
+            r#"
+            local sys = require("uji.sys")
+            emit(sys.sha256("abc"))
+            emit(sys.lossy("abc"))
+            emit(uji.base64.encode("abc"))
+            "#,
+        )
+        .unwrap();
+    assert_eq!(seen[0], "replaced abc", "a native library replaces it");
+    assert_eq!(seen[1], "lua abc", "a Lua file replaces it");
+    assert_eq!(seen[2], "YWJj", "the rest stay built in");
+}
+
+#[test]
+fn a_module_written_while_uji_runs_is_used_after_a_reload() {
+    let seen = Sandbox::new("modules")
+        .unwrap()
+        .probe(
+            r#"
+            local sys = require("uji.sys")
+            local app = require("uji.app")
+            local before = probe.work .. "/before.json"
+            if not sys.os.carry then
+                local file = assert(io.open(before, "w"))
+                file:write(sys.json.encode({ lossy = sys.lossy("abc"), session = app.session.id }))
+                file:close()
+                local folder = require("uji.paths").config() .. "/lua/uji/sys"
+                sys.fs.mkdir(folder)
+                sys.fs.write(folder .. "/lossy.lua", "return function(data) return 'reloaded ' .. data end")
+                require("uji.config").reload()
+                return
+            end
+            local file = assert(io.open(before))
+            local earlier = sys.json.decode(file:read("*a"))
+            file:close()
+            emit(earlier.lossy, sys.lossy("abc"), earlier.session == app.session.id)
+            "#,
+        )
+        .unwrap();
+    assert_eq!(seen[0], "abc", "the built-in module ran before the reload");
     assert_eq!(
-        seen[0], 1,
-        "the object that arrived after the cancel was dropped, not leaked"
+        seen[1], "reloaded abc",
+        "the file written while uji ran replaced it"
     );
+    assert_eq!(seen[2], true, "the reload kept the session");
 }
