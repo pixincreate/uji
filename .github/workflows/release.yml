@@ -1,0 +1,64 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes --verify-tag
+
+  formula:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: uji-labs/homebrew-uji
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Point the formula at the release
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${TAG}.tar.gz"
+          sha256="$(curl -fsSL "$url" | sha256sum | cut -d ' ' -f 1)"
+          ruby - "$url" "$sha256" tap/Formula/uji.rb <<'RUBY'
+          url, sha256, path = ARGV
+          stable = %(  url "#{url}"\n  sha256 "#{sha256}"\n)
+          formula = File.read(path).sub(/^  bottle do\n.*?^  end\n\n/m, "")
+          formula = if formula.match?(/^  url "/)
+            formula.sub(/^  url ".*"\n  sha256 ".*"\n/, stable)
+          else
+            formula.sub(/^(  homepage ".*"\n)/) { "#{Regexp.last_match(1)}#{stable}" }
+          end
+          File.write(path, formula)
+          RUBY
+
+      - name: Open a pull request on the tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        working-directory: tap
+        run: |
+          version="${TAG#v}"
+          branch="uji-${version}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -am "uji ${version}"
+          git push origin "$branch"
+          gh pr create --repo uji-labs/homebrew-uji --base main --head "$branch" \
+            --title "uji ${version}" --body "Moves the formula to [${TAG}](https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG})."
