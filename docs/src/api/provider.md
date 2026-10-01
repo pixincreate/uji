@@ -11,7 +11,7 @@ Adds a provider, or merges `spec` into the provider with the same `id`.
 |---|---|---|
 | `id` | string | Required. The provider's id. |
 | `name` | string | The name `/login` shows. Required for a new provider. |
-| `wire` | string | The request format: `"openai-chat"`, `"anthropic"`, `"gemini"`, or one you added with [`uji.wire.add`](wire.md). Required for a new provider. |
+| `wire` | string | The request format: `"openai-chat"`, `"openai-responses"`, `"anthropic"`, `"gemini"`, or one you added with [`uji.wire.add`](wire.md). Required for a new provider. |
 | `base_url` | string | The API root, such as `"https://api.openai.com/v1"`. Required for a new provider. |
 | `auth_env` | list of strings | Environment variables that may hold the API key. |
 | `models` | list | Model ids, or tables with `id`, `context`, `output`, `reasoning`, `cache` and `images`. `images` is `true` or `false` when you know whether the model takes images. |

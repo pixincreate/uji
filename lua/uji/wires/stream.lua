@@ -150,6 +150,7 @@ function Parts:answer(calls)
         reasoning = reasoning ~= "" and reasoning or nil,
         tool_calls = calls,
         usage = total > 0 and usage or nil,
+        wire_state = self.wire_state,
     }
 end
 
@@ -165,7 +166,7 @@ local function settle(parts, calls)
     end
 end
 
-local function progressed(line, state, read)
+local function progressed(line, state, spec)
     local data = line:match("^data: (.*)$")
     if not data then
         return false
@@ -173,15 +174,22 @@ local function progressed(line, state, read)
     if data == "[DONE]" then
         state:finish()
     else
-        local ok, event = pcall(sys.json.decode, data, EVENTS)
+        local ok, event = pcall(sys.json.decode, data, spec.json or EVENTS)
         if ok and type(event) == "table" then
-            pcall(read, event, state)
+            local read_ok, err = pcall(spec.read, event, state)
+            if not read_ok and spec.strict then
+                state.failure = provider("invalid stream event: " .. tostring(err))
+                state:finish()
+            end
+        elseif spec.strict then
+            state.failure = provider("invalid stream event JSON")
+            state:finish()
         end
     end
     return state:progress()
 end
 
-local function drain(body, state, read)
+local function drain(body, state, spec)
     local idle = M.idle
     local deadline = sys.os.clock() + idle
     while true do
@@ -192,8 +200,11 @@ local function drain(body, state, read)
         if not line then
             return err and { kind = "http", message = err }
         end
-        if progressed(line, state, read) then
+        if progressed(line, state, spec) then
             deadline = sys.os.clock() + idle
+        end
+        if state.failure then
+            return state.failure
         end
     end
 end
@@ -217,7 +228,7 @@ local function run(spec, reply)
     if body.status < 200 or body.status >= 300 then
         return nil, status_error({ status = body.status, headers = body.headers, body = body:read() or "" })
     end
-    local failure = drain(body, state, spec.read)
+    local failure = drain(body, state, spec)
     if failure then
         return nil, failure
     end

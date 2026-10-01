@@ -206,14 +206,16 @@ function Loop:run()
         local text, reasoning = answer.text or "", answer.reasoning
         if #calls == 0 then
             if not self.agent:queued() then
-                return self.agent:done(text, reasoning)
+                return self.agent:done(text, reasoning, answer.wire_state)
             end
-            self.agent:assistant_step(text, {}, reasoning)
-            self.messages[#self.messages + 1] = { type = "assistant", text = text, reasoning = reasoning }
+            self.agent:assistant_step(text, {}, reasoning, answer.wire_state)
+            self.messages[#self.messages + 1] = { type = "assistant", text = text, reasoning = reasoning,
+                wire_state = answer.wire_state }
             self:steer()
         else
-            self.agent:assistant_step(text, calls, reasoning)
-            self.messages[#self.messages + 1] = { type = "assistant", text = text, tool_calls = calls, reasoning = reasoning }
+            self.agent:assistant_step(text, calls, reasoning, answer.wire_state)
+            self.messages[#self.messages + 1] = { type = "assistant", text = text, tool_calls = calls, reasoning = reasoning,
+                wire_state = answer.wire_state }
             self:run_tools(calls)
         end
     end

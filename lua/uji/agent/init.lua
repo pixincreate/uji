@@ -227,9 +227,9 @@ function Agent:usage(spent)
     event.emit("status_changed", {})
 end
 
-function Agent:assistant_step(text, calls, reasoning)
+function Agent:assistant_step(text, calls, reasoning, wire_state)
     self:clear_stream()
-    self:append({ type = "assistant", text = text, tool_calls = calls, reasoning = reasoning })
+    self:append({ type = "assistant", text = text, tool_calls = calls, reasoning = reasoning, wire_state = wire_state })
     if self.turn and #calls > 0 then
         self.turn.calls = calls
         self.turn.answered = {}
@@ -262,9 +262,9 @@ function Agent:tool_result(call, content, attached)
     end
 end
 
-function Agent:done(text, reasoning)
+function Agent:done(text, reasoning, wire_state)
     self:clear_stream()
-    self:append({ type = "assistant", text = text, tool_calls = {}, reasoning = reasoning })
+    self:append({ type = "assistant", text = text, tool_calls = {}, reasoning = reasoning, wire_state = wire_state })
     self:finish(true)
     self:send_queued()
 end
