@@ -1,4 +1,3 @@
-local Agent = require("uji.agent")
 local Session = require("uji.store.session")
 local app = require("uji.app")
 local catalog = require("uji.catalog")
@@ -8,15 +7,7 @@ local model = require("uji.model")
 local notices = require("uji.notices")
 local sys = require("uji.sys")
 local task = require("uji.task")
-local text = require("uji.ui.text")
-local tool = require("uji.tool")
-
-local TITLE_WIDTH = 60
-
-local function fail(message)
-    io.stderr:write("uji: error: " .. message .. "\n")
-    sys.os.exit(1)
-end
+local title = require("uji.agent.title")
 
 local function write(stream, line)
     stream:write(line, "\n")
@@ -37,16 +28,12 @@ local function chosen(flags)
     return { provider = provider, model = name, effort = flags.effort }
 end
 
-local function offer(names)
-    local wanted = {}
+local function listed(names)
+    local out = {}
     for name in names:gmatch("[^,%s]+") do
-        wanted[name] = true
+        out[#out + 1] = name
     end
-    for _, name in ipairs(tool.list()) do
-        if not wanted[name] then
-            tool.remove(name)
-        end
-    end
+    return out
 end
 
 local function listen(session, json)
@@ -84,7 +71,7 @@ local function listen(session, json)
                 done[failed and "error" or "text"] = last.text
                 emit(sys.json.encode(done))
             elseif failed then
-                write(io.stderr, "uji: error: " .. last.text)
+                return cli.fail(last.text)
             else
                 write(io.stdout, last.text)
             end
@@ -104,33 +91,29 @@ return function(store, parsed)
     local flags = parsed.flags
     local prompt = table.concat(parsed.positional or {}, " ")
     if not prompt:find("%S") then
-        return fail("uji run needs a prompt")
+        return cli.fail("uji run needs a prompt")
     end
-    if flags.parent and not (cli.valid_id(flags.parent) and store:session(flags.parent)) then
-        return fail("no session with id: " .. tostring(flags.parent))
+    if flags.parent and not cli.session(store, flags.parent) then
+        return
     end
     local choice, problem = chosen(flags)
     if not choice then
-        return fail(problem)
+        return cli.fail(problem)
     end
     model.resolve(choice)
-    if flags.tools then
-        offer(flags.tools)
-    end
     if flags["append-prompt"] then
         event.on("before_turn", function(turn)
             return turn.system .. "\n\n" .. flags["append-prompt"]
         end, { name = "uji.run.prompt", priority = 1000 })
     end
-    local title = text.clip(flags.title or prompt:match("^%s*([^\n]*)"), TITLE_WIDTH)
-    local session = store:create_session(title, flags.parent)
-    app.session = session
-    app.agent = Agent(session)
-    app.agent.confirm = function()
+    local session = store:create_session(title.sanitize(flags.title or prompt), flags.parent)
+    local agent = app.attach(session)
+    agent.tools = flags.tools and listed(flags.tools)
+    agent.confirm = function()
         return true
     end
     listen(session, flags.json)
     event.emit("session_created", { session_id = session.id })
     task.release()
-    app.agent:submit(prompt)
+    agent:submit(prompt)
 end

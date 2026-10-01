@@ -1,3 +1,5 @@
+local sys = require("uji.sys")
+
 local M = {}
 
 local USAGE = [[A coding agent you can shape with Lua
@@ -30,6 +32,18 @@ local UUID = "^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%
 
 function M.valid_id(id)
     return type(id) == "string" and id:lower():match(UUID) ~= nil
+end
+
+function M.fail(message)
+    io.stderr:write("uji: error: " .. message .. "\n")
+    sys.os.exit(1)
+end
+
+function M.session(store, id)
+    if not M.valid_id(id) then
+        return M.fail("invalid session id: " .. tostring(id))
+    end
+    return store:session(id) or M.fail("no session with id: " .. id)
 end
 
 function M.parse(args)

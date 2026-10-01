@@ -186,7 +186,7 @@ function Agent:start(system)
     local loop = Loop(self, {
         system = system,
         messages = view.build(self.session:entries()),
-        tools = tool.specs(),
+        tools = tool.specs(self.tools),
         model = model.current.model,
         effort = model.current.effort,
         max_output = model.max_output(),
