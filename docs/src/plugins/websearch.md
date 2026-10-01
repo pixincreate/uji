@@ -1,6 +1,7 @@
 # websearch
 
-A `web_search` tool.
+`web_search` and `web_fetch` tools. Both go through Exa's public search
+service, so they need no key.
 
 ```lua
 require("websearch").setup({ count = 8 })
@@ -8,7 +9,7 @@ require("websearch").setup({ count = 8 })
 
 | Option | Meaning | Default |
 |---|---|---|
-| `backend` | `"brave"`, `"duckduckgo"` or `"auto"`, which uses Brave when its key is set. | `"auto"` |
-| `key_env` | The variable holding the Brave API key. | `"BRAVE_API_KEY"` |
+| `policy` | Whether the tools ask before they run: `"allow"`, `"ask"` or `"deny"`. | `"allow"` |
 | `count` | Results per search. | `5` |
-| `timeout` | Seconds per request. | `20` |
+| `chars` | Characters of a page that `web_fetch` returns at most. | `20000` |
+| `timeout` | Seconds per request. | `30` |

@@ -86,7 +86,7 @@ local function run(args)
         return
     end
     local command = parsed.command
-    if command ~= "new" and command ~= "resume" and command ~= "list" then
+    if command ~= "new" and command ~= "resume" and command ~= "list" and command ~= "run" then
         return fail("unrecognized subcommand '" .. command .. "'")
     end
     require("uji.task").hold()
@@ -100,6 +100,9 @@ local function run(args)
     config.load()
     if config.settle(args) then
         return
+    end
+    if command == "run" then
+        return require("uji.run")(store, parsed)
     end
     if command == "list" then
         local session = require("uji.ui.sessions").pick(store)

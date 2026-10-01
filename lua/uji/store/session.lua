@@ -167,5 +167,6 @@ function Session:used_tokens()
 end
 
 Session.prefix = prefix
+Session.encode = encode
 
 return Session

@@ -11,6 +11,8 @@ passwords and to what you last copied.
 | `uji.os.home()` | Your home directory, or `nil`. |
 | `uji.os.now()` | The time in milliseconds since the Unix epoch. |
 | `uji.os.clock()` | Seconds since uji started, for measuring how long something took. |
+| `uji.os.executable` | The path of the program running uji, or `nil` when the system cannot tell. |
+| `uji.os.argv` | The arguments uji started with, the program name first. |
 | `uji.os.roots` | The directories whose `lua/` and `native/` folders are searched before the built-in modules. |
 | `uji.os.carry` | The text handed over by the last `uji.os.restart`, or `nil`. |
 | `uji.os.library` | The file extension of a native module on this system, `"dylib"` or `"so"`. |
