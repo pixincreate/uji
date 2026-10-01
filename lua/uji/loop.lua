@@ -3,7 +3,6 @@ local model = require("uji.model")
 local sys = require("uji.sys")
 local stream = require("uji.wires.stream")
 
-local MAX_ITERATIONS = 100
 local RETRY_ATTEMPTS = 5
 local RETRY_INITIAL = 2
 local RETRY_FACTOR = 2
@@ -83,8 +82,6 @@ local function fresh_id()
 end
 
 local Loop = class()
-
-Loop.MAX_ITERATIONS = MAX_ITERATIONS
 
 function Loop:init(agent, turn)
     self.agent = agent
@@ -190,7 +187,7 @@ function Loop:run_tools(calls)
 end
 
 function Loop:run()
-    for _ = 1, MAX_ITERATIONS do
+    while true do
         self:compact()
         self:steer()
         local answer = self:generate()
@@ -220,7 +217,6 @@ function Loop:run()
             self:run_tools(calls)
         end
     end
-    self.agent:failed("stopped after " .. MAX_ITERATIONS .. " tool iterations without a final answer")
 end
 
 return Loop

@@ -30,19 +30,21 @@ function M.set_setting(key, value)
     end
 end
 
-function M.resolve()
-    local id = M.setting("llm.provider") or ""
+function M.resolve(choice)
+    choice = choice or {}
+    local saved = M.setting("llm.provider") or ""
+    local id = choice.provider or saved
     local provider = catalog.get(id)
     local stored = M.setting("llm.model")
-    local model = provider and provider:usable_model(stored) or stored or ""
-    local base_url = M.setting("llm.base_url")
+    local model = choice.model or provider and provider:usable_model(stored) or stored or ""
+    local base_url = id == saved and M.setting("llm.base_url") or nil
     if base_url == "" then
         base_url = nil
     end
     if not base_url and provider and provider.base_url ~= "" then
         base_url = provider.base_url
     end
-    local effort = M.setting("llm.effort")
+    local effort = choice.effort or M.setting("llm.effort")
     if not (effort and EFFORTS[effort] and provider and provider:reasons(model)) then
         effort = "off"
     end

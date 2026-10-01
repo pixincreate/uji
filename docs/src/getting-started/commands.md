@@ -9,6 +9,7 @@
 | `uji resume --id <ID>` | Resumes the session with that id. |
 | `uji list` | Opens a picker of the sessions in the current directory. |
 | `uji delete <ID>` | Deletes a session. |
+| `uji run <PROMPT>` | Sends one prompt without the screen and prints the answer. See [Running without the screen](run.md). |
 | `uji --help` | Prints the usage. |
 | `uji --version` | Prints the version. |
 

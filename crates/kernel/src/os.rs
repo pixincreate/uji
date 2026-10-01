@@ -75,6 +75,18 @@ fn library() -> &'static str {
 }
 
 #[constant(os)]
+fn executable() -> Option<String> {
+    std::env::current_exe()
+        .ok()
+        .map(|path| path.display().to_string())
+}
+
+#[constant(os)]
+fn argv(state: &State) -> Vec<String> {
+    state.args.clone()
+}
+
+#[constant(os)]
 fn roots(state: &State) -> Vec<String> {
     state.roots.clone()
 }

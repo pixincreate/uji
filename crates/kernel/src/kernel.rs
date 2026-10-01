@@ -40,6 +40,7 @@ pub(crate) struct Restart {
 }
 
 pub(crate) struct State {
+    pub(crate) args: Vec<String>,
     pub(crate) layers: Vec<Sources>,
     pub(crate) roots: Vec<String>,
     pub(crate) carry: Option<String>,
@@ -155,6 +156,7 @@ fn live(
     let lua = vm::create(layers.clone(), &boot.roots)?;
     let wake = Arc::new(Notify::new());
     lua.set_app_data(State {
+        args: boot.args.clone(),
         layers,
         roots: boot
             .roots

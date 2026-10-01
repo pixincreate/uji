@@ -190,14 +190,18 @@ fn a_turn_that_outgrows_its_window_is_compacted_mid_turn() {
 }
 
 #[test]
-fn a_turn_stops_after_one_hundred_tool_rounds() {
-    let server = serve(|_| read_notes()).unwrap();
+fn a_turn_keeps_calling_tools_until_the_model_answers() {
+    let server = serve(|round| {
+        if round < 150 {
+            read_notes()
+        } else {
+            text("done")
+        }
+    })
+    .unwrap();
     let messages = run(&server, 100_000, ALLOW_ALL, &[], 90).unwrap();
-    assert_eq!(server.turns().len(), 100);
-    assert_eq!(
-        last_error(&messages),
-        Some("stopped after 100 tool iterations without a final answer")
-    );
+    assert_eq!(server.turns().len(), 151);
+    assert_eq!(last_answer(&messages), Some("done"));
 }
 
 #[test]

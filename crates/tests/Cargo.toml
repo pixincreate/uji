@@ -12,6 +12,10 @@ build = "../uji/build.rs"
 [lib]
 path = "src/lib.rs"
 
+[[bin]]
+name = "uji-test"
+path = "src/bin/uji-test.rs"
+
 [dependencies]
 crossterm = "0.29"
 serde = { version = "1", features = ["derive"] }
