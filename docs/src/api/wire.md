@@ -52,7 +52,6 @@ Retained items are bound to the provider, endpoint and API-key fingerprint.
 If you change that key, start a different conversation rather than replaying the old state.
 Native prefix compaction replaces older items with a summary, as it does for other wires.
 This wire does not implement ChatGPT subscription authentication.
-Existing provider definitions remain unchanged.
 
 For example, configure a Go Responses model separately:
 
@@ -64,7 +63,9 @@ uji.provider.add({
   base_url = "https://opencode.ai/zen/go/v1",
   auth_env = { "OPENCODE_API_KEY" },
   compat = { user_agent = "uji", session_header = "x-opencode-session" },
-  models = { "grok-4.7" },
+  models = {
+    { id = "muse-spark-1.3-contributor", context = 1048576, output = 131072, reasoning = true },
+  },
 })
 ```
 

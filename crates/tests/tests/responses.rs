@@ -85,6 +85,39 @@ fn responses_encode_history_and_preserve_opaque_items() -> Result<(), Box<dyn Er
 }
 
 #[test]
+fn responses_do_not_replay_opaque_items_across_provider_or_endpoint_changes()
+-> Result<(), Box<dyn Error>> {
+    let seen = probe(
+        r#"
+        local codec = require('uji.wires.openai_responses')
+        local request = {model = 'fixture', system = '', tools = {}, effort = 'off', cache = 'off',
+            max_output = 64, provider = {id = 'original', base_url = 'https://original.invalid'},
+            auth = {key = 'synthetic-key'}, messages = {}}
+        local answer = assert(codec.decode({status = 'completed', output = {{type = 'reasoning',
+            encrypted_content = 'opaque'}, {type = 'function_call', call_id = 'call', name = 'read_file',
+            arguments = '{"path":"notes.txt"}'}}}, request))
+        request.messages = {{type = 'assistant', text = 'Read the file',
+            tool_calls = answer.tool_calls, wire_state = answer.wire_state}}
+        for _, provider in ipairs({{id = 'different', base_url = 'https://original.invalid'},
+            {id = 'original', base_url = 'https://different.invalid'}}) do
+            request.provider = provider
+            emit(codec.encode(request).input)
+        end
+    "#,
+    )?;
+    for input in seen {
+        assert_eq!(input.as_array().unwrap().len(), 2);
+        assert_eq!(input[0]["role"], "assistant");
+        assert_eq!(input[0]["content"], "Read the file");
+        assert_eq!(input[1]["type"], "function_call");
+        assert_eq!(input[1]["call_id"], "call");
+        assert_eq!(input[1]["arguments"], "{\"path\":\"notes.txt\"}");
+        assert!(!input.to_string().contains("opaque"));
+    }
+    Ok(())
+}
+
+#[test]
 fn responses_reject_incomplete_and_invalid_calls() -> Result<(), Box<dyn Error>> {
     let seen = probe(
         r#"
