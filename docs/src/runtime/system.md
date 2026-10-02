@@ -20,14 +20,14 @@ passwords and to what you last copied.
 
 ## uji.os.restart(opts)
 
-Starts uji's Lua side again once the current code yields, keeping the screen.
+Restarts uji once the current code waits, keeping the screen.
 Every task, connection and process from this run stops. `opts.args` is the
 command line for the new run, `opts.roots` sets `uji.os.roots` for it, and
 `opts.carry` is text it can read from `uji.os.carry`.
 
 ## uji.modules(namespace)
 
-Lists the modules directly inside `namespace`, such as `"uji.commands"`, as
+Lists the modules directly inside `namespace`, such as `"uji.builtin.commands"`, as
 full names in alphabetical order. It looks in the `lua/` folder of every
 directory in `uji.os.roots` and in the built-in modules. A folder with an
 `init.lua` counts as one module.
