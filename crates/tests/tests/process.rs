@@ -5,7 +5,7 @@ use serde_json::Value;
 use uji_tests::probe;
 
 const PROCESS: &str = r#"
-local process = require("uji.system.process")
+local process = require("uji.core.system.process")
 
 local function ignore() end
 
@@ -180,6 +180,6 @@ fn a_program_that_is_not_there_is_an_error_not_an_exit_code() {
         emit(process.run({ argv = {} }, ignore) == nil)
     "#)
     .unwrap();
-    assert!(seen[0] == true);
-    assert!(seen[1] == true);
+    assert_eq!(seen[0], true);
+    assert_eq!(seen[1], true);
 }
