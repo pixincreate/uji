@@ -4,6 +4,76 @@ use serde_json::json;
 use uji_tests::probe;
 
 #[test]
+fn auxiliary_requests_keep_the_owning_session_header() -> Result<(), Box<dyn Error>> {
+    probe(
+        r#"
+        local app = require('uji.core.app')
+        local model = require('uji.core.model')
+        local sys = require('uji.sys')
+        local title = require('uji.core.agent.title')
+        local compactor = require('uji.core.agent.compactor')
+        require('uji.core.auth').save_key('opencode-go', 'synthetic-test-key')
+        model.set_setting('llm.provider', 'opencode-go')
+        local sent = {}
+        sys.net.open = function(opts)
+            assert(opts.headers['x-opencode-session'] == 'owning-session')
+            assert(opts.headers['User-Agent'] == 'uji')
+            sent[#sent + 1] = opts.url
+            return nil, 'recorded; no network'
+        end
+        for _, id in ipairs({'deepseek-v4.1-flash', 'minimax-m3', 'muse-spark-1.3-contributor'}) do
+            model.set_setting('llm.model', id); model.resolve()
+            local answer, failure = title.generate('Fix the build', 'owning-session')
+            assert(answer == nil and failure ~= nil)
+            compactor.generate({{type='user',text='Fix the build'}}, nil, 'owning-session')
+            compactor.fold({{type='user',text=string.rep('earlier ',100)},
+                {type='user',text='recent'}}, {window=1,reserve=0}, 1, 'owning-session')
+        end
+        assert(#sent == 9)
+        assert(sent[1]:match('/chat/completions$'))
+        assert(sent[4]:match('/messages$'))
+        assert(sent[7]:match('/responses$'))
+        emit({passed=true})
+    "#,
+    )?;
+    Ok(())
+}
+
+#[test]
+fn failed_title_requests_report_a_notice_with_session_routing() -> Result<(), Box<dyn Error>> {
+    probe(
+        r#"
+        local app = require('uji.core.app')
+        local model = require('uji.core.model')
+        local sys = require('uji.sys')
+        local event = require('uji.core.event')
+        require('uji.core.auth').save_key('opencode-go', 'synthetic-test-key')
+        model.set_setting('llm.provider', 'opencode-go')
+        model.set_setting('llm.model', 'deepseek-v4.1-flash'); model.resolve()
+        local noticed = sys.promise()
+        event.on('notice', function(info)
+            if info.text:find('could not name the session', 1, true) then noticed:resolve(info.text) end
+        end)
+        local requests = 0
+        sys.net.open = function(opts)
+            requests = requests + 1
+            assert(opts.headers['x-opencode-session'] == app.session.id)
+            return nil, 'controlled transport failure'
+        end
+        app.agent.compact_if_needed = function() return false end
+        app.agent.prompt = function() return '', {} end
+        app.agent.start = function() end
+        app.agent:submit('Fix the build')
+        local notice = noticed:await()
+        assert(notice:find('controlled transport failure',1,true))
+        assert(requests == 1 and app.session:untitled())
+        emit({passed=true})
+    "#,
+    )?;
+    Ok(())
+}
+
+#[test]
 fn go_routes_each_model_without_changing_other_providers() -> Result<(), Box<dyn Error>> {
     let seen = probe(
         r#"

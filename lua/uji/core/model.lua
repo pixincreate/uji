@@ -210,6 +210,7 @@ function M.generate(opts)
         model = M.current.model,
         system = opts.system,
         messages = opts.messages,
+        session = opts.session,
         tools = {},
         effort = M.nearest(M.current.efforts, "off"),
         max_output = DEFAULT_MAX_OUTPUT,

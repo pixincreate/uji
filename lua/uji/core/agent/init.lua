@@ -394,7 +394,7 @@ function Agent:fold(messages)
     if not budget then
         return nil
     end
-    return compactor.fold(messages, budget, self:keep_recent())
+    return compactor.fold(messages, budget, self:keep_recent(), self.session.id)
 end
 
 function Agent:compact_if_needed()
@@ -437,7 +437,7 @@ function Agent:compact(keep)
     self:begin()
     task.spawn(function()
         local files = view.merge_files(view.files_touched(earlier), carried)
-        local ok, done = pcall(compactor.generate, earlier, previous)
+        local ok, done = pcall(compactor.generate, earlier, previous, self.session.id)
         if ok and done then
             if done.usage then
                 self.session:add_cost(done.usage)
@@ -459,8 +459,10 @@ function Agent:maybe_title(first)
         return
     end
     task.spawn(function()
-        local titled = title.generate(first)
+        local titled, failure = title.generate(first, self.session.id)
         if not titled then
+            local reason = failure and (failure.message or (failure.kind .. ": " .. tostring(failure.status)))
+            notices.push("could not name the session: " .. (reason or "no title returned"))
             return
         end
         if titled.usage then
