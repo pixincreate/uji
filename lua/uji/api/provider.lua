@@ -26,28 +26,12 @@ local function provider_row(provider)
         oauth = provider.oauth ~= nil,
         context_window = provider.context_window,
         models = models,
-        discovery = provider.discovery,
     }
 end
 
 uji.provider = {
     add = catalog.add,
     remove = catalog.remove,
-    refresh = function(id)
-        local provider = catalog.get(id)
-        if not provider then
-            return nil, { kind = "provider", message = "unknown provider: " .. tostring(id) }
-        end
-        local ready, failure = provider:refresh()
-        if not ready then
-            return nil, failure
-        end
-        local model = require("uji.core.model")
-        if model.current.id == id then
-            model.resolve({ provider = id, model = model.current.model ~= "" and model.current.model or provider:default_model() })
-        end
-        return provider_row(provider)
-    end,
     list = function()
         local rows = {}
         for index, provider in ipairs(catalog.all()) do

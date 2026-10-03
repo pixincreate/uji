@@ -1,20 +1,21 @@
-local function discover_go()
-    local formats = require("uji.core.opencode").go
-    uji.provider.add({
-        id = "opencode-go",
-        discover = function()
-            local models = {}
-            for id in pairs(formats) do
-                models[#models + 1] = { id = id, context = 1000000, output = 4096, reasoning = true }
-            end
-            return models
-        end,
-    })
-    assert(uji.provider.refresh("opencode-go"))
+local function configured_go()
+    -- Routing fixtures use the existing provider model-override contract.
+    local rows = {}
+    for id in
+        ([[glm-5.2 glm-5.3 glm-5.3-flash kimi-k2.6 kimi-k2.7-code kimi-k3
+        longcat-2.0 longcat-2.5-preview-free deepseek-v4-pro deepseek-v4-flash
+        deepseek-v4.1-flash deepseek-v4-flash-vision-exp mimo-v2.5 mimo-v2.5-pro
+        mimo-v2.6-flash mimo-v2.6-pro hy4-preview hy3 space-bunny-free
+        minimax-m3 minimax-m2.7 qwen3.8-max qwen3.8-flash qwen3.7-plus
+        grok-4.7 grok-4.6 gpt-6-luna gpt-5.6-luna muse-spark-1.3-contributor muse-spark-1.2-contributor]]):gmatch("%S+")
+    do
+        rows[#rows + 1] = { id = id, context = 1000000, output = 4096, reasoning = true }
+    end
+    uji.provider.add({ id = "opencode-go", models = rows })
 end
 
 it("keeps the owning session header on auxiliary requests", function()
-    discover_go()
+    configured_go()
     local model = require("uji.core.model")
     local sys = require("uji.sys")
     local title = require("uji.core.agent.title")
@@ -48,7 +49,7 @@ it("keeps the owning session header on auxiliary requests", function()
 end)
 
 it("reports a notice for failed title requests with session routing", function()
-    discover_go()
+    configured_go()
     local app = require("uji.core.app")
     local model = require("uji.core.model")
     local sys = require("uji.sys")
@@ -82,8 +83,8 @@ it("reports a notice for failed title requests with session routing", function()
     assert(requests == 1 and app.session:untitled())
 end)
 
-it("routes each Go model independently of Zen and OpenAI", function()
-    discover_go()
+it("routes each configured Go model independently of Zen and OpenAI", function()
+    configured_go()
     local catalog = require("uji.core.catalog")
     local sys = require("uji.sys")
     local go = assert(catalog.get("opencode-go"))
@@ -162,7 +163,6 @@ it("routes each Go model independently of Zen and OpenAI", function()
     assert(#requests == before and failed.kind == "provider")
     local zen = assert(catalog.get("opencode-zen"))
     assert(zen.base_url == "https://opencode.ai/zen/v1")
-    assert(#zen.models == 0 and zen.discovery == "unloaded")
     local openai = assert(catalog.get("openai"))
     assert(openai.api:url({ provider = { base_url = openai.base_url } }) == "https://api.openai.com/v1/responses")
 
@@ -191,7 +191,7 @@ it("routes each Go model independently of Zen and OpenAI", function()
 end)
 
 it("sets Go headers from the request session", function()
-    discover_go()
+    configured_go()
     local go = assert(require("uji.core.catalog").get("opencode-go"))
     local sys, headers = require("uji.sys"), {}
     sys.net.open = function(opts)

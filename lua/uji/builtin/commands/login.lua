@@ -2,12 +2,6 @@ local SUBSCRIPTION = "Subscription (sign in with browser)"
 local API_KEY = "API key"
 
 local function configure(provider, url)
-    if provider.discovery then
-        local _, failure = uji.provider.refresh(provider.id)
-        if failure then
-            uji.notify("model discovery failed: " .. failure.message .. "; run /models to retry")
-        end
-    end
     uji.model.use({ provider = provider.id, base_url = url and url.base_url or "", model = url and url.model })
     uji.notify("logged in to " .. provider.id)
 end
@@ -35,7 +29,6 @@ local function ask_key(provider)
         local saved, err = uji.auth.save_key(provider.id, key)
         if not saved then
             uji.notify("failed to save credential: " .. tostring(err))
-            return false
         end
     end
     return true
