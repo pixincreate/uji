@@ -33,6 +33,29 @@ group(
 )
 
 local Go = uji.class()
+local loaded = require("uji.sys").promise()
+local registered, original_api
+
+local function owns_provider()
+    return require("uji.core.catalog").get("opencode-go") == registered and registered.api == original_api
+end
+
+function Go:ready(model)
+    if not owns_provider() then
+        return nil, { kind = "provider", message = "OpenCode Go provider changed while loading" }
+    end
+    if registered:model(model) then
+        return true
+    end
+    local problem = loaded:await()
+    if not owns_provider() then
+        return nil, { kind = "provider", message = "OpenCode Go provider changed while loading" }
+    end
+    if problem then
+        return nil, { kind = "provider", message = problem .. "; run /reload to retry loading OpenCode Go models" }
+    end
+    return true
+end
 
 function Go:efforts(model)
     local api = formats[model]
@@ -40,8 +63,15 @@ function Go:efforts(model)
 end
 
 function Go:stream(request, reply)
+    local available, failure = self:ready(request.model)
+    if not available then
+        return reply.fail(failure)
+    end
+    local provider = registered
+    if not request.model or request.model == "" then
+        request.model = provider:default_model()
+    end
     local api = formats[request.model]
-    local provider = require("uji.core.catalog").get("opencode-go")
     if not api or not provider:model(request.model) then
         return reply.fail({ kind = "provider", message = "unsupported or unavailable OpenCode Go model: " .. tostring(request.model) })
     end
@@ -54,5 +84,35 @@ uji.provider.add({
     api = Go(),
     base_url = BASE_URL,
     auth_env = { "OPENCODE_API_KEY" },
-    models = listed(BASE_URL, "opencode-go", formats),
+    models = {},
 })
+registered = require("uji.core.catalog").get("opencode-go")
+original_api = registered.api
+
+-- HTTP waits must run outside require(), which cannot yield.
+uji.schedule(function()
+    local ok, failure = pcall(function()
+        assert(owns_provider(), "OpenCode Go provider changed while loading")
+        local models, problem = listed(BASE_URL, "opencode-go", formats)
+        assert(owns_provider(), "OpenCode Go provider changed while loading")
+        if problem then
+            error(problem, 0)
+        end
+        for index = #models, 1, -1 do
+            if registered:model(models[index].id) then
+                table.remove(models, index)
+            end
+        end
+        uji.provider.add({ id = "opencode-go", models = models })
+        local model = require("uji.core.model")
+        local current = model.current
+        if current.provider == registered then
+            model.resolve({
+                provider = current.id,
+                model = current.model ~= "" and current.model or registered:default_model(),
+                effort = current.wanted_effort,
+            })
+        end
+    end)
+    loaded:resolve(not ok and tostring(failure) or nil)
+end)

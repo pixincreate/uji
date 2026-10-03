@@ -47,6 +47,29 @@ group(
 )
 
 local Zen = uji.class()
+local loaded = require("uji.sys").promise()
+local registered, original_api
+
+local function owns_provider()
+    return require("uji.core.catalog").get("opencode-zen") == registered and registered.api == original_api
+end
+
+function Zen:ready(model)
+    if not owns_provider() then
+        return nil, { kind = "provider", message = "OpenCode Zen provider changed while loading" }
+    end
+    if registered:model(model) then
+        return true
+    end
+    local problem = loaded:await()
+    if not owns_provider() then
+        return nil, { kind = "provider", message = "OpenCode Zen provider changed while loading" }
+    end
+    if problem then
+        return nil, { kind = "provider", message = problem .. "; run /reload to retry loading OpenCode Zen models" }
+    end
+    return true
+end
 
 function Zen:efforts(model)
     local api = formats[model]
@@ -54,8 +77,15 @@ function Zen:efforts(model)
 end
 
 function Zen:stream(request, reply)
+    local available, failure = self:ready(request.model)
+    if not available then
+        return reply.fail(failure)
+    end
+    local provider = registered
+    if not request.model or request.model == "" then
+        request.model = provider:default_model()
+    end
     local api = formats[request.model]
-    local provider = require("uji.core.catalog").get("opencode-zen")
     if not api or not provider:model(request.model) then
         return reply.fail({ kind = "provider", message = "unsupported or unavailable OpenCode Zen model: " .. tostring(request.model) })
     end
@@ -68,5 +98,35 @@ uji.provider.add({
     api = Zen(),
     base_url = BASE_URL,
     auth_env = { "OPENCODE_API_KEY" },
-    models = listed(BASE_URL, "opencode", formats),
+    models = {},
 })
+registered = require("uji.core.catalog").get("opencode-zen")
+original_api = registered.api
+
+-- HTTP waits must run outside require(), which cannot yield.
+uji.schedule(function()
+    local ok, failure = pcall(function()
+        assert(owns_provider(), "OpenCode Zen provider changed while loading")
+        local models, problem = listed(BASE_URL, "opencode", formats)
+        assert(owns_provider(), "OpenCode Zen provider changed while loading")
+        if problem then
+            error(problem, 0)
+        end
+        for index = #models, 1, -1 do
+            if registered:model(models[index].id) then
+                table.remove(models, index)
+            end
+        end
+        uji.provider.add({ id = "opencode-zen", models = models })
+        local model = require("uji.core.model")
+        local current = model.current
+        if current.provider == registered then
+            model.resolve({
+                provider = current.id,
+                model = current.model ~= "" and current.model or registered:default_model(),
+                effort = current.wanted_effort,
+            })
+        end
+    end)
+    loaded:resolve(not ok and tostring(failure) or nil)
+end)

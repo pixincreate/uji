@@ -4,9 +4,9 @@ for _, effort in ipairs(require("uji.core.catalog").EFFORTS) do
 end
 
 local function get(url)
-    local response = uji.http.request({ url = url, headers = { ["User-Agent"] = "uji" }, timeout = 5 })
+    local response, problem = uji.http.request({ url = url, headers = { ["User-Agent"] = "uji" }, timeout = 5 })
     if not response or response.status ~= 200 then
-        error("could not fetch OpenCode models from " .. url, 0)
+        error("could not fetch OpenCode models from " .. url .. ": " .. tostring(problem or (response and response.status)), 0)
     end
     return uji.json.decode(response.body, { nulls = false })
 end
@@ -38,17 +38,15 @@ return function(base_url, source, formats)
                     images = images or modality == "image"
                 end
                 local efforts
-                for _, option in ipairs(info.reasoning_options or {}) do
-                    if option.type == "effort" then
-                        if type(option.values) ~= "table" then
-                            error("invalid OpenCode effort metadata", 0)
-                        end
+                for _, option in ipairs(type(info.reasoning_options) == "table" and info.reasoning_options or {}) do
+                    if type(option) == "table" and option.type == "effort" and type(option.values) == "table" then
+                        local supported = {}
                         for _, value in ipairs(option.values) do
-                            if not accepted[value] then
-                                error("unsupported OpenCode effort metadata", 0)
+                            if accepted[value] then
+                                supported[#supported + 1] = value
                             end
                         end
-                        efforts = option.values
+                        efforts = #supported > 0 and supported or nil
                     end
                 end
                 found[#found + 1] = {
@@ -69,7 +67,7 @@ return function(base_url, source, formats)
         return found
     end)
     if not ok then
-        return {}
+        return {}, tostring(models)
     end
     return models
 end

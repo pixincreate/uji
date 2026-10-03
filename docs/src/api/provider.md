@@ -47,8 +47,11 @@ Run `/login`, select **OpenCode Go**, and enter your OpenCode console API key.
 You can also set `OPENCODE_API_KEY`.
 The provider uses `https://opencode.ai/zen/go/v1`, separate from OpenCode Zen.
 The provider file fetches available IDs from `/models` and capabilities from `https://models.dev/api.json`, then registers them with `uji.provider.add`.
+Fetching runs in a background task after provider registration.
+Execution waits for that task when the selected model is not already configured, before capturing reasoning effort, output limits, and caching.
+Explicit model and effort choices remain selected while metadata loads.
 No API key is sent to either public discovery request.
-Failed requests produce an empty catalog; use `/reload` to retry.
+Failed requests produce an empty catalog and an inference error with the loading failure; use `/reload` to retry.
 There is no bundled or stale catalog fallback.
 Only models with metadata and documented endpoint assignments are listed.
 It routes these models through the existing Chat Completions, Anthropic Messages, or Responses APIs.

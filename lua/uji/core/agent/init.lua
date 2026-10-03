@@ -183,21 +183,28 @@ end
 
 function Agent:start(system)
     local Loop = require("uji.core.loop")
-    local loop = Loop(self, {
-        system = system,
-        messages = view.build(self.session:entries()),
-        tools = tool.specs(self.tools),
-        model = model.current.model,
-        effort = model.current.effort,
-        reasoning = model.current.reasoning,
-        max_output = model.max_output(),
-        cache = model.retention(),
-        session = self.session.id,
-    })
     self:begin()
-    self.turn = { loop = loop, calls = {}, answered = {} }
     self.task = task.spawn(function()
-        local ok, err = pcall(loop.run, loop)
+        local ok, err = pcall(function()
+            local current, failure = model.ready()
+            if not current then
+                self:failed(failure.message)
+                return
+            end
+            local loop = Loop(self, {
+                system = system,
+                messages = view.build(self.session:entries()),
+                tools = tool.specs(self.tools),
+                model = current.model,
+                effort = current.effort,
+                reasoning = current.reasoning,
+                max_output = model.max_output(),
+                cache = model.retention(),
+                session = self.session.id,
+            })
+            self.turn = { loop = loop, calls = {}, answered = {} }
+            loop:run()
+        end)
         if not ok then
             self:failed("uji.core.loop: " .. sys.message(err))
         end
