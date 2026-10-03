@@ -210,9 +210,9 @@ function Agent:failed(message)
     self:finish(true)
 end
 
-function Agent:restarted(attempt, of, wait)
+function Agent:restarted(attempt, of, wait, reason)
     self:clear_stream()
-    notices.push(string.format("request failed, retrying in %ds (%d/%d)", math.max(wait, 1), attempt, of))
+    notices.push(string.format("request failed (%s), retrying in %ds (%d/%d)", reason, math.max(wait, 1), attempt, of))
 end
 
 function Agent:compacted(spent, count)
@@ -511,6 +511,7 @@ function Agent:interrupt()
     end
     self:append({ type = "error", text = "interrupted" })
     self:finish(true)
+    self:send_queued()
     return true
 end
 

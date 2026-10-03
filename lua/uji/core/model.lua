@@ -79,16 +79,21 @@ function M.resolve(choice)
         efforts = efforts,
         reasoning = #efforts > 0,
         caches = provider ~= nil and provider:caches(model),
+        choice = choice,
+        loaded = provider == nil or provider.state == catalog.STATE.LOADED,
     }
     event.emit("model_changed", { provider = id, model = model })
     event.emit("status_changed", {})
-    if provider and provider.state ~= catalog.STATE.LOADED then
-        local current = M.current
-        task.spawn(function()
-            if provider:load() == catalog.STATE.LOADED and M.current == current then
-                M.resolve(choice)
-            end
-        end)
+    if not M.current.loaded then
+        task.spawn(M.load)
+    end
+    return M.current
+end
+
+function M.load()
+    local current = M.current
+    if not current.loaded and current.provider:load() == catalog.STATE.LOADED and M.current == current then
+        M.resolve(current.choice)
     end
     return M.current
 end
@@ -179,12 +184,11 @@ function M.call(stream, request, reply)
 end
 
 function M.stream(request, reply)
-    local current = M.current
+    local current = M.load()
     local provider = current.provider
     if current.id == "" or not provider then
         return nil, { kind = "provider", message = NOT_CONFIGURED }
     end
-    provider:load()
     local api = provider.api
     local credentials, missing = auth.resolve(provider)
     if not credentials then

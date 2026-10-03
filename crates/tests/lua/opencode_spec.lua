@@ -152,6 +152,7 @@ it("sends the session and its own user agent on chat, title and compaction reque
     for _, request in ipairs(mock.requests) do
         if request.path == "/v1/chat/completions" then
             assert.equal(app.session.id, request.headers["x-opencode-session"])
+            assert.equal("uji", request.headers["x-opencode-client"])
             assert.equal("uji/", request.headers["user-agent"]:sub(1, 4))
             local system = server.system(request)
             local kind = server.has_tools(request) and "turn" or system:find("compact", 1, true) and "compaction" or "title"
@@ -159,4 +160,29 @@ it("sends the session and its own user agent on chat, title and compaction reque
         end
     end
     assert.same({ turn = true, title = true, compaction = true }, kinds)
+end)
+
+it("sends earlier thinking back as reasoning_content on the chat API", function()
+    metadata({ ["glm-x"] = {} })
+    local mock = inventory({ "glm-x" })
+    local provider = register(mock)
+    uji.provider.load("opencode-test")
+    provider.api:stream({
+        model = "glm-x",
+        provider = { id = provider.id, base_url = provider.base_url },
+        auth = { key = "test-key" },
+        messages = {
+            { type = "user", text = "hi" },
+            { type = "assistant", text = "hello", reasoning = "they said hi" },
+            { type = "assistant", text = "again" },
+            { type = "user", text = "next" },
+        },
+        tools = {},
+        reasoning = true,
+        max_output = 16,
+        cache = "off",
+    }, { fail = function() end })
+    local sent = mock.requests[#mock.requests].body.messages
+    assert.equal("they said hi", sent[2].reasoning_content)
+    assert.is_nil(sent[3].reasoning_content)
 end)

@@ -34,8 +34,14 @@ it("retries a failed request until it succeeds", function()
         return server.text("done")
     end)
     agent.allow_all()
+    local notices = {}
+    uji.on("notice", function(notice)
+        notices[#notices + 1] = notice.text
+    end)
     local messages = run(mock.url)
     assert.equal(4, #mock:turns())
+    assert.equal(1, notices[1]:find("request failed (http: 500: boom), retrying in ", 1, true))
+    assert.equal('request failed (http: 429: {"error":"slow"}), retrying in 1s (2/5)', notices[2])
     assert.same({ "    1| alpha\n    2| line two\n    3| gamma\n" }, agent.tool_results(messages))
     assert.equal("done", agent.last_answer(messages))
 end)
@@ -196,6 +202,31 @@ it("ends the turn when a running tool is interrupted", { timeout = 20 }, functio
     assert.same({ "error: interrupted by the user while this tool ran" }, agent.tool_results(messages))
     assert.equal("interrupted", agent.last_error(messages))
     assert.equal(1, #mock:turns())
+end)
+
+it("sends the queued message once the turn is interrupted", { timeout = 20 }, function()
+    local mock = agent.serve(function(round)
+        if round == 0 then
+            return server.tool_calls(0, { { "run_command", '{"command":"sleep 30"}' } })
+        end
+        return server.text("done")
+    end)
+    agent.allow_all()
+    uji.on("tool_started", function()
+        uji.session.submit("instead")
+        uji.defer(0.5, uji.session.interrupt)
+    end)
+    local messages = run(mock.url)
+    local types = {}
+    for index, message in ipairs(messages) do
+        types[index] = message.type == "user" and message.text or message.type
+    end
+    assert.same({ "go", "assistant", "tool", "error", "instead", "assistant" }, types)
+    local turns = mock:turns()
+    assert.equal(2, #turns)
+    local sent = turns[2].body.messages
+    assert.equal("instead", sent[#sent].content)
+    assert.equal("done", agent.last_answer(messages))
 end)
 
 it("drops the connection when a stream is interrupted", { timeout = 20 }, function()

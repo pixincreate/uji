@@ -14,17 +14,28 @@ local function client(Api)
     function Client:headers(request, ...)
         local out = Api.headers(self, request, ...)
         out["User-Agent"] = AGENT
+        out["x-opencode-client"] = "uji"
         out["x-opencode-session"] = common.session(request)
         return out
     end
-    return Client()
+    return Client
 end
 
-local CHAT = client(uji.api.openai)
+local Chat = client(uji.api.openai)
+
+function Chat:assistant(item, request)
+    local out = uji.api.openai.assistant(self, item, request)
+    if item.reasoning and item.reasoning ~= "" then
+        out.reasoning_content = item.reasoning
+    end
+    return out
+end
+
+local CHAT = Chat()
 local CLIENTS = {
-    ["@ai-sdk/openai"] = client(uji.api.responses),
-    ["@ai-sdk/anthropic"] = client(uji.api.anthropic),
-    ["@ai-sdk/google"] = client(uji.api.gemini),
+    ["@ai-sdk/openai"] = client(uji.api.responses)(),
+    ["@ai-sdk/anthropic"] = client(uji.api.anthropic)(),
+    ["@ai-sdk/google"] = client(uji.api.gemini)(),
 }
 
 local function fetch(url)

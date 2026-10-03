@@ -100,10 +100,8 @@ return function(store, parsed)
     if not choice then
         return cli.fail(problem)
     end
-    local provider = model.resolve(choice).provider
-    if provider and provider.state ~= catalog.STATE.LOADED and provider:load() == catalog.STATE.LOADED then
-        model.resolve(choice)
-    end
+    model.resolve(choice)
+    model.load()
     if flags["append-prompt"] then
         event.on("before_turn", function(turn)
             return turn.system .. "\n\n" .. flags["append-prompt"]
