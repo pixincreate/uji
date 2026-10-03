@@ -1,4 +1,5 @@
 local plugin = require("uji.core.plugin")
+local sys = require("uji.sys")
 
 local MAX_RESERVE = 20000
 local EFFORTS = { "off", "minimal", "low", "medium", "high", "xhigh", "max" }
@@ -20,7 +21,9 @@ for _, name in ipairs(EFFORTS) do
     KNOWN[name] = true
 end
 
-local M = { providers = {}, EFFORTS = EFFORTS }
+local STATE = { IDLE = "idle", LOADING = "loading", LOADED = "loaded", FAILED = "failed" }
+
+local M = { providers = {}, EFFORTS = EFFORTS, DEFAULT_EFFORTS = DEFAULT_EFFORTS, STATE = STATE }
 
 local function efforts(list, id)
     if list == nil then
@@ -44,15 +47,18 @@ local function model(spec)
     if type(spec) ~= "table" or type(spec.id) ~= "string" then
         error("a model is an id or a table with an id", 0)
     end
-    return {
+    local entry = {
         id = spec.id,
         context = spec.context,
         output = spec.output,
         reasoning = spec.reasoning == true,
         cache = spec.cache == true,
-        images = type(spec.images) == "boolean" and spec.images or nil,
         efforts = efforts(spec.efforts, spec.id),
     }
+    if type(spec.images) == "boolean" then
+        entry.images = spec.images
+    end
+    return entry
 end
 
 local function api(value, id)
@@ -63,6 +69,9 @@ local function api(value, id)
 end
 
 local function models(list)
+    if list ~= nil and type(list) ~= "table" then
+        error("models must be a list or a function that returns one", 0)
+    end
     local out = {}
     for index, spec in ipairs(list or {}) do
         out[index] = model(spec)
@@ -137,13 +146,8 @@ function Provider:budget(id)
     return { window = window, reserve = reserve }
 end
 
-function Provider:apply(patch)
-    for _, key in ipairs({ "name", "api", "base_url", "auth_env", "oauth", "context_window" }) do
-        if patch[key] ~= nil then
-            self[key] = patch[key]
-        end
-    end
-    for _, entry in ipairs(models(patch.models)) do
+function Provider:merge(list)
+    for _, entry in ipairs(models(list)) do
         local replaced = false
         for index, existing in ipairs(self.models) do
             if existing.id == entry.id then
@@ -157,7 +161,49 @@ function Provider:apply(patch)
     end
 end
 
+function Provider:apply(patch)
+    for _, key in ipairs({ "name", "api", "base_url", "auth_env", "oauth", "context_window" }) do
+        if patch[key] ~= nil then
+            self[key] = patch[key]
+        end
+    end
+    if type(patch.models) == "function" then
+        self.loader = patch.models
+        self.state = STATE.IDLE
+        self.error = nil
+    else
+        self:merge(patch.models)
+    end
+end
+
+function Provider:load()
+    if self.state == STATE.LOADED then
+        return STATE.LOADED
+    end
+    local loading = self.loading
+    if not loading then
+        local loader = self.loader
+        loading = sys.promise()
+        self.loading = loading
+        self.state = STATE.LOADING
+        sys.task.spawn(function()
+            local ok, err = pcall(function()
+                self:merge(loader())
+            end)
+            local state, failure = ok and STATE.LOADED or STATE.FAILED, not ok and sys.message(err) or nil
+            if self.loader == loader then
+                self.state = state
+                self.error = failure
+            end
+            self.loading = nil
+            loading:resolve(state, failure)
+        end)
+    end
+    return loading:await()
+end
+
 local function create(spec)
+    local lazy = type(spec.models) == "function"
     return setmetatable({
         id = spec.id,
         name = spec.name,
@@ -166,7 +212,9 @@ local function create(spec)
         auth_env = spec.auth_env or {},
         oauth = spec.oauth,
         context_window = spec.context_window,
-        models = models(spec.models),
+        models = lazy and {} or models(spec.models),
+        loader = lazy and spec.models or nil,
+        state = lazy and STATE.IDLE or STATE.LOADED,
         owner = plugin.current(),
     }, Provider)
 end

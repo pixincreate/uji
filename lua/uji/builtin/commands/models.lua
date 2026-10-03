@@ -4,8 +4,14 @@ uji.command.add("models", {
         local current = uji.model.current().provider
         local available = {}
         for _, provider in ipairs(uji.provider.list()) do
-            if #provider.models > 0 and (provider.id == current or uji.auth.authenticated(provider.id)) then
-                available[#available + 1] = provider
+            if provider.id == current or uji.auth.authenticated(provider.id) then
+                local row = uji.provider.load(provider.id)
+                if row.error then
+                    uji.notify("could not load " .. row.name .. " models: " .. row.error)
+                end
+                if #row.models > 0 then
+                    available[#available + 1] = row
+                end
             end
         end
         if #available == 0 then

@@ -137,7 +137,7 @@ function OpenAI:body(request)
         end)),
         stream = true,
         stream_options = { include_usage = true },
-        prompt_cache_key = self.cache_key and request.session or nil,
+        prompt_cache_key = self.cache_key and common.session(request) or nil,
     }
     if request.reasoning then
         self:thinking(out, request)

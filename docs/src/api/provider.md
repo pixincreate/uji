@@ -14,7 +14,7 @@ Adds a provider, or merges `spec` into the provider with the same `id`.
 | `api` | object | The API the provider speaks, such as `uji.api.openai()`. [Provider APIs](apis.md) lists the built-in ones and how to change them. Required for a new provider. |
 | `base_url` | string | The API root, such as `"https://api.openai.com/v1"`. Required for a new provider. |
 | `auth_env` | list of strings | Environment variables that may hold the API key. |
-| `models` | list | Model ids, or tables with `id`, `context`, `output`, `reasoning`, `cache`, `images` and `efforts`. `images` is `true` or `false` when you know whether the model takes images. `efforts` lists the reasoning efforts the model accepts, from `off`, `minimal`, `low`, `medium`, `high`, `xhigh` and `max`. Without it, uji asks the provider's `api`. |
+| `models` | list or function | Model ids, or tables with `id`, `context`, `output`, `reasoning`, `cache`, `images` and `efforts`. `images` is `true` or `false` when you know whether the model takes images. `efforts` lists the reasoning efforts the model accepts, from `off`, `minimal`, `low`, `medium`, `high`, `xhigh` and `max`. Without it, uji asks the provider's `api`. A function returns that list, and uji calls it once, the first time it needs the provider's models. The function may wait, for example on `uji.http.request`. |
 | `context_window` | integer | The context size to assume for a model that does not set one. |
 | `oauth` | table | Subscription sign-in settings. The built-in Anthropic and OpenAI providers show the format. |
 
@@ -23,8 +23,8 @@ When the provider exists, each field you give replaces the old one, except
 the old one whole.
 
 Raises an error for an unknown field, for an `api` without a `stream` method,
-for an unknown effort, and for a new provider without `name`, `api` and
-`base_url`.
+for `models` that are neither a list nor a function, for an unknown effort,
+and for a new provider without `name`, `api` and `base_url`.
 
 ```lua
 uji.provider.add({
@@ -39,7 +39,24 @@ uji.provider.add({
 })
 
 uji.provider.add({ id = "openai", base_url = "https://proxy.example.com/v1" })
+
+uji.provider.add({
+  id = "ollama",
+  models = function()
+    local response = uji.http.request({ url = "http://localhost:11434/api/tags", timeout = 5 })
+    local models = {}
+    for _, entry in ipairs(uji.json.decode(response.body).models) do
+      models[#models + 1] = entry.name
+    end
+    return models
+  end,
+})
 ```
+
+uji calls the function when the provider is the current one, when `/models`
+lists it, and before the first request to it. The models it returns merge
+with the ones the provider already has. When it raises an error, the provider
+keeps its models, and uji calls it again the next time it needs them.
 
 ## uji.provider.remove(id)
 
@@ -52,14 +69,43 @@ uji.provider.remove("perplexity")
 ## uji.provider.list()
 
 Returns one table per provider with `id`, `name`, `api`, `base_url`,
-`auth_env`, `context_window` and `models`, and `oauth`, which is `true` when
-the provider offers subscription sign-in. Each model has `id`, `context`,
-`output`, `reasoning`, `cache`, `images` and `efforts`.
+`auth_env`, `context_window`, `models`, `oauth`, which is `true` when the
+provider offers subscription sign-in, `state` and `error`. Each model has `id`,
+`context`, `output`, `reasoning`, `cache`, `images` and `efforts`.
+
+`state` is one of the values in `uji.provider.STATE`:
+
+| Value | Meaning |
+|---|---|
+| `STATE.IDLE` | The provider has a `models` function that uji has not called yet. |
+| `STATE.LOADING` | The function is running. |
+| `STATE.LOADED` | The models are in. A provider with a plain list starts here. |
+| `STATE.FAILED` | The function raised an error, and `error` holds its message. uji calls it again the next time it needs the models. |
 
 ```lua
 for _, provider in ipairs(uji.provider.list()) do
   if provider.base_url:find("localhost", 1, true) then
     uji.notify(provider.name)
   end
+end
+```
+
+## uji.provider.get(id)
+
+Returns the row for one provider, in the format `uji.provider.list()` uses, or
+`nil` when no provider has that id. It does not load anything.
+
+## uji.provider.load(id, on_done)
+
+Calls the provider's `models` function if its models are not loaded yet,
+waits for it, and returns the provider's row. The row's `state` is
+`STATE.LOADED`, or `STATE.FAILED` with `error` set. With `on_done`, it returns
+at once and calls `on_done` with the row. Raises an error when no provider has
+that id.
+
+```lua
+local ollama = uji.provider.load("ollama")
+if ollama.state == uji.provider.STATE.FAILED then
+  uji.notify("could not list Ollama models: " .. ollama.error)
 end
 ```

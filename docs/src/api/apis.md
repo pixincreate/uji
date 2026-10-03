@@ -117,7 +117,8 @@ cancels the call. The request has these fields:
 - `effort`, one of the model's efforts, or `nil` for the provider's default
 - `max_output`, the output token limit
 - `cache`, one of `off`, `short` and `long`
-- `session`, the session id
+- `ctx`, a table with `session`, the session the request is for, whose `id`
+  is the session id. It is empty for a request made outside a session.
 - `provider`, with `id` and `base_url`
 - `auth`, with `key`, and `oauth` for subscription sign-in
 

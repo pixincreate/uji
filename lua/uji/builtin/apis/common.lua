@@ -92,4 +92,9 @@ function M.bearer(token)
     return token and "Bearer " .. token
 end
 
+function M.session(request)
+    local session = request.ctx and request.ctx.session
+    return session and session.id
+end
+
 return M

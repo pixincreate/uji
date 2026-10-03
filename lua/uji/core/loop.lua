@@ -9,6 +9,7 @@ local RETRY_FACTOR = 2
 local RETRY_JITTER = 0.25
 local RETRY_CEILING = 30
 local MAX_RETRY_AFTER = 60
+local REASON_WIDTH = 160
 local RETRYABLE = { [408] = true, [409] = true, [425] = true, [429] = true }
 local ARRAY = getmetatable(sys.json.array({}))
 
@@ -25,7 +26,8 @@ local function describe(failure)
         return tostring(failure)
     end
     if failure.kind == "auth" then
-        return "authentication rejected (" .. failure.status .. ") - check the api key for this provider"
+        local hint = "authentication rejected (" .. failure.status .. ") - check the api key for this provider"
+        return failure.message and hint .. ": " .. failure.message or hint
     end
     if failure.kind == "provider" then
         return "provider: " .. failure.message
@@ -105,7 +107,6 @@ function Loop:call()
         reasoning = self.reasoning,
         max_output = self.max_output,
         cache = self.cache,
-        session = self.session,
     }, {
         text = function(delta)
             agent:delta("text", delta)
@@ -129,7 +130,8 @@ function Loop:generate()
         end
         local wait = failure.retry_after and math.min(failure.retry_after, MAX_RETRY_AFTER) or backoff(attempt)
         attempt = attempt + 1
-        self.agent:restarted(attempt, RETRY_ATTEMPTS, math.floor(wait))
+        local reason = text.clip(describe(failure):match("[^\n]*"), REASON_WIDTH)
+        self.agent:restarted(attempt, RETRY_ATTEMPTS, math.floor(wait), reason)
         sys.sleep(wait)
     end
 end

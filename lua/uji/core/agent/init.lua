@@ -58,6 +58,7 @@ local Agent = class()
 
 function Agent:init(session)
     self.session = session
+    self.ctx = { session = session }
     self.queue = {}
     self.state = "idle"
     self.confirm = function()
@@ -192,11 +193,10 @@ function Agent:start(system)
         reasoning = model.current.reasoning,
         max_output = model.max_output(),
         cache = model.retention(),
-        session = self.session.id,
     })
     self:begin()
     self.turn = { loop = loop, calls = {}, answered = {} }
-    self.task = task.spawn(function()
+    self.task = task.spawn_in(self.ctx, function()
         local ok, err = pcall(loop.run, loop)
         if not ok then
             self:failed("uji.core.loop: " .. sys.message(err))
@@ -210,9 +210,9 @@ function Agent:failed(message)
     self:finish(true)
 end
 
-function Agent:restarted(attempt, of, wait)
+function Agent:restarted(attempt, of, wait, reason)
     self:clear_stream()
-    notices.push(string.format("request failed, retrying in %ds (%d/%d)", math.max(wait, 1), attempt, of))
+    notices.push(string.format("request failed (%s), retrying in %ds (%d/%d)", reason, math.max(wait, 1), attempt, of))
 end
 
 function Agent:compacted(spent, count)
@@ -435,7 +435,7 @@ function Agent:compact(keep)
         earlier[#earlier + 1] = stored[index].message
     end
     self:begin()
-    task.spawn(function()
+    task.spawn_in(self.ctx, function()
         local files = view.merge_files(view.files_touched(earlier), carried)
         local ok, done = pcall(compactor.generate, earlier, previous)
         if ok and done then
@@ -458,7 +458,7 @@ function Agent:maybe_title(first)
     if not self.session:untitled() or #self.session:entries() ~= 1 then
         return
     end
-    task.spawn(function()
+    task.spawn_in(self.ctx, function()
         local titled = title.generate(first)
         if not titled then
             return
@@ -511,6 +511,7 @@ function Agent:interrupt()
     end
     self:append({ type = "error", text = "interrupted" })
     self:finish(true)
+    self:send_queued()
     return true
 end
 
@@ -531,7 +532,7 @@ function Agent:run_shell(command)
     event.emit("scroll_to_bottom", {})
     event.emit("tool_progress", { name = name, line = "" })
     event.emit("shell_started", { command = command })
-    task.spawn(function()
+    task.spawn_in(self.ctx, function()
         local capture = process.Capture(SHELL_OUTPUT)
         for line in proc:lines() do
             capture:push(line)

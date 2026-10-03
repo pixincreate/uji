@@ -157,7 +157,7 @@ function Responses:body(request)
         end)),
         stream = true,
         store = false,
-        prompt_cache_key = self.cache_key and request.session or nil,
+        prompt_cache_key = self.cache_key and common.session(request) or nil,
         max_output_tokens = math.max(request.max_output, MIN_OUTPUT),
     }
     if request.reasoning then

@@ -101,6 +101,7 @@ return function(store, parsed)
         return cli.fail(problem)
     end
     model.resolve(choice)
+    model.load()
     if flags["append-prompt"] then
         event.on("before_turn", function(turn)
             return turn.system .. "\n\n" .. flags["append-prompt"]

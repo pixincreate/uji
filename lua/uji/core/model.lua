@@ -4,6 +4,7 @@ local context = require("uji.core.context")
 local event = require("uji.core.event")
 local images = require("uji.core.images")
 local sys = require("uji.sys")
+local task = require("uji.core.task")
 
 local DEFAULT_MAX_OUTPUT = 8192
 local NOT_CONFIGURED = "no provider is configured - run /login to set one up"
@@ -57,7 +58,7 @@ function M.resolve(choice)
     local saved = M.setting("llm.provider") or ""
     local id = choice.provider or saved
     local provider = catalog.get(id)
-    local stored = M.setting("llm.model")
+    local stored = M.setting("llm.model." .. id) or (id == saved and M.setting("llm.model") or nil)
     local model = choice.model or provider and provider:usable_model(stored) or stored or ""
     local base_url = id == saved and M.setting("llm.base_url") or nil
     if base_url == "" then
@@ -78,9 +79,22 @@ function M.resolve(choice)
         efforts = efforts,
         reasoning = #efforts > 0,
         caches = provider ~= nil and provider:caches(model),
+        choice = choice,
+        loaded = provider == nil or provider.state == catalog.STATE.LOADED,
     }
     event.emit("model_changed", { provider = id, model = model })
     event.emit("status_changed", {})
+    if not M.current.loaded then
+        task.spawn(M.load)
+    end
+    return M.current
+end
+
+function M.load()
+    local current = M.current
+    if not current.loaded and current.provider:load() == catalog.STATE.LOADED and M.current == current then
+        M.resolve(current.choice)
+    end
     return M.current
 end
 
@@ -90,8 +104,7 @@ function M.remember(provider_id, model)
 end
 
 function M.model_for(provider)
-    local stored = M.setting("llm.model." .. provider.id) or M.setting("llm.model")
-    return provider:usable_model(stored)
+    return provider:usable_model(M.setting("llm.model." .. provider.id))
 end
 
 function M.max_output()
@@ -171,7 +184,7 @@ function M.call(stream, request, reply)
 end
 
 function M.stream(request, reply)
-    local current = M.current
+    local current = M.load()
     local provider = current.provider
     if current.id == "" or not provider then
         return nil, { kind = "provider", message = NOT_CONFIGURED }
@@ -182,6 +195,7 @@ function M.stream(request, reply)
         return nil, missing
     end
     request.model = request.model or current.model
+    request.ctx = task.ctx()
     request.provider = { id = provider.id, base_url = current.base_url or "" }
     if request.reasoning == nil then
         request.reasoning = current.reasoning
@@ -212,7 +226,7 @@ function M.generate(opts)
         messages = opts.messages,
         tools = {},
         effort = M.nearest(M.current.efforts, "off"),
-        max_output = DEFAULT_MAX_OUTPUT,
+        max_output = math.min(DEFAULT_MAX_OUTPUT, M.max_output()),
         cache = "off",
     })
 end

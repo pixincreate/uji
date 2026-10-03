@@ -35,15 +35,16 @@ end
 
 local function status_error(response)
     local status = response.status
+    local message = M.clip(trim(response.body), MAX_ERROR_BODY)
     if status == 401 or status == 403 then
-        return { kind = "auth", status = status }
+        return { kind = "auth", status = status, message = message ~= "" and message or nil }
     end
     local wait = response.headers["retry-after"]
     return {
         kind = "http",
         status = status,
         retry_after = wait and tonumber(wait:match("^%s*(%d+)%s*$")),
-        message = M.clip(trim(response.body), MAX_ERROR_BODY),
+        message = message,
     }
 end
 
