@@ -79,12 +79,10 @@ function M.resolve(choice)
         efforts = efforts,
         reasoning = #efforts > 0,
         caches = provider ~= nil and provider:caches(model),
-        choice = choice,
-        complete = provider == nil or provider.state == catalog.STATE.LOADED,
     }
     event.emit("model_changed", { provider = id, model = model })
     event.emit("status_changed", {})
-    if not M.current.complete then
+    if provider and provider.state ~= catalog.STATE.LOADED then
         local current = M.current
         task.spawn(function()
             if provider:load() == catalog.STATE.LOADED and M.current == current then
