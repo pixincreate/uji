@@ -13,6 +13,7 @@ local FIELDS = {
     oauth = true,
     context_window = true,
     models = true,
+    discover = true,
 }
 
 local KNOWN = {}
@@ -41,8 +42,12 @@ local function model(spec)
     if type(spec) == "string" then
         return { id = spec, reasoning = false, cache = false }
     end
-    if type(spec) ~= "table" or type(spec.id) ~= "string" then
+    if type(spec) ~= "table" or type(spec.id) ~= "string" or spec.id == "" then
         error("a model is an id or a table with an id", 0)
+    end
+    local images
+    if type(spec.images) == "boolean" then
+        images = spec.images
     end
     return {
         id = spec.id,
@@ -50,7 +55,7 @@ local function model(spec)
         output = spec.output,
         reasoning = spec.reasoning == true,
         cache = spec.cache == true,
-        images = type(spec.images) == "boolean" and spec.images or nil,
+        images = images,
         efforts = efforts(spec.efforts, spec.id),
     }
 end
@@ -95,7 +100,59 @@ function Provider:usable_model(stored)
     if stored and self:model(stored) then
         return stored
     end
+    if self.discover and stored then
+        return stored
+    end
     return self:default_model()
+end
+
+function Provider:refresh()
+    if not self.discover then
+        return self
+    end
+    if self.loading then
+        return self.loading:await()
+    end
+    local sys = require("uji.sys")
+    local pending = sys.promise()
+    self.loading, self.models, self.discovery = pending, {}, "loading"
+    local callback, base_url = self.discover, self.base_url
+    -- The shared fetch outlives a cancelled caller; only its wait is cancelled.
+    sys.task.spawn(function()
+        local ok, rows, failure = pcall(callback, { id = self.id, base_url = base_url })
+        if ok and rows then
+            ok, rows = pcall(models, rows)
+        end
+        if M.get(self.id) ~= self or self.discover ~= callback or self.base_url ~= base_url then
+            ok, rows = false, "provider changed during discovery; refresh again"
+        end
+        if not ok or not rows then
+            failure = ok and failure or { kind = "provider", message = sys.message(rows) }
+            failure = failure or { kind = "provider", message = "model discovery failed; run /models to retry" }
+            self.discovery, self.discovery_error = "failed", failure
+        else
+            for index, row in ipairs(rows) do
+                rows[index] = self.overrides[row.id] or row
+            end
+            self.models, self.discovery, self.discovery_error = rows, "ready", nil
+        end
+        self.loading = nil
+        pending:resolve(not failure and self or nil, failure)
+    end)
+    return pending:await()
+end
+
+function Provider:ensure()
+    if not self.discover then
+        return self
+    end
+    if self.discovery == "unloaded" then
+        return self:refresh()
+    end
+    if self.loading then
+        return self.loading:await()
+    end
+    return self.discovery == "ready" and self or nil, self.discovery_error
 end
 
 function Provider:reasons(id)
@@ -138,10 +195,23 @@ function Provider:budget(id)
 end
 
 function Provider:apply(patch)
-    for _, key in ipairs({ "name", "api", "base_url", "auth_env", "oauth", "context_window" }) do
+    for _, key in ipairs({ "name", "api", "base_url", "auth_env", "oauth", "context_window", "discover" }) do
         if patch[key] ~= nil then
             self[key] = patch[key]
         end
+    end
+    if self.discover then
+        for _, entry in ipairs(models(patch.models)) do
+            self.overrides[entry.id] = entry
+        end
+        if patch.base_url or patch.discover then
+            self.models, self.discovery, self.discovery_error = {}, "unloaded", nil
+        else
+            for index, entry in ipairs(self.models) do
+                self.models[index] = self.overrides[entry.id] or entry
+            end
+        end
+        return
     end
     for _, entry in ipairs(models(patch.models)) do
         local replaced = false
@@ -158,6 +228,12 @@ function Provider:apply(patch)
 end
 
 local function create(spec)
+    local overrides = {}
+    if spec.discover then
+        for _, entry in ipairs(models(spec.models)) do
+            overrides[entry.id] = entry
+        end
+    end
     return setmetatable({
         id = spec.id,
         name = spec.name,
@@ -166,7 +242,10 @@ local function create(spec)
         auth_env = spec.auth_env or {},
         oauth = spec.oauth,
         context_window = spec.context_window,
-        models = models(spec.models),
+        models = spec.discover and {} or models(spec.models),
+        discover = spec.discover,
+        discovery = spec.discover and "unloaded" or nil,
+        overrides = overrides,
         owner = plugin.current(),
     }, Provider)
 end
@@ -201,6 +280,9 @@ function M.add(patch)
         end
     end
     api(patch.api, patch.id)
+    if patch.discover ~= nil and type(patch.discover) ~= "function" then
+        error("discover must be a function", 2)
+    end
     local existing = M.get(patch.id)
     if existing then
         existing:apply(patch)

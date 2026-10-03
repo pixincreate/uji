@@ -1,4 +1,20 @@
+local function discover_go()
+    local formats = require("uji.core.opencode").go
+    uji.provider.add({
+        id = "opencode-go",
+        discover = function()
+            local models = {}
+            for id in pairs(formats) do
+                models[#models + 1] = { id = id, context = 1000000, output = 4096, reasoning = true }
+            end
+            return models
+        end,
+    })
+    assert(uji.provider.refresh("opencode-go"))
+end
+
 it("keeps the owning session header on auxiliary requests", function()
+    discover_go()
     local model = require("uji.core.model")
     local sys = require("uji.sys")
     local title = require("uji.core.agent.title")
@@ -32,6 +48,7 @@ it("keeps the owning session header on auxiliary requests", function()
 end)
 
 it("reports a notice for failed title requests with session routing", function()
+    discover_go()
     local app = require("uji.core.app")
     local model = require("uji.core.model")
     local sys = require("uji.sys")
@@ -65,7 +82,8 @@ it("reports a notice for failed title requests with session routing", function()
     assert(requests == 1 and app.session:untitled())
 end)
 
-it("routes each Go model without changing other providers", function()
+it("routes each Go model independently of Zen and OpenAI", function()
+    discover_go()
     local catalog = require("uji.core.catalog")
     local sys = require("uji.sys")
     local go = assert(catalog.get("opencode-go"))
@@ -144,7 +162,7 @@ it("routes each Go model without changing other providers", function()
     assert(#requests == before and failed.kind == "provider")
     local zen = assert(catalog.get("opencode-zen"))
     assert(zen.base_url == "https://opencode.ai/zen/v1")
-    assert(zen.api:url({ provider = { base_url = zen.base_url } }) == zen.base_url .. "/chat/completions")
+    assert(#zen.models == 0 and zen.discovery == "unloaded")
     local openai = assert(catalog.get("openai"))
     assert(openai.api:url({ provider = { base_url = openai.base_url } }) == "https://api.openai.com/v1/responses")
 
@@ -173,6 +191,7 @@ it("routes each Go model without changing other providers", function()
 end)
 
 it("sets Go headers from the request session", function()
+    discover_go()
     local go = assert(require("uji.core.catalog").get("opencode-go"))
     local sys, headers = require("uji.sys"), {}
     sys.net.open = function(opts)

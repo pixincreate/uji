@@ -176,6 +176,48 @@ function M.stream(request, reply)
     if current.id == "" or not provider then
         return nil, { kind = "provider", message = NOT_CONFIGURED }
     end
+    if provider.discover then
+        if current.base_url ~= provider.base_url then
+            return nil,
+                {
+                    kind = "provider",
+                    message = "remote discovery does not support a saved base URL override; run /login",
+                }
+        end
+        local ready, failure = provider:ensure()
+        if not ready then
+            return nil, failure
+        end
+        local requested = request.model or current.model
+        if requested == "" then
+            requested = provider:default_model()
+        end
+        if not provider:model(requested) then
+            return nil,
+                {
+                    kind = "provider",
+                    message = "model is unavailable in the remote catalog: " .. requested .. "; run /models",
+                }
+        end
+        if M.current == current then
+            M.resolve({ provider = provider.id, model = current.model ~= "" and current.model or requested })
+        end
+        if request.model == "" then
+            request.reasoning = provider:reasons(requested)
+        end
+        request.model = requested
+        local efforts = provider:efforts(requested)
+        current = {
+            id = provider.id,
+            provider = provider,
+            model = requested,
+            base_url = provider.base_url,
+            reasoning = #efforts > 0,
+        }
+        if request.effort ~= nil then
+            request.effort = M.nearest(efforts, request.effort)
+        end
+    end
     local api = provider.api
     local credentials, missing = auth.resolve(provider)
     if not credentials then
@@ -187,7 +229,10 @@ function M.stream(request, reply)
         request.reasoning = current.reasoning
     end
     request.auth = credentials
-    local accepts = M.images()
+    local accepts = provider:images(request.model)
+    if accepts == nil and M.setting(text_only(current)) == "no" then
+        accepts = false
+    end
     local messages = request.messages
     request.messages = images.prepare(messages, accepts)
     local function stream(...)
@@ -212,7 +257,7 @@ function M.generate(opts)
         messages = opts.messages,
         session = opts.session,
         tools = {},
-        effort = M.nearest(M.current.efforts, "off"),
+        effort = M.nearest(M.current.efforts, "off") or "off",
         max_output = DEFAULT_MAX_OUTPUT,
         cache = "off",
     })

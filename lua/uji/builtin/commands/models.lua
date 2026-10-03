@@ -2,6 +2,15 @@ uji.command.add("models", {
     desc = "pick the default model",
     handler = function()
         local current = uji.model.current().provider
+        for _, provider in ipairs(uji.provider.list()) do
+            if provider.id == current and provider.discovery then
+                local _, failure = uji.provider.refresh(current)
+                if failure then
+                    uji.notify("model discovery failed: " .. failure.message)
+                    return
+                end
+            end
+        end
         local available = {}
         for _, provider in ipairs(uji.provider.list()) do
             if #provider.models > 0 and (provider.id == current or uji.auth.authenticated(provider.id)) then
