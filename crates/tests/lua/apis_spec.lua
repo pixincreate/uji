@@ -324,7 +324,7 @@ local function request(case, id, url)
         reasoning = case.reasoning,
         max_output = case.max_output,
         cache = case.cache,
-        session = "s1",
+        ctx = { session = { id = "s1" } },
         provider = { id = case.provider, base_url = url .. "/case/" .. id .. "/" .. case.script .. "/v1" },
         auth = auth,
     }

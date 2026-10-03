@@ -1,0 +1,45 @@
+local sys = require("uji.sys")
+local task = require("uji.core.task")
+
+it("gives a task no context unless it was started with one", function()
+    assert.same({}, task.ctx())
+end)
+
+it("hands a task's context to every task it starts", function()
+    local ctx = { session = { id = "s1" } }
+    local seen = {}
+    local finished = sys.promise()
+    task.spawn_in(ctx, function()
+        seen.own = task.ctx()
+        task.spawn(function()
+            seen.spawned = task.ctx()
+        end)
+        task.defer(0, function()
+            seen.deferred = task.ctx()
+        end)
+        task.race(function()
+            seen.raced = task.ctx()
+        end)
+        task.timeout(1, function()
+            seen.timed = task.ctx()
+        end)
+        sys.sleep(0.05)
+        finished:resolve()
+    end)
+    finished:await()
+    for _, name in ipairs({ "own", "spawned", "deferred", "raced", "timed" }) do
+        assert.equal(ctx, seen[name], name)
+    end
+end)
+
+it("keeps a task started outside a context free of it", function()
+    local seen
+    task.spawn_in({ session = { id = "s1" } }, function() end)
+    local finished = sys.promise()
+    task.spawn(function()
+        seen = task.ctx()
+        finished:resolve()
+    end)
+    finished:await()
+    assert.same({}, seen)
+end)

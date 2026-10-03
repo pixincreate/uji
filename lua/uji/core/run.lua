@@ -100,7 +100,10 @@ return function(store, parsed)
     if not choice then
         return cli.fail(problem)
     end
-    model.resolve(choice)
+    local provider = model.resolve(choice).provider
+    if provider and provider.state ~= "loaded" and provider:load() == "loaded" then
+        model.resolve(choice)
+    end
     if flags["append-prompt"] then
         event.on("before_turn", function(turn)
             return turn.system .. "\n\n" .. flags["append-prompt"]

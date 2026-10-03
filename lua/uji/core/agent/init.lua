@@ -58,6 +58,7 @@ local Agent = class()
 
 function Agent:init(session)
     self.session = session
+    self.ctx = { session = session }
     self.queue = {}
     self.state = "idle"
     self.confirm = function()
@@ -183,28 +184,20 @@ end
 
 function Agent:start(system)
     local Loop = require("uji.core.loop")
+    local loop = Loop(self, {
+        system = system,
+        messages = view.build(self.session:entries()),
+        tools = tool.specs(self.tools),
+        model = model.current.model,
+        effort = model.current.effort,
+        reasoning = model.current.reasoning,
+        max_output = model.max_output(),
+        cache = model.retention(),
+    })
     self:begin()
-    self.task = task.spawn(function()
-        local ok, err = pcall(function()
-            local current, failure = model.ready()
-            if not current then
-                self:failed(failure.message)
-                return
-            end
-            local loop = Loop(self, {
-                system = system,
-                messages = view.build(self.session:entries()),
-                tools = tool.specs(self.tools),
-                model = current.model,
-                effort = current.effort,
-                reasoning = current.reasoning,
-                max_output = model.max_output(),
-                cache = model.retention(),
-                session = self.session.id,
-            })
-            self.turn = { loop = loop, calls = {}, answered = {} }
-            loop:run()
-        end)
+    self.turn = { loop = loop, calls = {}, answered = {} }
+    self.task = task.spawn_in(self.ctx, function()
+        local ok, err = pcall(loop.run, loop)
         if not ok then
             self:failed("uji.core.loop: " .. sys.message(err))
         end
@@ -404,7 +397,7 @@ function Agent:fold(messages)
     if not budget then
         return nil
     end
-    return compactor.fold(messages, budget, self:keep_recent(), self.session.id)
+    return compactor.fold(messages, budget, self:keep_recent())
 end
 
 function Agent:compact_if_needed()
@@ -442,9 +435,9 @@ function Agent:compact(keep)
         earlier[#earlier + 1] = stored[index].message
     end
     self:begin()
-    task.spawn(function()
+    task.spawn_in(self.ctx, function()
         local files = view.merge_files(view.files_touched(earlier), carried)
-        local ok, done = pcall(compactor.generate, earlier, previous, self.session.id)
+        local ok, done = pcall(compactor.generate, earlier, previous)
         if ok and done then
             if done.usage then
                 self.session:add_cost(done.usage)
@@ -465,11 +458,9 @@ function Agent:maybe_title(first)
     if not self.session:untitled() or #self.session:entries() ~= 1 then
         return
     end
-    task.spawn(function()
-        local titled, failure = title.generate(first, self.session.id)
+    task.spawn_in(self.ctx, function()
+        local titled = title.generate(first)
         if not titled then
-            local reason = failure and (failure.message or (failure.kind .. ": " .. tostring(failure.status)))
-            notices.push("could not name the session: " .. (reason or "no title returned"))
             return
         end
         if titled.usage then
@@ -540,7 +531,7 @@ function Agent:run_shell(command)
     event.emit("scroll_to_bottom", {})
     event.emit("tool_progress", { name = name, line = "" })
     event.emit("shell_started", { command = command })
-    task.spawn(function()
+    task.spawn_in(self.ctx, function()
         local capture = process.Capture(SHELL_OUTPUT)
         for line in proc:lines() do
             capture:push(line)

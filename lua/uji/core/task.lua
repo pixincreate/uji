@@ -13,15 +13,36 @@ M.unpack = function(values, from)
     return unpack(values, from or 1, values.n)
 end
 
+local contexts = setmetatable({}, { __mode = "k" })
+
+function M.ctx()
+    return contexts[coroutine.running()] or {}
+end
+
+local function inherit(fn, ctx)
+    ctx = ctx or contexts[coroutine.running()]
+    if not ctx then
+        return fn
+    end
+    return function(...)
+        contexts[coroutine.running()] = ctx
+        return fn(...)
+    end
+end
+
 function M.spawn(fn, ...)
-    return sys.task.spawn(fn, ...)
+    return sys.task.spawn(inherit(fn), ...)
+end
+
+function M.spawn_in(ctx, fn, ...)
+    return sys.task.spawn(inherit(fn, ctx), ...)
 end
 
 function M.schedule(fn, ...)
     local args = pack(...)
-    local run = function()
+    local run = inherit(function()
         fn(unpack(args, 1, args.n))
-    end
+    end)
     if M.held then
         M.held[#M.held + 1] = run
         return
@@ -43,18 +64,19 @@ end
 
 function M.defer(seconds, fn, ...)
     local args = pack(...)
-    local task = sys.task.spawn(function()
+    local task = sys.task.spawn(inherit(function()
         sys.sleep(seconds)
         fn(unpack(args, 1, args.n))
-    end)
+    end))
     return function()
         task:cancel()
     end
 end
 
 local function guarded(fn)
+    local run = inherit(fn)
     return function()
-        return pack(pcall(fn))
+        return pack(pcall(run))
     end
 end
 
@@ -90,7 +112,7 @@ function M.sequence()
     return function(fn)
         local before, done = last, sys.promise()
         last = done
-        sys.task.spawn(function()
+        sys.task.spawn(inherit(function()
             if before then
                 before:await()
             end
@@ -99,7 +121,7 @@ function M.sequence()
             if not ok then
                 error(err, 0)
             end
-        end)
+        end))
     end
 end
 
@@ -112,9 +134,9 @@ function M.callback(run)
         end
         local args = pack(...)
         args.n = count - 1
-        local task = sys.task.spawn(function()
+        local task = sys.task.spawn(inherit(function()
             last(run(unpack(args, 1, args.n)))
-        end)
+        end))
         return function()
             task:cancel()
         end

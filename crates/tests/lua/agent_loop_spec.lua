@@ -15,7 +15,7 @@ end
 
 local function compacted(mock)
     for _, request in ipairs(mock.requests) do
-        if server.system(request):sub(1, 26) == "You compact coding session" then
+        if server.system(request):find("You compact coding sessions", 1, true) == 1 then
             return true
         end
     end

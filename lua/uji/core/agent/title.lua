@@ -42,18 +42,17 @@ function M.sanitize(raw)
     return (clip(trimmed, MAX_TITLE))
 end
 
-function M.generate(first_message, session)
-    local answer, failure = model.generate({
-        session = session,
+function M.generate(first_message)
+    local answer = model.generate({
         system = PROMPT,
         messages = { { type = "user", text = (clip(first_message, MAX_INPUT)) } },
     })
     if not answer then
-        return nil, failure
+        return nil
     end
     local title = M.sanitize(answer.text)
     if not title then
-        return nil, { kind = "provider", message = "the title request returned no usable title" }
+        return nil
     end
     return { title = title, usage = answer.usage }
 end

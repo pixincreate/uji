@@ -14,7 +14,7 @@ Adds a provider, or merges `spec` into the provider with the same `id`.
 | `api` | object | The API the provider speaks, such as `uji.api.openai()`. [Provider APIs](apis.md) lists the built-in ones and how to change them. Required for a new provider. |
 | `base_url` | string | The API root, such as `"https://api.openai.com/v1"`. Required for a new provider. |
 | `auth_env` | list of strings | Environment variables that may hold the API key. |
-| `models` | list | Model ids, or tables with `id`, `context`, `output`, `reasoning`, `cache`, `images` and `efforts`. `images` is `true` or `false` when you know whether the model takes images. `efforts` lists the reasoning efforts the model accepts, from `off`, `minimal`, `low`, `medium`, `high`, `xhigh` and `max`. Without it, uji asks the provider's `api`. |
+| `models` | list or function | Model ids, or tables with `id`, `context`, `output`, `reasoning`, `cache`, `images` and `efforts`. `images` is `true` or `false` when you know whether the model takes images. `efforts` lists the reasoning efforts the model accepts, from `off`, `minimal`, `low`, `medium`, `high`, `xhigh` and `max`. Without it, uji asks the provider's `api`. A function returns that list, and uji calls it once, the first time it needs the provider's models. The function may wait, for example on `uji.http.request`. |
 | `context_window` | integer | The context size to assume for a model that does not set one. |
 | `oauth` | table | Subscription sign-in settings. The built-in Anthropic and OpenAI providers show the format. |
 
@@ -23,8 +23,8 @@ When the provider exists, each field you give replaces the old one, except
 the old one whole.
 
 Raises an error for an unknown field, for an `api` without a `stream` method,
-for an unknown effort, and for a new provider without `name`, `api` and
-`base_url`.
+for `models` that are neither a list nor a function, for an unknown effort,
+and for a new provider without `name`, `api` and `base_url`.
 
 ```lua
 uji.provider.add({
@@ -39,32 +39,24 @@ uji.provider.add({
 })
 
 uji.provider.add({ id = "openai", base_url = "https://proxy.example.com/v1" })
+
+uji.provider.add({
+  id = "ollama",
+  models = function()
+    local response = uji.http.request({ url = "http://localhost:11434/api/tags", timeout = 5 })
+    local models = {}
+    for _, entry in ipairs(uji.json.decode(response.body).models) do
+      models[#models + 1] = entry.name
+    end
+    return models
+  end,
+})
 ```
 
-## OpenCode Go
-
-Run `/login`, select **OpenCode Go**, and enter your OpenCode console API key.
-You can also set `OPENCODE_API_KEY`.
-The provider uses `https://opencode.ai/zen/go/v1`, separate from OpenCode Zen.
-The provider file fetches available IDs from `/models` and capabilities from `https://models.dev/api.json`, then registers them with `uji.provider.add`.
-Fetching runs in a background task after provider registration.
-Execution waits for that task when the selected model is not already configured, before capturing reasoning effort, output limits, and caching.
-Explicit model and effort choices remain selected while metadata loads.
-No API key is sent to either public discovery request.
-Failed requests produce an empty catalog and an inference error with the loading failure; use `/reload` to retry.
-There is no bundled or stale catalog fallback.
-Only models with metadata and documented endpoint assignments are listed.
-It routes these models through the existing Chat Completions, Anthropic Messages, or Responses APIs.
-
-Zen fetches its own inventory and uses separate endpoint assignments, including Gemini.
-Client and owning-session headers apply to both services, including title and compaction requests.
-HTTP rejection messages include bounded server details with outgoing API keys redacted.
-An HTTP 403 does not establish that your API key is invalid.
-
-Model availability and subscription allowances depend on your account.
-Context and output token limits do not represent remaining subscription allowance.
-Disable **Use balance** in the Go console if you do not want account-enabled pay-as-you-go fallback.
-Go API-key access does not configure ChatGPT subscription authentication.
+uji calls the function when the provider is the current one, when `/models`
+lists it, and before the first request to it. The models it returns merge
+with the ones the provider already has. When it raises an error, the provider
+keeps its models, and uji calls it again the next time it needs them.
 
 ## uji.provider.remove(id)
 
@@ -77,14 +69,30 @@ uji.provider.remove("perplexity")
 ## uji.provider.list()
 
 Returns one table per provider with `id`, `name`, `api`, `base_url`,
-`auth_env`, `context_window` and `models`, and `oauth`, which is `true` when
-the provider offers subscription sign-in. Each model has `id`, `context`,
-`output`, `reasoning`, `cache`, `images` and `efforts`.
+`auth_env`, `context_window`, `models`, `oauth`, which is `true` when the
+provider offers subscription sign-in, and `state`. `state` is `"loaded"` once
+the models are in, `"idle"` before uji has called a `models` function,
+`"loading"` while it runs, and `"failed"` when it raised an error. Each model
+has `id`, `context`, `output`, `reasoning`, `cache`, `images` and `efforts`.
 
 ```lua
 for _, provider in ipairs(uji.provider.list()) do
   if provider.base_url:find("localhost", 1, true) then
     uji.notify(provider.name)
   end
+end
+```
+
+## uji.provider.models(id, on_done)
+
+Loads the provider's models if they are not loaded yet, waits for them, and
+returns them in the format `uji.provider.list()` uses. When loading fails, it
+returns the models the provider already has and the error message.
+With `on_done`, it returns at once and calls `on_done` with the same values.
+
+```lua
+local models, err = uji.provider.models("ollama")
+if err then
+  uji.notify("could not list Ollama models: " .. err)
 end
 ```

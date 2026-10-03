@@ -25,10 +25,8 @@ local function describe(failure)
         return tostring(failure)
     end
     if failure.kind == "auth" then
-        if failure.message and failure.message ~= "" then
-            return "request rejected (" .. failure.status .. "): " .. failure.message
-        end
-        return "authentication rejected (" .. failure.status .. ") - check the api key for this provider"
+        local hint = "authentication rejected (" .. failure.status .. ") - check the api key for this provider"
+        return failure.message and hint .. ": " .. failure.message or hint
     end
     if failure.kind == "provider" then
         return "provider: " .. failure.message
@@ -108,7 +106,6 @@ function Loop:call()
         reasoning = self.reasoning,
         max_output = self.max_output,
         cache = self.cache,
-        session = self.session,
     }, {
         text = function(delta)
             agent:delta("text", delta)
