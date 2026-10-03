@@ -48,8 +48,8 @@ local function find(rows, id)
 end
 
 it("does not load models for a provider nobody has picked", function()
-    assert.equal("idle", catalog.get("opencode-go").state)
-    assert.equal("idle", catalog.get("opencode-zen").state)
+    assert.equal(uji.provider.STATE.IDLE, uji.provider.get("opencode-go").state)
+    assert.equal(uji.provider.STATE.IDLE, uji.provider.get("opencode-zen").state)
 end)
 
 it("lists the live models with their limits, efforts and images", function()
@@ -62,11 +62,11 @@ it("lists the live models with their limits, efforts and images", function()
             cost = { input = 1, output = 2, cache_read = 0.1 },
             provider = { npm = "@ai-sdk/openai" },
         },
-        ["glm-x"] = { limit = { context = 200000, output = 0 }, modalities = { input = { "text" } } },
+        ["glm-x"] = { limit = { context = 200000 }, modalities = { input = { "text" } } },
     })
     local mock = inventory({ "gpt-x", "glm-x", "gpt-x", "unlisted" })
     register(mock)
-    local rows = uji.provider.models("opencode-test")
+    local rows = uji.provider.load("opencode-test").models
     local ids = {}
     for index, row in ipairs(rows) do
         ids[index] = row.id
@@ -95,7 +95,7 @@ it("sends each model to the API that models.dev names for it", function()
     })
     local mock = inventory({ "gpt-x", "claude-x", "gemini-x", "glm-x", "unlisted" })
     local provider = register(mock)
-    uji.provider.models("opencode-test")
+    uji.provider.load("opencode-test")
     local routes = {
         ["gpt-x"] = "/v1/responses",
         ["claude-x"] = "/v1/messages",
@@ -137,7 +137,7 @@ it("sends the session and its own user agent on chat, title and compaction reque
     register(mock)
     agent.allow_all()
     uji.model.use({ provider = "opencode-test", model = "glm-x" })
-    uji.provider.models("opencode-test")
+    uji.provider.load("opencode-test")
     local turned, titled = sys.promise(), sys.promise()
     uji.on("turn_finished", function()
         turned:resolve()

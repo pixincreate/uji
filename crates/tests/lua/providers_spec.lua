@@ -1,5 +1,7 @@
 local sys = require("uji.sys")
 
+local STATE = uji.provider.STATE
+
 local function counted(models, fails)
     local calls = { count = 0 }
     calls.load = function()
@@ -32,34 +34,30 @@ local function ids(rows)
 end
 
 local function state(id)
-    for _, provider in ipairs(uji.provider.list()) do
-        if provider.id == id then
-            return provider.state
-        end
-    end
+    return uji.provider.get(id).state
 end
 
 it("loads a provider's models only once they are needed", function()
     local calls = counted({ { id = "fetched", context = 1000 } })
     add("lazy", calls.load)
     assert.equal(0, calls.count)
-    assert.equal("idle", state("lazy"))
-    assert.same({ "fetched" }, ids(uji.provider.models("lazy")))
-    assert.same({ "fetched" }, ids(uji.provider.models("lazy")))
+    assert.equal(STATE.IDLE, state("lazy"))
+    assert.same({ "fetched" }, ids(uji.provider.load("lazy").models))
+    assert.same({ "fetched" }, ids(uji.provider.load("lazy").models))
     assert.equal(1, calls.count)
-    assert.equal("loaded", state("lazy"))
+    assert.equal(STATE.LOADED, state("lazy"))
 end)
 
 it("shares one load between everyone waiting for it", function()
     local calls = counted({ { id = "fetched" } })
     add("shared", calls.load)
     local done = sys.promise()
-    uji.provider.models("shared", function()
+    uji.provider.load("shared", function()
         done:resolve()
     end)
     sys.sleep(0)
-    assert.equal("loading", state("shared"))
-    uji.provider.models("shared")
+    assert.equal(STATE.LOADING, state("shared"))
+    uji.provider.load("shared")
     done:await()
     assert.equal(1, calls.count)
 end)
@@ -68,13 +66,14 @@ it("keeps the listed models when loading fails and loads again later", function(
     local calls = counted({ { id = "fetched" } }, 1)
     add("flaky", { "listed" })
     add("flaky", calls.load)
-    local rows, failure = uji.provider.models("flaky")
-    assert.same({ "listed" }, ids(rows))
-    assert.equal("offline", failure)
-    assert.equal("failed", state("flaky"))
-    rows, failure = uji.provider.models("flaky")
-    assert.same({ "listed", "fetched" }, ids(rows))
-    assert.is_nil(failure)
+    local row = uji.provider.load("flaky")
+    assert.same({ "listed" }, ids(row.models))
+    assert.equal(STATE.FAILED, row.state)
+    assert.equal("offline", row.error)
+    row = uji.provider.load("flaky")
+    assert.same({ "listed", "fetched" }, ids(row.models))
+    assert.equal(STATE.LOADED, row.state)
+    assert.is_nil(row.error)
     assert.equal(2, calls.count)
 end)
 
@@ -99,4 +98,15 @@ it("rejects models that are neither a list nor a function", function()
     local ok, err = pcall(add, "broken", "not a list")
     assert.is_false(ok)
     assert.truthy(err:find("models must be a list or a function that returns one", 1, true))
+end)
+
+it("gives nothing for an unknown provider and points a load of one at the caller", function()
+    assert.is_nil(uji.provider.get("nobody"))
+    local ok, err = pcall(function()
+        local row = uji.provider.load("nobody")
+        return row
+    end)
+    assert.is_false(ok)
+    assert.truthy(err:find("providers_spec.lua", 1, true))
+    assert.truthy(err:find("no provider is registered as nobody", 1, true))
 end)

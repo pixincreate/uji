@@ -32,10 +32,20 @@ local function provider_row(provider)
         context_window = provider.context_window,
         models = model_rows(provider),
         state = provider.state,
+        error = provider.error,
     }
 end
 
+local function found(id)
+    local provider = catalog.get(id)
+    if not provider then
+        error("no provider is registered as " .. tostring(id), 3)
+    end
+    return provider
+end
+
 uji.provider = {
+    STATE = catalog.STATE,
     add = catalog.add,
     remove = catalog.remove,
     list = function()
@@ -45,12 +55,13 @@ uji.provider = {
         end
         return rows
     end,
-    models = task.callback(function(id)
+    get = function(id)
         local provider = catalog.get(id)
-        if not provider then
-            error("no provider is registered as " .. tostring(id), 3)
-        end
-        local _, failure = provider:load()
-        return model_rows(provider), failure
+        return provider and provider_row(provider)
+    end,
+    load = task.callback(function(id)
+        local provider = found(id)
+        provider:load()
+        return provider_row(provider)
     end),
 }

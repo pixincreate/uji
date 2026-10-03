@@ -21,9 +21,9 @@ for _, name in ipairs(EFFORTS) do
     KNOWN[name] = true
 end
 
-local IDLE, LOADING, LOADED, FAILED = "idle", "loading", "loaded", "failed"
+local STATE = { IDLE = "idle", LOADING = "loading", LOADED = "loaded", FAILED = "failed" }
 
-local M = { providers = {}, EFFORTS = EFFORTS, DEFAULT_EFFORTS = DEFAULT_EFFORTS }
+local M = { providers = {}, EFFORTS = EFFORTS, DEFAULT_EFFORTS = DEFAULT_EFFORTS, STATE = STATE }
 
 local function efforts(list, id)
     if list == nil then
@@ -40,12 +40,6 @@ local function efforts(list, id)
     return { unpack(list) }
 end
 
-local function boolean(value)
-    if type(value) == "boolean" then
-        return value
-    end
-end
-
 local function model(spec)
     if type(spec) == "string" then
         return { id = spec, reasoning = false, cache = false }
@@ -53,15 +47,18 @@ local function model(spec)
     if type(spec) ~= "table" or type(spec.id) ~= "string" then
         error("a model is an id or a table with an id", 0)
     end
-    return {
+    local entry = {
         id = spec.id,
         context = spec.context,
         output = spec.output,
         reasoning = spec.reasoning == true,
         cache = spec.cache == true,
-        images = boolean(spec.images),
         efforts = efforts(spec.efforts, spec.id),
     }
+    if type(spec.images) == "boolean" then
+        entry.images = spec.images
+    end
+    return entry
 end
 
 local function api(value, id)
@@ -172,29 +169,31 @@ function Provider:apply(patch)
     end
     if type(patch.models) == "function" then
         self.loader = patch.models
-        self.state = IDLE
+        self.state = STATE.IDLE
+        self.error = nil
     else
         self:merge(patch.models)
     end
 end
 
 function Provider:load()
-    if self.state == LOADED then
-        return LOADED
+    if self.state == STATE.LOADED then
+        return STATE.LOADED
     end
     local loading = self.loading
     if not loading then
         local loader = self.loader
         loading = sys.promise()
         self.loading = loading
-        self.state = LOADING
+        self.state = STATE.LOADING
         sys.task.spawn(function()
             local ok, err = pcall(function()
                 self:merge(loader())
             end)
-            local state, failure = ok and LOADED or FAILED, not ok and sys.message(err) or nil
+            local state, failure = ok and STATE.LOADED or STATE.FAILED, not ok and sys.message(err) or nil
             if self.loader == loader then
                 self.state = state
+                self.error = failure
             end
             self.loading = nil
             loading:resolve(state, failure)
@@ -215,7 +214,7 @@ local function create(spec)
         context_window = spec.context_window,
         models = lazy and {} or models(spec.models),
         loader = lazy and spec.models or nil,
-        state = lazy and IDLE or LOADED,
+        state = lazy and STATE.IDLE or STATE.LOADED,
         owner = plugin.current(),
     }, Provider)
 end

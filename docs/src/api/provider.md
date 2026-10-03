@@ -70,10 +70,17 @@ uji.provider.remove("perplexity")
 
 Returns one table per provider with `id`, `name`, `api`, `base_url`,
 `auth_env`, `context_window`, `models`, `oauth`, which is `true` when the
-provider offers subscription sign-in, and `state`. `state` is `"loaded"` once
-the models are in, `"idle"` before uji has called a `models` function,
-`"loading"` while it runs, and `"failed"` when it raised an error. Each model
-has `id`, `context`, `output`, `reasoning`, `cache`, `images` and `efforts`.
+provider offers subscription sign-in, `state` and `error`. Each model has `id`,
+`context`, `output`, `reasoning`, `cache`, `images` and `efforts`.
+
+`state` is one of the values in `uji.provider.STATE`:
+
+| Value | Meaning |
+|---|---|
+| `STATE.IDLE` | The provider has a `models` function that uji has not called yet. |
+| `STATE.LOADING` | The function is running. |
+| `STATE.LOADED` | The models are in. A provider with a plain list starts here. |
+| `STATE.FAILED` | The function raised an error, and `error` holds its message. uji calls it again the next time it needs the models. |
 
 ```lua
 for _, provider in ipairs(uji.provider.list()) do
@@ -83,16 +90,22 @@ for _, provider in ipairs(uji.provider.list()) do
 end
 ```
 
-## uji.provider.models(id, on_done)
+## uji.provider.get(id)
 
-Loads the provider's models if they are not loaded yet, waits for them, and
-returns them in the format `uji.provider.list()` uses. When loading fails, it
-returns the models the provider already has and the error message.
-With `on_done`, it returns at once and calls `on_done` with the same values.
+Returns the row for one provider, in the format `uji.provider.list()` uses, or
+`nil` when no provider has that id. It does not load anything.
+
+## uji.provider.load(id, on_done)
+
+Calls the provider's `models` function if its models are not loaded yet,
+waits for it, and returns the provider's row. The row's `state` is
+`STATE.LOADED`, or `STATE.FAILED` with `error` set. With `on_done`, it returns
+at once and calls `on_done` with the row. Raises an error when no provider has
+that id.
 
 ```lua
-local models, err = uji.provider.models("ollama")
-if err then
-  uji.notify("could not list Ollama models: " .. err)
+local ollama = uji.provider.load("ollama")
+if ollama.state == uji.provider.STATE.FAILED then
+  uji.notify("could not list Ollama models: " .. ollama.error)
 end
 ```

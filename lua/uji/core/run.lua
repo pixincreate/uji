@@ -101,7 +101,7 @@ return function(store, parsed)
         return cli.fail(problem)
     end
     local provider = model.resolve(choice).provider
-    if provider and provider.state ~= "loaded" and provider:load() == "loaded" then
+    if provider and provider.state ~= catalog.STATE.LOADED and provider:load() == catalog.STATE.LOADED then
         model.resolve(choice)
     end
     if flags["append-prompt"] then

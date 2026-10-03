@@ -80,14 +80,14 @@ function M.resolve(choice)
         reasoning = #efforts > 0,
         caches = provider ~= nil and provider:caches(model),
         choice = choice,
-        complete = provider == nil or provider.state == "loaded",
+        complete = provider == nil or provider.state == catalog.STATE.LOADED,
     }
     event.emit("model_changed", { provider = id, model = model })
     event.emit("status_changed", {})
     if not M.current.complete then
         local current = M.current
         task.spawn(function()
-            if provider:load() == "loaded" and M.current == current then
+            if provider:load() == catalog.STATE.LOADED and M.current == current then
                 M.resolve(choice)
             end
         end)
@@ -101,8 +101,7 @@ function M.remember(provider_id, model)
 end
 
 function M.model_for(provider)
-    local stored = M.setting("llm.model." .. provider.id) or (M.setting("llm.provider") == provider.id and M.setting("llm.model") or nil)
-    return provider:usable_model(stored)
+    return provider:usable_model(M.setting("llm.model." .. provider.id))
 end
 
 function M.max_output()

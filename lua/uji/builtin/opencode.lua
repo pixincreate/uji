@@ -1,14 +1,12 @@
+local catalog = require("uji.core.catalog")
 local common = require("uji.builtin.apis.common")
-local defaults = require("uji.core.catalog").DEFAULT_EFFORTS
-local sys = require("uji.sys")
 
 local METADATA = "https://models.dev/api.json"
-local SOURCES = { "opencode", "opencode-go" }
 local AGENT = "uji/" .. require("uji.version")
 
-local KNOWN = { none = "off" }
-for _, effort in ipairs(require("uji.core.catalog").EFFORTS) do
-    KNOWN[effort] = effort
+local EFFORTS = { none = "off" }
+for _, effort in ipairs(catalog.EFFORTS) do
+    EFFORTS[effort] = effort
 end
 
 local function client(Api)
@@ -40,42 +38,24 @@ local function fetch(url)
     return uji.json.decode(response.body, { nulls = false })
 end
 
-local pending
+local known = {}
 
-local function metadata()
-    local mine = pending
-    if not mine then
-        mine = sys.promise()
-        pending = mine
-        local ok, value = pcall(function()
-            local all, kept = fetch(METADATA), {}
-            for _, source in ipairs(SOURCES) do
-                kept[source] = all[source] and all[source].models or {}
-            end
-            return kept
-        end)
-        if not ok then
-            pending = nil
+local function metadata(source)
+    if not known[source] then
+        local all = fetch(METADATA)
+        for _, name in ipairs({ "opencode", "opencode-go" }) do
+            known[name] = all[name] and all[name].models or {}
         end
-        mine:resolve(ok, value)
     end
-    local ok, value = mine:await()
-    if not ok then
-        error(value, 0)
-    end
-    return value
-end
-
-local function positive(value)
-    return type(value) == "number" and value > 0 and value or nil
+    return known[source]
 end
 
 local function efforts(options)
-    for _, option in ipairs(type(options) == "table" and options or {}) do
-        if type(option) == "table" and option.type == "effort" and type(option.values) == "table" then
+    for _, option in ipairs(options or {}) do
+        if option.type == "effort" then
             local out = {}
             for _, value in ipairs(option.values) do
-                out[#out + 1] = KNOWN[value]
+                out[#out + 1] = EFFORTS[value]
             end
             return #out > 0 and out or nil
         end
@@ -83,27 +63,26 @@ local function efforts(options)
 end
 
 local function images(info)
-    local input = info.modalities and info.modalities.input
-    if type(input) ~= "table" then
+    if not info.modalities then
         return nil
     end
-    for _, modality in ipairs(input) do
-        if modality == "image" then
+    for _, kind in ipairs(info.modalities.input or {}) do
+        if kind == "image" then
             return true
         end
     end
     return false
 end
 
-local function entry(id, info)
+local function model(id, info)
     if not info then
         return { id = id }
     end
     local limit = info.limit or {}
     return {
         id = id,
-        context = positive(limit.context),
-        output = positive(limit.output),
+        context = limit.context,
+        output = limit.output,
         reasoning = info.reasoning == true,
         images = images(info),
         cache = info.cost ~= nil and info.cost.cache_read ~= nil,
@@ -113,25 +92,40 @@ end
 
 local OpenCode = uji.class()
 
-function OpenCode:init()
+function OpenCode:init(spec)
+    self.spec = spec
     self.routes = {}
 end
 
-function OpenCode:route(model)
-    return self.routes[model] or CHAT
+function OpenCode:route(id)
+    return self.routes[id] or CHAT
 end
 
-function OpenCode:efforts(model)
-    local api = self:route(model)
-    return api.efforts and api:efforts(model) or defaults
+function OpenCode:efforts(id)
+    local api = self:route(id)
+    return api.efforts and api:efforts(id) or catalog.DEFAULT_EFFORTS
 end
 
 function OpenCode:stream(request, reply)
     return self:route(request.model):stream(request, reply)
 end
 
+function OpenCode:models()
+    local info = metadata(self.spec.source)
+    local out = {}
+    for _, item in ipairs(fetch(self.spec.base_url .. "/models").data) do
+        local found = info[item.id]
+        self.routes[item.id] = CLIENTS[found and found.provider and found.provider.npm] or CHAT
+        out[#out + 1] = model(item.id, found)
+    end
+    table.sort(out, function(a, b)
+        return a.id < b.id
+    end)
+    return out
+end
+
 return function(spec)
-    local api = OpenCode()
+    local api = OpenCode(spec)
     uji.provider.add({
         id = spec.id,
         name = spec.name,
@@ -139,26 +133,7 @@ return function(spec)
         base_url = spec.base_url,
         auth_env = { "OPENCODE_API_KEY" },
         models = function()
-            local listed = fetch(spec.base_url .. "/models")
-            if type(listed) ~= "table" or type(listed.data) ~= "table" then
-                error(spec.base_url .. "/models sent no model list", 0)
-            end
-            local known = metadata()[spec.source]
-            local out, seen = {}, {}
-            for _, item in ipairs(listed.data) do
-                local id = type(item) == "table" and item.id
-                if type(id) == "string" and not seen[id] then
-                    seen[id] = true
-                    local info = known[id]
-                    local sdk = info and info.provider and info.provider.npm
-                    api.routes[id] = CLIENTS[sdk] or CHAT
-                    out[#out + 1] = entry(id, info)
-                end
-            end
-            table.sort(out, function(a, b)
-                return a.id < b.id
-            end)
-            return out
+            return api:models()
         end,
     })
 end

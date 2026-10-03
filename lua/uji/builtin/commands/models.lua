@@ -2,24 +2,16 @@ uji.command.add("models", {
     desc = "pick the default model",
     handler = function()
         local current = uji.model.current().provider
-        local wanted = {}
+        local available = {}
         for _, provider in ipairs(uji.provider.list()) do
             if provider.id == current or uji.auth.authenticated(provider.id) then
-                wanted[#wanted + 1] = provider
-                if provider.state ~= "loaded" then
-                    uji.task.spawn(uji.provider.models, provider.id)
+                local row = uji.provider.load(provider.id)
+                if row.error then
+                    uji.notify("could not load " .. row.name .. " models: " .. row.error)
                 end
-            end
-        end
-        local available = {}
-        for _, provider in ipairs(wanted) do
-            local models, failure = uji.provider.models(provider.id)
-            if failure then
-                uji.notify("could not load " .. provider.name .. " models: " .. failure)
-            end
-            if #models > 0 then
-                provider.models = models
-                available[#available + 1] = provider
+                if #row.models > 0 then
+                    available[#available + 1] = row
+                end
             end
         end
         if #available == 0 then
