@@ -1,4 +1,5 @@
 local app = require("uji.core.app")
+local check = require("uji.core.check")
 local cli = require("uji.core.cli")
 local tokens = require("uji.core.agent.tokens")
 
@@ -69,9 +70,13 @@ function M.compact()
     return app.agent:compact() == true
 end
 
-function M.list()
+function M.list(opts)
+    opts = check.options(opts or {}, "uji.session.list")
+    if opts.directory ~= nil and type(opts.directory) ~= "string" then
+        error("uji.session.list needs directory to be a string", 2)
+    end
     local rows = {}
-    for index, session in ipairs(app.store:sessions()) do
+    for index, session in ipairs(app.store:sessions(opts.directory)) do
         rows[index] = {
             id = session.id,
             title = session.title,
@@ -83,16 +88,22 @@ function M.list()
 end
 
 function M.delete(key)
+    if type(key) ~= "string" then
+        error("uji.session.delete needs a session id", 2)
+    end
     if not cli.valid_id(key) then
-        error("delete needs a session id", 2)
+        return nil, "invalid session id: " .. key
     end
     local current = app.session and app.session.id
+    if current == key then
+        return nil, "the open session cannot be deleted"
+    end
     while current do
-        if current == key then
-            return nil, "the open session cannot be deleted"
-        end
         local session = app.store:session(current)
         current = session and session.parent
+        if current == key then
+            return nil, "deleting it would delete the open session too"
+        end
     end
     if not app.store:delete(key) then
         return nil, "no session with id " .. key

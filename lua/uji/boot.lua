@@ -65,8 +65,8 @@ local function run(args)
     app.store = store
     if parsed.command == "delete" then
         local id = parsed.positional and parsed.positional[1]
-        if not cli.valid_id(id) then
-            return cli.fail("invalid session id: " .. tostring(id))
+        if not id then
+            return cli.fail("delete needs a session id")
         end
         local removed, err = uji.session.delete(id)
         if not removed then
@@ -92,11 +92,15 @@ local function run(args)
         return require("uji.core.run")(store, parsed)
     end
     if command == "list" then
-        local chosen = require("uji.core.ui.sessions").pick(uji.session.list())
+        local chosen = require("uji.core.ui.sessions").pick(uji.session.list({ directory = sys.os.cwd() }))
         if not chosen then
             return require("uji.core.ui"):quit()
         end
-        return start(store:session(chosen.id), "session_resumed")
+        local session = cli.session(store, chosen.id)
+        if session then
+            start(session, "session_resumed")
+        end
+        return
     end
     local session, created = open_session(store, parsed)
     if session then

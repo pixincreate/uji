@@ -104,9 +104,15 @@ function Store:latest(directory)
     return row and Session(self, row)
 end
 
-function Store:sessions()
+function Store:sessions(directory)
+    local filter, params = "parent IS NULL", {}
+    if directory then
+        filter = filter .. " AND directory = ?"
+        params[1] = directory
+    end
+    local query = "SELECT " .. COLUMNS .. " FROM sessions WHERE " .. filter .. " ORDER BY time_updated DESC, id DESC"
     local out = {}
-    for _, row in ipairs(self.db:query("SELECT " .. COLUMNS .. " FROM sessions WHERE parent IS NULL ORDER BY time_updated DESC")) do
+    for _, row in ipairs(self.db:query(query, params)) do
         out[#out + 1] = Session(self, row)
     end
     return out

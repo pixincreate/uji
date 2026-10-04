@@ -76,27 +76,30 @@ if not uji.session.compact() then
 end
 ```
 
-## uji.session.list()
+## uji.session.list(opts)
 
-Returns every stored root conversation, newest first, as a list of tables
-with `id`, `title`, `directory` and `updated` (milliseconds since the Unix
-epoch). Conversations saved as children with `uji run --parent` are not
-listed. Filter by `directory` to show only the current project.
+Returns the stored sessions, newest first, as a list of tables with `id`,
+`title`, `directory` and `updated` (milliseconds since the Unix epoch).
+Sessions saved under another one with `uji run --parent` are not listed.
+`opts` is optional, and without `directory` the list covers every directory.
+
+| Option | Type | Meaning |
+|---|---|---|
+| `directory` | string | List only the sessions started in this directory. |
 
 ```lua
-for _, session in ipairs(uji.session.list()) do
-  if session.directory == uji.session.info().directory then
-    uji.notify(session.title)
-  end
+local here = uji.session.info().directory
+for _, session in ipairs(uji.session.list({ directory = here })) do
+  uji.notify(session.title)
 end
 ```
 
 ## uji.session.delete(id)
 
-Deletes a stored conversation and its child history, and returns `true`.
-It returns `nil` and a message when no conversation has that id, or when the
-open conversation is the target or one of its ancestors; switch away first.
-An id that is not a UUID raises an error.
+Deletes a stored session and the sessions saved under it, and returns `true`.
+It returns `nil` and a message when the id is not a session id, when no session
+has that id, or when deleting it would delete the session open in this uji.
+Anything other than a string raises an error.
 
 ```lua
 local ok, err = uji.session.delete(id)
