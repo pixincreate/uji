@@ -31,7 +31,7 @@ local MIGRATIONS = {
     [[ALTER TABLE sessions ADD COLUMN parent TEXT REFERENCES sessions(id) ON DELETE CASCADE]],
 }
 
-local COLUMNS = "id, title, directory, time_created, time_updated"
+local COLUMNS = "id, title, directory, parent, time_created, time_updated"
 
 local Store = class()
 
@@ -80,6 +80,7 @@ function Store:create_session(title, parent)
         id = id.new(),
         title = title or UNTITLED,
         directory = sys.os.cwd(),
+        parent = parent,
         time_created = now,
         time_updated = now,
     }

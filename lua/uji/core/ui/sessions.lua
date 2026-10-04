@@ -127,10 +127,10 @@ end
 
 local M = {}
 
-function M.pick(store)
+function M.pick(rows)
     local directory = sys.os.cwd()
     local sessions = {}
-    for _, session in ipairs(store:sessions()) do
+    for _, session in ipairs(rows) do
         if session.directory == directory then
             sessions[#sessions + 1] = session
         end

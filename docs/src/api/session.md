@@ -75,3 +75,32 @@ if not uji.session.compact() then
   uji.notify("nothing to compact")
 end
 ```
+
+## uji.session.list()
+
+Returns every stored root conversation, newest first, as a list of tables
+with `id`, `title`, `directory` and `updated` (milliseconds since the Unix
+epoch). Conversations saved as children with `uji run --parent` are not
+listed. Filter by `directory` to show only the current project.
+
+```lua
+for _, session in ipairs(uji.session.list()) do
+  if session.directory == uji.session.info().directory then
+    uji.notify(session.title)
+  end
+end
+```
+
+## uji.session.delete(id)
+
+Deletes a stored conversation and its child history, and returns `true`.
+It returns `nil` and a message when no conversation has that id, or when the
+open conversation is the target or one of its ancestors; switch away first.
+An id that is not a UUID raises an error.
+
+```lua
+local ok, err = uji.session.delete(id)
+if not ok then
+  uji.notify(err)
+end
+```

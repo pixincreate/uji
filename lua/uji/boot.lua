@@ -61,12 +61,17 @@ local function run(args)
     if not ok then
         return cli.fail(sys.message(store))
     end
+    local app = require("uji.core.app")
+    app.store = store
     if parsed.command == "delete" then
         local id = parsed.positional and parsed.positional[1]
         if not cli.valid_id(id) then
             return cli.fail("invalid session id: " .. tostring(id))
         end
-        store:delete(id)
+        local removed, err = uji.session.delete(id)
+        if not removed then
+            return cli.fail(err)
+        end
         return
     end
     local command = parsed.command
@@ -74,8 +79,6 @@ local function run(args)
         return cli.fail("unrecognized subcommand '" .. command .. "'")
     end
     require("uji.core.task").hold()
-    local app = require("uji.core.app")
-    app.store = store
     app.argv = args
     app.flags = parsed.flags
     require("uji.core.model").attach(store)
@@ -89,11 +92,11 @@ local function run(args)
         return require("uji.core.run")(store, parsed)
     end
     if command == "list" then
-        local session = require("uji.core.ui.sessions").pick(store)
-        if not session then
+        local chosen = require("uji.core.ui.sessions").pick(uji.session.list())
+        if not chosen then
             return require("uji.core.ui"):quit()
         end
-        return start(session, "session_resumed")
+        return start(store:session(chosen.id), "session_resumed")
     end
     local session, created = open_session(store, parsed)
     if session then
