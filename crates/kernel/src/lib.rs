@@ -16,6 +16,7 @@ mod proc;
 mod promise;
 mod task;
 mod tty;
+mod utils;
 mod vm;
 
 pub use kernel::{Error, Options, Outcome, run};
