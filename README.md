@@ -34,6 +34,13 @@ Or with Homebrew:
 brew install uji-labs/uji/uji
 ```
 
+Or on Fedora with COPR:
+
+```sh
+sudo dnf copr enable @uji-labs/Uji
+sudo dnf install uji
+```
+
 [Installation](https://docs.uji.sh/getting-started/install.html) has the other
 ways.
 
