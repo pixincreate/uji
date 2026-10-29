@@ -251,9 +251,33 @@ fn normalized(path: &Path) -> PathBuf {
 
 #[function(fs)]
 fn resolve(directory: &str, path: &str) -> String {
-    normalized(&Path::new(directory).join(os::expanded(path)))
+    access_path(&Path::new(directory).join(os::expanded(path)))
         .display()
         .to_string()
+}
+
+fn access_path(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for part in path.components() {
+        match (part, out.components().next_back()) {
+            (Component::CurDir, _)
+            | (Component::ParentDir, Some(Component::RootDir | Component::Prefix(_))) => {}
+            (Component::ParentDir, Some(Component::Normal(_))) => {
+                // Removing a symlink before `..` changes the path the OS accesses.
+                let cancel = match std::fs::symlink_metadata(&out) {
+                    Ok(metadata) => metadata.is_dir(),
+                    Err(error) => error.kind() == std::io::ErrorKind::NotFound,
+                };
+                if cancel {
+                    out.pop();
+                } else {
+                    out.push(part);
+                }
+            }
+            _ => out.push(part),
+        }
+    }
+    out
 }
 
 #[function(fs)]
@@ -307,7 +331,7 @@ async fn glob(
         Ok(glob::glob(&full.to_string_lossy())?
             .filter_map(Result::ok)
             .map(|found| {
-                let found = normalized(&found);
+                let found = access_path(&found);
                 let shown = match found.strip_prefix(&base) {
                     Ok(inside) if relative => inside,
                     _ => &found,
