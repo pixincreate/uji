@@ -180,19 +180,21 @@ it("replaces exact snippets with edit_file and explains what it could not do", {
 end)
 
 it("rejects missing or non-string file contents without changing the file", { timeout = 20 }, function()
-    local calls = {}
-    for _, value in ipairs({ "", ', "new_string": null', ', "new_string": false', ', "new_string": 1', ', "new_string": {}' }) do
-        calls[#calls + 1] = { "edit_file", '{"path":"notes.txt","old_string":"gamma"' .. value .. "}" }
-    end
-    for _, value in ipairs({ "", ', "content": null', ', "content": false', ', "content": 1', ', "content": {}' }) do
-        calls[#calls + 1] = { "write_file", '{"path":"notes.txt"' .. value .. "}" }
-    end
-    local results = round_trip(calls)
-    for index, result in ipairs(results) do
-        local key = index <= 5 and "new_string" or "content"
-        assert.equal("error: `" .. key .. "` is required and must be a string", result)
-    end
-    assert.equal(10, #results)
+    local results = round_trip({
+        { "edit_file", '{"path": "notes.txt", "old_string": "gamma"}' },
+        { "edit_file", '{"path": "notes.txt", "old_string": "gamma", "new_string": null}' },
+        { "edit_file", '{"path": "notes.txt", "old_string": "gamma", "new_string": false}' },
+        { "edit_file", '{"path": "notes.txt", "old_string": "gamma", "new_string": 1}' },
+        { "edit_file", '{"path": "notes.txt", "old_string": "gamma", "new_string": {}}' },
+        { "write_file", '{"path": "notes.txt"}' },
+        { "write_file", '{"path": "notes.txt", "content": null}' },
+        { "write_file", '{"path": "notes.txt", "content": false}' },
+        { "write_file", '{"path": "notes.txt", "content": 1}' },
+        { "write_file", '{"path": "notes.txt", "content": {}}' },
+    })
+    local edit = "error: `new_string` is required and must be a string"
+    local write = "error: `content` is required and must be a string"
+    assert.same({ edit, edit, edit, edit, edit, write, write, write, write, write }, results)
     assert.equal("alpha\nline two\ngamma\ndelta\nepsilon\n", sandbox.read(sandbox.work .. "/notes.txt"))
 end)
 
