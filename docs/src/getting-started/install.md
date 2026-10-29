@@ -24,6 +24,13 @@ brew install uji-labs/uji/uji
 Homebrew installs the same ready-made build as the script. `brew upgrade uji`
 moves to a newer release.
 
+## On Fedora with COPR
+
+```sh
+sudo dnf copr enable @uji-labs/Uji
+sudo dnf install uji
+```
+
 ## With Nix
 
 ```sh
