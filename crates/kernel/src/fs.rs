@@ -348,6 +348,36 @@ async fn realpath(path: String) -> std::io::Result<String> {
     Ok(tokio::fs::canonicalize(path).await?.display().to_string())
 }
 
+#[function(fs)]
+async fn canonical(path: String) -> std::io::Result<String> {
+    let full = PathBuf::from(&path);
+    let mut head = full.clone();
+    let mut kept = 0;
+    loop {
+        match tokio::fs::canonicalize(&head).await {
+            Ok(found) => {
+                let mut out = found;
+                for part in full.components().skip(full.components().count() - kept) {
+                    match part {
+                        Component::CurDir => {}
+                        Component::ParentDir => {
+                            out.pop();
+                        }
+                        _ => out.push(part),
+                    }
+                }
+                return Ok(out.display().to_string());
+            }
+            Err(error) => {
+                if !head.pop() {
+                    return Err(error);
+                }
+                kept += 1;
+            }
+        }
+    }
+}
+
 async fn delete(path: String, recursive: bool) -> std::io::Result<()> {
     let metadata = tokio::fs::symlink_metadata(&path).await?;
     if !metadata.is_dir() {

@@ -161,3 +161,10 @@ it("does not redirect a failed parent traversal to a neighboring file", function
     end
     assert.equal("neighbor", uji.fs.read("note.txt"))
 end)
+
+it("resolves a path to the file the system would touch", function()
+    sandbox.file("note.txt", "note")
+    assert.equal(sys.fs.realpath(sandbox.work .. "/note.txt"), sys.fs.canonical(sandbox.work .. "/note.txt"))
+    assert.equal(sys.fs.realpath(sandbox.work) .. "/new.txt", sys.fs.canonical(sandbox.work .. "/new.txt"))
+    assert.equal(sys.fs.realpath(sandbox.work) .. "/b.txt", sys.fs.canonical(sandbox.work .. "/a/../b.txt"))
+end)
