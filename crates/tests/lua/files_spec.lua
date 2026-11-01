@@ -179,3 +179,24 @@ it("does not follow a link that points at itself", function()
     symlink("self", sandbox.work .. "/self")
     assert.equal(sys.fs.realpath(sandbox.work) .. "/self", sys.fs.canonical(sandbox.work .. "/self"))
 end)
+
+if uji.os.platform == "linux" then
+    it("resolves missing targets through the system's symlink limit", function()
+        for _, count in ipairs({ 39, 40, 41 }) do
+            local dir = sys.fs.realpath(sandbox.work) .. "/" .. count
+            assert(sys.fs.mkdir(dir))
+            for at = 1, count do
+                symlink(at == count and "target" or "link" .. (at + 1), dir .. "/link" .. at)
+            end
+            if count <= 40 then
+                assert.equal(dir .. "/target", sys.fs.canonical(dir .. "/link1"))
+                assert(sys.fs.write(dir .. "/link1", "created"))
+                assert.equal("created", sandbox.read(dir .. "/target"))
+                assert.equal(dir .. "/target", sys.fs.canonical(dir .. "/link1"))
+            else
+                assert.is_nil((sys.fs.write(dir .. "/link1", "wrong")))
+                assert.is_nil((sys.fs.read(dir .. "/target")))
+            end
+        end
+    end)
+end

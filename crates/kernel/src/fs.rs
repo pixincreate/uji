@@ -258,6 +258,13 @@ async fn resolve(directory: &str, path: &str) -> String {
         .to_string()
 }
 
+#[function(fs)]
+fn lexical(directory: &str, path: &str) -> String {
+    normalized(&Path::new(directory).join(os::expanded(path)))
+        .display()
+        .to_string()
+}
+
 async fn access_path(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for part in path.components() {
@@ -376,7 +383,7 @@ fn split(path: &Path) -> Option<(PathBuf, OsString)> {
 // creates or reads a file, so canonical has to spell the resolved target.
 async fn dereferenced(path: &Path) -> std::io::Result<PathBuf> {
     let mut candidate = path.to_path_buf();
-    for _ in 0..HOPS {
+    for hops in 0..=HOPS {
         match tokio::fs::canonicalize(&candidate).await {
             Ok(found) => return Ok(found),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -392,6 +399,9 @@ async fn dereferenced(path: &Path) -> std::io::Result<PathBuf> {
         match tokio::fs::symlink_metadata(&link).await {
             Ok(entry) if entry.is_symlink() => {}
             _ => return Ok(candidate),
+        }
+        if hops == HOPS {
+            break;
         }
         candidate = anchored(&base, &tokio::fs::read_link(&link).await?);
     }
